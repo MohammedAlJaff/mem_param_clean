@@ -861,3 +861,31 @@ root data/ ignore check: passed
 mem_param_src/datasets/ inclusion check: passed
 limitation: notebooks and real image loaders were not executed in this change
 ```
+
+
+## 2026-08-18T15:57:45Z - Create the first reviewed Git baseline
+
+### Decision
+Create root commit `d3b26f3` (`Create initial research baseline`) on `main` as
+the first identifiable code state for the clean study.
+
+The snapshot contains 47 reviewed files: first-party source, configuration,
+documentation, tests, and the two sanity notebooks. It excludes downloaded
+datasets, Python and tool caches, experiment outputs, checkpoints, W&B files,
+and run directories. Remove T001 from `TODO.txt`; dependency reconstruction
+remains open as T002 and real torch-fidelity integration remains open as T003.
+
+### Checks
+```text
+environment: local memcompgen Conda environment
+credential-pattern scan of upload set: clean
+raw dataset and generated-artifact scan of upload set: clean
+largest staged file: 464 KiB
+git staged whitespace check: passed
+pytest full suite: 22 passed
+ruff mem_param_src and tests: passed
+compileall mem_param_src and tests: passed
+notebook JSON validation: passed
+git status immediately after root commit: clean
+limitation: declared dependencies are not yet sufficient for a fresh environment
+```

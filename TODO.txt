@@ -1,5 +1,5 @@
 MEM_PARAM_CLEAN OPERATIONAL TODO
-Updated: 2026-08-16
+Updated: 2026-08-18
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -17,12 +17,6 @@ MIGRATION_JOURNAL.md and remove it from this file.
 
 
 NOW: MAKE THE CLEAN REPOSITORY SAFE AND REPRODUCIBLE
-
-[ ] T001 - Create the first reviewed Git commit.
-    Problem: The clean repository has no commits and all files are untracked.
-    Next action: Review the complete initial tree, stage only intended files,
-    and create the first commit.
-    Done when: `git status` is clean after a reviewed initial commit.
 
 [ ] T002 - Declare the real runtime and test dependencies.
     Problem: environment.yml and pyproject.toml currently declare only the
