@@ -1,0 +1,133 @@
+MEM_PARAM_CLEAN OPERATIONAL TODO
+Updated: 2026-08-16
+
+PURPOSE
+This is the single list of unfinished work in the clean repository.
+MIGRATION_JOURNAL.md records decisions and completed work. This file records
+what still needs action.
+
+HOW TO USE THIS FILE
+[ ] not started
+[~] in progress
+[!] blocked
+
+Work on one narrow item at a time. Do not port a whole old directory just to
+close an item. When an item is complete, record the result in
+MIGRATION_JOURNAL.md and remove it from this file.
+
+
+NOW: MAKE THE CLEAN REPOSITORY SAFE AND REPRODUCIBLE
+
+[ ] T001 - Create the first reviewed Git commit.
+    Problem: The clean repository has no commits and all files are untracked.
+    Next action: Review the complete initial tree, stage only intended files,
+    and create the first commit.
+    Done when: `git status` is clean after a reviewed initial commit.
+
+[ ] T002 - Declare the real runtime and test dependencies.
+    Problem: environment.yml and pyproject.toml currently declare only the
+    minimal shell dependencies. The source also needs PyTorch; image data and
+    metrics need optional packages such as torchvision and torch-fidelity; the
+    sanity notebook needs matplotlib and Jupyter.
+    Next action: Separate required dependencies from image, evaluation, and
+    development extras without pinning machine-specific GPU builds.
+    Done when: A fresh documented environment can import the package, run the
+    tests, and execute the GMM sanity notebook.
+
+[ ] T003 - Run a real torch-fidelity integration check.
+    Problem: The local memcompgen environment does not contain torch-fidelity.
+    Current FID tests mock the library boundary and do not run Inception.
+    Next action: In the complete project environment, compute FID on a tiny
+    tensor pair and test one torch-fidelity feature-encoder call.
+    Done when: Real feature extraction and FID finish successfully and the
+    command/result are recorded in MIGRATION_JOURNAL.md.
+
+
+NOW: SETTLE SAMPLING OUTPUT AND ENDPOINT POLICY
+
+[ ] T013 - Implement sampling.output = "clean_prediction".
+    Problem: The flag exists, but selecting it deliberately raises
+    NotImplementedError. Only sampling.output = "final_sample" works today.
+    Next action: Define and test the clean-data prediction made at
+    sampling.end_time for Euler and Heun.
+    Done when: Both output choices have explicit, numerically tested behavior.
+
+[ ] T014 - Choose safe-division settings for the actual experiment ranges.
+    Problem: The current paired default uses start/end = 0.01/0.99 and
+    denominator_epsilon = 0.01, so the clamp threshold matches the smallest
+    ideal FM coefficient in the configured interval. This still needs empirical
+    validation before paper runs.
+    Next action: Compare exact division and several epsilon values over the
+    intended time ranges, then record one justified setting per experiment.
+    Done when: Paper runs do not rely on an unexplained default clamp.
+
+[ ] T015 - Reconsider non-uniform training-time sampling only if needed.
+    Problem: Logit-normal sampling was removed so training times are now
+    uniformly sampled between training.start_time and training.end_time.
+    Next action: Leave this alone unless an experiment needs a different time
+    distribution; then add it as a named, tested option.
+    Done when: Any added distribution has a clear scientific reason and tests.
+
+
+NEXT: BUILD ONE SCRIPTABLE END-TO-END PATH
+
+[ ] T004 - Add the smallest reusable training runner.
+    Problem: The GMM path trains only inside the sanity notebook.
+    Next action: Port only the shared optimizer and training-loop pieces needed
+    for a short GMM command-line run.
+    Done when: One command runs config -> GMM data -> training -> Heun sampling
+    -> metrics without notebook-owned training logic.
+
+[ ] T005 - Add the run-artifact contract.
+    Problem: The clean repo does not yet save the exact inputs required for
+    reproducible checkpoint evaluation.
+    Next action: Save resolved config, train tensor, reference tensor, z_init,
+    checkpoints, metric records, and synthetic geometry under one run folder.
+    Done when: A completed GMM smoke run can be reproduced using only its saved
+    run directory.
+
+[ ] T006 - Add saved-run checkpoint replay.
+    Problem: There is no clean checkpoint-evaluation entrypoint.
+    Next action: Load the saved config, tensors, z_init, geometry, and model
+    checkpoint; do not rebuild the dataset.
+    Done when: Replaying a saved checkpoint produces deterministic samples and
+    a metric record without reading the original data source.
+
+
+NEXT: FINISH IMAGE VALIDATION
+
+[ ] T007 - Decide which image datasets remain in the clean repo and test them.
+    Problem: Image loader modules were ported, but only the GMM loader has an
+    end-to-end runtime check in the clean repository.
+    Next action: Review MNIST, CelebA32 grayscale, Flowers102, AFHQ-v2, and
+    FFHQ128 one by one; retain and test only the loaders needed by the paper.
+    Done when: Every retained loader returns the documented, leakage-checked
+    data bundle and has a focused test or smoke command.
+
+[ ] T008 - Validate the scientific image-memorization measurements.
+    Problem: Code paths exist for full pixels, random-projected pixels, encoder
+    features, and rho sweeps, but their agreement has not been established in
+    the clean repository.
+    Next action: Use selected saved checkpoints to compare metric spaces and
+    rho values against the same saved training and held-out tensors.
+    Done when: Correlations, disagreements, and parameterization ordering are
+    summarized in a small reviewed result table.
+
+
+LATER: PORT ONLY AFTER LIVE ENTRYPOINTS EXIST
+
+[ ] T009 - Add focused tests for model, sampling, data, and synthetic metrics.
+    Done when: Each retained source class has direct tests; tests do not depend
+    on generated outputs or the old repository.
+
+[ ] T010 - Add tracking and visualization as separate concerns.
+    Done when: Metric computation returns data only, tracking formats records,
+    and visualization writes figures from saved records/tensors.
+
+[ ] T011 - Review Berzelius jobs and experiment sweeps.
+    Done when: Retained job files call clean, tested entrypoints and contain no
+    study logic or imports from the old repository.
+
+[ ] T012 - Review external baselines only when required for reproducibility.
+    Done when: Every retained external component has a documented purpose,
+    version/source, and read-only boundary.

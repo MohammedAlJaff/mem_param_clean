@@ -1,0 +1,38 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local environments
+.env
+.venv/
+venv/
+ENV/
+
+# Local machine files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data and generated outputs
+/data/
+tmp/
+outputs/
+runs/
+logs/
+wandb/
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.pkl
+
+# Local paths
+**/paths.local.yaml
+**/paths.local.yml
