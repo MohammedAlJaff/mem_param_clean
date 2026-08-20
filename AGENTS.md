@@ -79,7 +79,9 @@ Examples:
 
 ## Data and Artifact Rules
 
-- Persist the exact training tensor or subset artifact for every run.
+- Persist the exact training and reference tensors for every run.
+- Persist `data_manifest.json` with source sizes, catalog hashes, and stable
+  sample identifiers aligned with the saved tensors.
 - Persist the exact `z_init` used for checkpoint replay.
 - Post-hoc evaluation must operate on saved artifacts, not rebuilt datasets.
 - Keep outputs inside the caller's chosen run directory.
@@ -108,6 +110,35 @@ Examples:
   for example `r = d1 / d2` or `delta_f_mem = f_mem(gen) - f_mem(held-out)`.
 - Canonical first-party Python should not use type hints or
   `from __future__ import annotations`.
+
+## Notebook Style
+
+- Use ASD-STE100 Simplified Technical English, Issue 9, for all notebook
+  comments, descriptions, instructions, titles, and Markdown text.
+- Use a maximum of 20 words in an instruction. Use a maximum of 25 words in a
+  descriptive sentence.
+- Write one topic in each sentence. Use active voice. Use the imperative form
+  for instructions.
+- Use one word for one meaning. Use the same term for the same object or
+  operation. Avoid idioms, ambiguous words, unnecessary synonyms, and phrasal
+  verbs.
+- Use technical nouns and technical verbs when exact research, mathematics,
+  dataset, tensor, library, API, or code terms are necessary. Do not change an
+  exact identifier to satisfy the general vocabulary.
+- Start every code cell with a short top comment that states the cell's purpose
+  in plain research language.
+- Add concise inline comments beside or immediately above most non-obvious
+  lines so the reader can understand the operation, scientific assumption,
+  tensor meaning, or expected result without relying on a separate Markdown
+  cell.
+- Markdown cells may still explain equations, interpretation, and experimental
+  context, but they do not replace the top note and inline comments in code
+  cells.
+- Comment the reason for transforms, split selection, seeds, tensor shapes,
+  metric settings, and plotting choices. Avoid comments that merely repeat the
+  Python syntax.
+- Keep each code cell focused on one conceptual step and keep comments concise
+  enough that the code remains easy to scan.
 
 ## Environment
 

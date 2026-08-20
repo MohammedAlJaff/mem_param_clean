@@ -889,3 +889,464 @@ notebook JSON validation: passed
 git status immediately after root commit: clean
 limitation: declared dependencies are not yet sufficient for a fresh environment
 ```
+
+
+## 2026-08-18T19:03:33Z - Declare and reconstruct the complete local environment
+
+### Decision
+Use `pyproject.toml` as the authoritative Python dependency declaration. Keep
+PyTorch and `ml-collections` in the core package, and separate optional
+dependencies into `image`, `evaluation`, and `dev` profiles. Do not add a
+duplicate `requirements.txt`.
+
+Use `environment.yml` to create Python 3.10 and install the repository in
+editable mode with all three profiles:
+
+```text
+.[image,evaluation,dev]
+```
+
+Keep PyTorch and Torchvision platform-neutral so local CPU/MPS and cluster CUDA
+builds can satisfy the same package contract. Pin Ruff to the validated 0.14.8
+policy because a newer Ruff release changed its default findings for unchanged
+source code.
+
+Remove T002 from `TODO.txt`. T003 now starts from an environment containing
+torch-fidelity but still requires a real Inception feature and FID integration
+check.
+
+### Fresh-Environment Checks
+```text
+environment: /tmp/mem_param_clean_t002_env created from environment.yml
+platform: macOS arm64
+Python: 3.10.20
+torch: 2.13.0
+torchvision: 0.28.0
+torch-fidelity: 0.4.0
+editable mem_param_src import: passed
+pip dependency consistency check: passed
+pytest full suite: 22 passed
+ruff 0.14.8 mem_param_src and tests: passed
+compileall mem_param_src and tests: passed
+GMM sanity notebook execution: 12/12 non-empty code cells executed
+executed notebook error-output scan: 0
+limitation: Berzelius and real torch-fidelity feature extraction were not tested
+```
+
+
+## 2026-08-18T19:08:52Z - Run the real torch-fidelity integration
+
+### Decision
+Complete T003 using the repository's real `TorchFidelityFeatureEncoder` and
+`compute_image_fid` adapters with torch-fidelity 0.4.0. Remove T003 from
+`TODO.txt`.
+
+The check used two distinct deterministic tensor batches generated with seed
+37. Each batch contained three RGB images with shape `[3, 3, 32, 32]` and
+values in `[0, 1]`. The integration ran on CPU with
+`inception-v3-compat`, caching downloaded weights only under `/tmp`.
+
+### Checks
+```text
+environment: /tmp/mem_param_clean_t002_env
+platform: macOS arm64, CPU
+torch: 2.13.0
+torchvision: 0.28.0
+torch-fidelity: 0.4.0
+feature adapter spec: torch_fidelity:inception-v3-compat:2048
+feature result: shape [2, 2048], all values finite
+FID tensor batches: n_samples=3, n_reference=3
+FID result: 89.5920389865937, finite
+Inception weights: weights-inception-2015-12-05-6726825d.pth
+Inception weights size: 96 MiB
+Inception weights SHA-256: 6726825d0af5f729cebd5821db510b11b1cfad8faad88a03f1befd49fb9129b2
+mocks used: none
+limitation: the tiny random batches validate integration, not scientific FID quality
+```
+
+
+## 2026-08-18T19:28:13Z - Add a visual FID walkthrough on real image datasets
+
+### Decision
+Add `notebooks/sanity/fid_cifar_flowers_walkthrough.ipynb` as an executed,
+research-facing explanation of the repository's real `compute_image_fid` path.
+Use deterministic 32-image subsets from CIFAR-10 train, CIFAR-10 test, and
+Flowers102 validation, render the exact tensors, and keep the Inception
+extractor, preprocessing, sample count, batch size, and CPU device fixed across
+comparisons.
+
+Treat the resulting FID values as a visual runtime diagnostic rather than
+dataset-level estimates. The notebook explicitly separates distributional FID
+from nearest-neighbor memorization measurements and explains that a tiny
+negative identical-input FID is floating-point roundoff around zero.
+
+Declare `scipy>=1.8` in the `image` optional dependency profile because
+Torchvision's Flowers102 loader requires `scipy.io.loadmat` for the official
+split metadata.
+
+### Checks
+```text
+environment: /tmp/mem_param_clean_t002_env, macOS arm64, CPU
+Python: 3.10.20
+torch: 2.13.0
+torchvision: 0.28.0
+torch-fidelity: 0.4.0
+scipy: 1.15.3
+dataset loading: CIFAR-10 train/test and Flowers102 val passed with download=False
+notebook execution: 11/11 code cells executed, 0 error outputs
+identical CIFAR control FID: -0.00018111240910911874, interpreted as numerical zero
+CIFAR train-vs-test FID: 247.9516615643539
+CIFAR train-vs-Flowers val FID: 359.8505496497645
+embedded figure inspection: sample grid and FID comparison chart passed
+editable dependency installation: passed
+pip dependency consistency check: passed
+pytest full suite: 22 passed
+git diff whitespace check: passed
+limitation: N=32 estimates demonstrate behavior but are not scientific FID estimates
+```
+
+
+## 2026-08-18T19:35:19Z - Make notebook code locally understandable
+
+### Decision
+Adopt a repository notebook-commenting rule: every code cell starts with a
+plain-language purpose comment and includes concise comments beside or directly
+above non-obvious operations. Standalone Markdown remains useful for equations
+and interpretation, but it is not the only explanation of runnable code.
+
+Apply the rule to every code cell in
+`notebooks/sanity/fid_cifar_flowers_walkthrough.ipynb`. Preserve the notebook's
+cell order, experiment protocol, outputs, and research interpretation.
+
+### Checks
+```text
+AGENTS.md notebook rule: added
+FID notebook code cells with top purpose comments: 11/11
+FID notebook code-cell syntax compilation: passed
+FID notebook execution: 11/11 code cells executed, 0 error outputs
+embedded figures: 2
+deterministic FID values: unchanged
+notebook JSON validation: passed
+git diff whitespace check: passed
+TODO.txt: not changed by this task
+```
+
+
+## 2026-08-18T19:50:42Z - Apply ASD-STE100 to notebook text
+
+### Decision
+Use ASD-STE100 Simplified Technical English, Issue 9, for notebook text. Apply
+the standard to titles, Markdown, instructions, descriptions, and code
+comments.
+
+Use a maximum of 20 words in an instruction. Use a maximum of 25 words in a
+descriptive sentence. Use active voice and one topic in each sentence. Keep
+exact research and code terms as subject-field technical terms.
+
+Revise all text in `notebooks/sanity/fid_cifar_flowers_walkthrough.ipynb`.
+Keep the code, protocol, results, cell order, and figures constant.
+
+### Checks
+```text
+ASD-STE100 source: official Issue 9, 2025-01-15
+notebook code cells with top purpose comment: 11/11
+sentence-length audit: 0 violations
+passive-voice heuristic: 0 candidates
+notebook code-cell syntax compilation: passed
+notebook execution: 11/11 code cells executed, 0 error outputs
+embedded figures: 2
+deterministic FID values: unchanged
+notebook JSON validation: passed
+git diff whitespace check: passed
+certified ASD-STE100 checker or trained human review: not used
+TODO.txt: not changed by this task
+```
+
+
+## 2026-08-18T20:20:00Z - Rename the safe-division denominator field
+
+### Decision
+Rename the active `denominator_epsilon` field to `safe_div_denom_eps`. Apply a
+strict rename with no compatibility alias. Update the model API, sampling API,
+configuration, tests, documentation, TODO wording, and the GMM sanity notebook.
+
+Audit all six target-space conversions in
+`/Users/mohammadaljaff/Desktop/PhD/projects/mem_param/mem_param_clean/mem_param_src/model.py`.
+Compare them with the reference implementation in
+`/Users/mohammadaljaff/Desktop/PhD/projects/mem_param/mem_par/src/gdfm/core.py`.
+
+The old `v`-to-`eps` conversion first recovered `x`. It then converted `x` to
+`eps`, which divided by `b(t) = 1 - t`. The clean model already uses the direct
+two-equation solution:
+
+```text
+eps_hat = (a'(t) z_t - a(t) v_hat) / (a'(t)b(t) - a(t)b'(t))
+```
+
+For the linear FM path, the determinant is one. This direct conversion avoids
+an unnecessary division by `1 - t`. No conversion formula needed a change in
+this task.
+
+The `x`-to-`v` conversion still requires division by `b(t)`. The `eps`-to-`v`
+conversion still requires division by `a(t)`. Algebraic expansion does not
+remove those singular denominators.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+focused model and sampling tests: 10 passed
+full pytest suite: 22 passed
+Ruff on changed Python files: passed
+GMM sanity notebook execution: passed, output written under /tmp
+notebook JSON validation: passed
+active-code search for denominator_epsilon: zero matches
+git diff whitespace check: passed
+limitation: T014 remains open; this task did not select the experiment epsilon
+```
+
+
+## 2026-08-18T20:58:09Z - Add the simplest image runner prototype
+
+### Decision
+Add and execute
+`notebooks/prototypes/prototype_simplest_runner.ipynb`. Keep the runner linear
+and visible. Do not add helper functions or a runner class.
+
+Use deterministic Flowers102 train and validation subsets. Train a small
+two-level UNet in the `v` prediction and loss spaces. Run two epochs over 64
+training images with Adam. Generate eight images from fixed noise with ten Heun
+steps.
+
+Save the exact data bundle, initial noise, checkpoint, samples, and figures in
+`outputs/prototypes/simplest_runner_flowers102/`. The output directory remains
+Git-ignored.
+
+The first notebook execution could not import `mem_param_src`. Jupyter started
+the kernel in the notebook directory. The setup cell now finds the repository
+root and adds it to the import path before project imports.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, MPS
+notebook template: experiment
+code cells: 8/8 executed
+error outputs: 0
+optimizer steps: 16
+epoch 1 mean loss: 1.161882
+epoch 2 mean loss: 0.909726
+first step loss: 1.309464931488037
+last step loss: 0.8198249340057373
+sample shape: [8, 3, 32, 32]
+finite samples: true
+saved artifact files: 7
+notebook JSON validation: passed
+code-cell syntax compilation: passed
+top purpose comments: 8/8
+git diff whitespace check: passed
+limitation: this short run validates execution, not image quality
+```
+
+
+## 2026-08-19T16:45:00Z - Run the safe-division diagonal sanity experiment
+
+### Decision
+Add and execute
+`notebooks/experiments/safe_division_diagonal_sanity.ipynb`. Use Flowers102 and
+train all six labeled diagonal conditions: `x/x`, `eps/eps`, and `v/v`, with
+safe division disabled and enabled.
+
+Use the same initialization, images, noise, and time values for each
+exact-safe pair. Use 128 training images, 64 reference images, batch size 8,
+100 optimizer steps, Adam with learning rate `1e-3`, and no weight decay. Use a
+two-level UNet with 32 base channels and 669,251 parameters.
+
+Sample 16 fixed initial tensors with Heun, 20 steps, and the time interval
+`[0.01, 0.99]`. Set `safe_div_denom_eps = 0.01`. Compare exact division with
+safe epsilon values from `1e-6` through `5e-2` in the numerical sweep.
+
+The safe-division flag did not change diagonal training. Each exact-safe pair
+had equal loss values and equal final parameter tensors. Safe division with
+epsilon `0.01` also produced samples that were equal to exact division. This
+result is expected because `t` and `1 - t` do not fall below `0.01` in the
+sampling interval.
+
+Safe epsilon `0.05` changed the `x` and `eps` conversion results inside the
+active interval. The maximum conversion RMSE was approximately `0.80`. Do not
+use `0.05` with this interval. Keep `0.01` as the in-house boundary guard.
+
+The `eps/eps` samples were numerically large after 100 steps. Their RMS was
+`11.92`, compared with `0.43` for `x/x` and `0.45` for `v/v`. This short run
+does not establish sampling quality or paper settings.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, MPS
+notebook template: experiment
+code cells: 11/11 executed
+error outputs: 0
+training conditions: 6
+checkpoints: 24
+exact-safe loss maximum absolute difference: 0.0 for x, eps, and v
+exact-safe parameter maximum absolute difference: 0.0 for x, eps, and v
+exact-safe sample RMSE: 0.0 for x, eps, and v
+saved run directory size: 85 MB
+notebook JSON validation: passed
+code-cell syntax compilation: passed
+top purpose comments: 11/11
+limitation: one seed and 100 steps provide in-house evidence only
+limitation: T014 remains open until the paper time ranges are fixed
+```
+
+
+## 2026-08-19T16:56:05Z - Name sampling outputs and cross division controls
+
+### Decision
+Replace the sampling output names with `x_t_max` and `x_1`. Do not keep aliases
+for `final_sample` or `clean_prediction`.
+
+`x_t_max` returns the integrated solver state at `sampling.end_time`. The model
+equations still call this interpolated state `z_t`. The output API uses the
+selected sampling terminology without changing the internal equations.
+
+`x_1` evaluates the model at the final state and time. It converts that
+prediction to clean-data space with `model_to_x`. It does not integrate from
+`t_max` to one.
+
+Keep the two safe-division controls independent. Training reads
+`training.use_safe_division`. Inference reads `sampling.use_safe_division`. Do
+not add a duplicate inference configuration section.
+
+Expand `notebooks/experiments/safe_division_diagonal_sanity.ipynb` to cross
+both controls. Each of the six trained models now uses exact and safe sampling.
+The result record contains 12 sampling conditions and names both Boolean flags.
+Remove T013 because both sampling outputs now have explicit tested behavior.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU and MPS
+focused sampling tests: 10 passed, 4 subtests passed
+Euler x_t_max behavior: passed
+Heun x_t_max behavior: passed
+Euler x_1 behavior: passed
+Heun x_1 behavior: passed
+full pytest suite: 22 passed, 4 subtests passed
+Ruff on mem_param_src and tests: passed
+safe-division notebook code cells: 11/11 executed
+safe-division notebook error outputs: 0
+training conditions: 6
+sampling conditions: 12
+training-flag sample maximum absolute difference: 0.0 for all conditions
+sampling-flag sample maximum absolute difference: 0.0 for all conditions
+notebook JSON validation: passed for all three edited notebooks
+git diff whitespace check: passed
+limitation: the experiment uses x_t_max; x_1 has focused runtime tests only
+limitation: T014 remains open until the paper time ranges are fixed
+```
+
+
+## 2026-08-20T15:08:46Z - Add standalone image and synthetic runners
+
+### Decision
+Add four installed commands: `mem-param-image-train`,
+`mem-param-synthetic-train`, `mem-param-image-eval`, and
+`mem-param-synthetic-eval`. Keep the optimizer loop and checkpoint replay shared
+between the two data domains. Keep each command-line module thin.
+
+Require training configs to define `get_config()`. Apply repeatable `--set`
+overrides only to existing fields. Standalone evaluation requires a saved run
+directory. It can also accept an evaluation config and `--set` overrides under
+only `sampling` and `evaluation`. The setting order is saved run, evaluation
+config, then command-line override.
+
+Save one shallow run directory with the resolved config, complete CPU data
+bundle, fixed `z_init`, checkpoints, and training history. Synthetic runs also
+save the exact sliced-Wasserstein directions. Evaluation reads these artifacts
+without rebuilding the dataset. It records metrics for every checkpoint and
+saves the complete generated tensor only for the final checkpoint.
+
+Use `x_1` as the default sampling output. Keep `x_t_max` as the integrated-state
+diagnostic. Support explicit, interval, and `bonnaire-1m` checkpoint schedules.
+Do not add resume, optimizer-state checkpoints, W&B, live monitors, plots, FID,
+feature metrics, sweeps, or attempt hierarchies in this runner version.
+
+Remove T004, T005, and T006 after the saved-run and replay checks pass. Keep
+T007, T008, T010, and T014 open.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+baseline before runner work: 22 passed, 4 subtests passed
+final full pytest suite: 30 passed, 4 subtests passed
+Ruff lint on mem_param_src, configs, and tests: passed
+Ruff format check on new runner/config/test files: passed
+Python compileall on mem_param_src, configs, and tests: passed
+config-reference synchronization test: passed
+git diff whitespace check: passed
+editable installation: passed with --no-deps --no-build-isolation
+installed command help checks: 4/4 passed
+installed synthetic train and standalone eval commands: exit 0
+installed Flowers102 train with --evaluate-after-training: exit 0
+GMM runtime: 4 steps, 3 checkpoints, 3 metric records
+GMM final x_1 tensor: [16, 8], finite
+Flowers102 runtime: download=False, 2 steps, 3 checkpoints, 3 metric records
+Flowers102 final x_1 tensor: [4, 3, 32, 32], finite
+named exact-division evaluation: passed for GMM and Flowers102
+deterministic saved-run replay test: exact tensor and metric equality passed
+dataset rebuild guard during evaluation: passed
+limitation: smoke budgets verify execution, not scientific model quality
+limitation: image loaders other than Flowers102 still need end-to-end checks
+limitation: repository-wide Ruff formatting still reports older source files
+limitation: T014 remains open; no paper safe-division setting was selected
+```
+
+
+## 2026-08-20T16:13:36Z - Persist finite dataset partition identity
+
+### Decision
+Upgrade saved runs to artifact format version 2. Save the exact post-transform
+training and reference tensors in `data_bundle.pt`. Add `data_manifest.json` as
+the readable record of source pools and selected partition members.
+
+Record stable sample identifiers in exact tensor order for every image loader.
+Use split-relative integer indices for MNIST, CelebA32, and Flowers102. Use
+relative file paths for AFHQ v2 and FFHQ. Record source sizes and an SHA-256
+value for each ordered source catalog. Keep source indices when the loader has
+them.
+
+Record SHA-256 values for the complete tensor bundle and each saved tensor.
+The catalog hash identifies the ordered identifier catalog. It is not a hash
+of all raw dataset bytes. The tensor hashes identify the exact selected values
+that training and evaluation use.
+
+Treat `reference` as a selected held-out partition. Do not imply that it is the
+complete complement of `train`. Do not copy unused source tensors into each
+run. Keep the existing `Dataset` and `DataLoader` training path unchanged.
+
+Require complete finite-dataset identity metadata before image training.
+Validate saved manifest membership during standalone evaluation. Evaluation
+continues to read the saved tensor bundle and does not rebuild the source
+dataset.
+
+Do not add a dataset cache, a new dataset abstraction, or a new TODO item.
+Version-1 runner artifacts are not compatible with the version-2 replay
+contract.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+full pytest suite: 33 passed, 4 subtests passed
+Ruff lint on mem_param_src, configs, and tests: passed
+Ruff format check on changed dataset, runner, and runner-test files: passed
+Python compileall on mem_param_src, configs, and tests: passed
+git diff whitespace check: passed
+partition identity repeatability and same-source disjointness tests: passed
+artifact bundle, manifest, tensor, and label SHA-256 checks: passed
+real MNIST loader with download=False: identity validation passed
+real Flowers102 loader with download=False: identity validation passed
+installed Flowers102 training with evaluation: exit 0
+installed Flowers102 standalone named exact-division evaluation: exit 0
+Flowers102 runtime: 2 steps, checkpoints 0/1/2, default and named evaluations
+dataset rebuild during standalone evaluation: not used by design and regression tested
+limitation: selected tensor hashes do not hash unused raw source files
+limitation: live AFHQ v2, FFHQ, and CelebA32 catalogs were not available for runtime checks
+```

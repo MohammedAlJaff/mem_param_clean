@@ -46,15 +46,15 @@ def _validate_time_settings(n_steps, start_time, end_time):
         )
 
 
-def _validate_division_settings(use_safe_division, denominator_epsilon):
+def _validate_division_settings(use_safe_division, safe_div_denom_eps):
     """Check the sampling-time division controls."""
     if not isinstance(use_safe_division, bool):
         raise ValueError("sampling.use_safe_division must be true or false")
 
-    epsilon = float(denominator_epsilon)
+    epsilon = float(safe_div_denom_eps)
     if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
         raise ValueError(
-            "sampling.denominator_epsilon must be a finite number between 0 and 1"
+            "sampling.safe_div_denom_eps must be a finite number between 0 and 1"
         )
 
 
@@ -80,7 +80,7 @@ def convert_prediction(
     target,
     *,
     use_safe_division,
-    denominator_epsilon,
+    safe_div_denom_eps,
 ):
     """Convert a model prediction into the requested target space."""
     t = _batch_time(t, state)
@@ -91,12 +91,12 @@ def convert_prediction(
         source=model.prediction_space,
         target=target,
         use_safe_division=use_safe_division,
-        denominator_epsilon=denominator_epsilon,
+        safe_div_denom_eps=safe_div_denom_eps,
     )
 
 
 def model_to_x(
-    model, state, t, *, use_safe_division, denominator_epsilon
+    model, state, t, *, use_safe_division, safe_div_denom_eps
 ):
     """Convert the model prediction at ``(state, t)`` into clean-data space."""
     prediction = predict_in_prediction_space(model, state, t)
@@ -107,12 +107,12 @@ def model_to_x(
         t,
         target="x",
         use_safe_division=use_safe_division,
-        denominator_epsilon=denominator_epsilon,
+        safe_div_denom_eps=safe_div_denom_eps,
     )
 
 
 def model_to_eps(
-    model, state, t, *, use_safe_division, denominator_epsilon
+    model, state, t, *, use_safe_division, safe_div_denom_eps
 ):
     """Convert the model prediction at ``(state, t)`` into noise space."""
     prediction = predict_in_prediction_space(model, state, t)
@@ -123,12 +123,12 @@ def model_to_eps(
         t,
         target="eps",
         use_safe_division=use_safe_division,
-        denominator_epsilon=denominator_epsilon,
+        safe_div_denom_eps=safe_div_denom_eps,
     )
 
 
 def model_to_velocity(
-    model, state, t, *, use_safe_division, denominator_epsilon
+    model, state, t, *, use_safe_division, safe_div_denom_eps
 ):
     """Convert the model prediction at ``(state, t)`` into velocity space."""
     prediction = predict_in_prediction_space(model, state, t)
@@ -139,7 +139,7 @@ def model_to_velocity(
         t,
         target="v",
         use_safe_division=use_safe_division,
-        denominator_epsilon=denominator_epsilon,
+        safe_div_denom_eps=safe_div_denom_eps,
     )
 
 
@@ -152,11 +152,11 @@ def sample_euler(
     start_time,
     end_time,
     use_safe_division,
-    denominator_epsilon,
+    safe_div_denom_eps,
     device=None,
 ):
     """Integrate from ``start_time`` to ``end_time`` with forward Euler."""
-    _validate_division_settings(use_safe_division, denominator_epsilon)
+    _validate_division_settings(use_safe_division, safe_div_denom_eps)
     device = _infer_device(model, z, device)
     state = z.to(device)
     times = time_grid(
@@ -175,7 +175,7 @@ def sample_euler(
             state,
             time_now,
             use_safe_division=use_safe_division,
-            denominator_epsilon=denominator_epsilon,
+            safe_div_denom_eps=safe_div_denom_eps,
         )
         state = state + (time_next - time_now) * velocity
 
@@ -191,11 +191,11 @@ def sample_heun(
     start_time,
     end_time,
     use_safe_division,
-    denominator_epsilon,
+    safe_div_denom_eps,
     device=None,
 ):
     """Integrate from ``start_time`` to ``end_time`` with Heun's method."""
-    _validate_division_settings(use_safe_division, denominator_epsilon)
+    _validate_division_settings(use_safe_division, safe_div_denom_eps)
     device = _infer_device(model, z, device)
     state = z.to(device)
     times = time_grid(
@@ -215,7 +215,7 @@ def sample_heun(
             state,
             time_now,
             use_safe_division=use_safe_division,
-            denominator_epsilon=denominator_epsilon,
+            safe_div_denom_eps=safe_div_denom_eps,
         )
         trial_state = state + step_size * velocity_now
         velocity_next = model_to_velocity(
@@ -223,7 +223,7 @@ def sample_heun(
             trial_state,
             time_next,
             use_safe_division=use_safe_division,
-            denominator_epsilon=denominator_epsilon,
+            safe_div_denom_eps=safe_div_denom_eps,
         )
         state = state + 0.5 * step_size * (velocity_now + velocity_next)
 
@@ -240,19 +240,14 @@ def sample(
     start_time,
     end_time,
     use_safe_division,
-    denominator_epsilon,
+    safe_div_denom_eps,
     output,
     device=None,
 ):
-    """Run the selected sampler and return the final sample at ``end_time``."""
-    if output == "clean_prediction":
-        raise NotImplementedError(
-            "sampling.output='clean_prediction' is reserved but not implemented; "
-            "use sampling.output='final_sample' for now"
-        )
-    if output != "final_sample":
+    """Return the state at ``t_max`` or the conventional endpoint sample ``x_1``."""
+    if output not in ("x_t_max", "x_1"):
         raise ValueError(
-            "sampling.output must be 'final_sample' or 'clean_prediction', "
+            "sampling.output must be 'x_t_max' or 'x_1', "
             f"got {output!r}"
         )
 
@@ -260,15 +255,25 @@ def sample(
     if sampler is None:
         raise ValueError(f"Unknown sampling method: {method}")
 
-    return sampler(
+    state_t_max = sampler(
         model,
         z,
         n_steps=n_steps,
         start_time=start_time,
         end_time=end_time,
         use_safe_division=use_safe_division,
-        denominator_epsilon=denominator_epsilon,
+        safe_div_denom_eps=safe_div_denom_eps,
         device=device,
+    )
+    if output == "x_t_max":
+        return state_t_max
+
+    return model_to_x(
+        model,
+        state_t_max,
+        float(end_time),
+        use_safe_division=use_safe_division,
+        safe_div_denom_eps=safe_div_denom_eps,
     )
 
 

@@ -9,6 +9,31 @@ description = "Target parameterization and memorization dynamics."
 requires-python = ">=3.10"
 dependencies = [
   "ml-collections>=0.1.1",
+  "torch>=2.0",
+]
+
+[project.scripts]
+mem-param-image-train = "mem_param_src.runners.image_train:main"
+mem-param-synthetic-train = "mem_param_src.runners.synthetic_train:main"
+mem-param-image-eval = "mem_param_src.runners.image_eval:main"
+mem-param-synthetic-eval = "mem_param_src.runners.synthetic_eval:main"
+
+[project.optional-dependencies]
+image = [
+  "Pillow>=9.0",
+  "scipy>=1.8",
+  "torchvision>=0.15",
+]
+evaluation = [
+  "torch-fidelity>=0.4",
+]
+dev = [
+  "ipykernel>=6",
+  "jupyterlab>=4",
+  "matplotlib>=3.7",
+  "nbconvert>=7",
+  "pytest>=8",
+  "ruff==0.14.8",
 ]
 
 [tool.setuptools.packages.find]

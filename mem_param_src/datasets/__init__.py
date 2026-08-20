@@ -7,6 +7,14 @@ appropriate dataset-specific loader and returns tensors plus the metadata
 needed for later replay and evaluation.
 """
 
-from mem_param_src.datasets.common import build_data_bundle, validate_data_bundle
+from mem_param_src.datasets.common import (
+    build_data_bundle,
+    validate_data_bundle,
+    validate_finite_data_identity,
+)
 
-__all__ = ["build_data_bundle", "validate_data_bundle"]
+__all__ = [
+    "build_data_bundle",
+    "validate_data_bundle",
+    "validate_finite_data_identity",
+]

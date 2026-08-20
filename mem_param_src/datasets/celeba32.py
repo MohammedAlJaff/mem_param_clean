@@ -10,7 +10,11 @@ dataset loaders so the training and evaluation code can stay generic.
 import torch
 from torchvision import datasets, transforms
 
-from mem_param_src.datasets.common import maybe_flatten, seeded_indices
+from mem_param_src.datasets.common import (
+    maybe_flatten,
+    seeded_indices,
+    source_catalog_sha256,
+)
 
 
 def _build_transform():
@@ -86,6 +90,10 @@ def load_celeba32_bundle(config):
 
     train_tensor = maybe_flatten(train_tensor, config)
     reference_tensor = maybe_flatten(reference_tensor, config)
+    train_source_id = "torchvision_celeba:train"
+    reference_source_id = f"torchvision_celeba:{config.data.reference_split}"
+    train_sample_ids = [int(item) for item in train_indices.tolist()]
+    reference_sample_ids = [int(item) for item in reference_indices.tolist()]
 
     return {
         "train": train_tensor.contiguous(),
@@ -94,10 +102,22 @@ def load_celeba32_bundle(config):
         "reference_labels": reference_labels,
         "train_indices": train_indices,
         "reference_indices": reference_indices,
+        "train_sample_ids": train_sample_ids,
+        "reference_sample_ids": reference_sample_ids,
+        "train_sample_id_kind": "index",
+        "reference_sample_id_kind": "index",
+        "train_source_size": len(train_set),
+        "reference_source_size": len(reference_set),
+        "train_source_catalog_sha256": source_catalog_sha256(
+            train_source_id, range(len(train_set))
+        ),
+        "reference_source_catalog_sha256": source_catalog_sha256(
+            reference_source_id, range(len(reference_set))
+        ),
         "train_role": "train",
         "reference_role": "heldout_reference",
-        "train_source_id": "torchvision_celeba:train",
-        "reference_source_id": f"torchvision_celeba:{config.data.reference_split}",
+        "train_source_id": train_source_id,
+        "reference_source_id": reference_source_id,
         "train_split": "train",
         "reference_split": str(config.data.reference_split),
         "display_shape": (

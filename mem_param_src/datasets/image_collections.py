@@ -13,7 +13,12 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
-from mem_param_src.datasets.common import maybe_flatten, seeded_indices
+from mem_param_src.datasets.common import (
+    maybe_flatten,
+    relative_path_sample_ids,
+    seeded_indices,
+    source_catalog_sha256,
+)
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -82,6 +87,11 @@ def _stack_subset(dataset, indices):
         images.append(image)
         labels.append(int(label))
     return torch.stack(images), torch.as_tensor(labels, dtype=torch.long)
+
+
+def _selected_catalog_ids(catalog, indices):
+    """Select stable sample identifiers in exact tensor order."""
+    return [catalog[int(index)] for index in indices.tolist()]
 
 
 def _class_count_summary(labels):
@@ -182,6 +192,10 @@ def load_flowers102_bundle(config):
 
     train_tensor = maybe_flatten(train_tensor, config)
     reference_tensor = maybe_flatten(reference_tensor, config)
+    train_source_id = f"torchvision_flowers102:{train_split}"
+    reference_source_id = f"torchvision_flowers102:{reference_split}"
+    train_sample_ids = [int(item) for item in train_indices.tolist()]
+    reference_sample_ids = [int(item) for item in reference_indices.tolist()]
 
     return {
         "train": train_tensor.contiguous(),
@@ -192,10 +206,22 @@ def load_flowers102_bundle(config):
         "reference_class_counts": _class_count_summary(reference_labels),
         "train_indices": train_indices,
         "reference_indices": reference_indices,
+        "train_sample_ids": train_sample_ids,
+        "reference_sample_ids": reference_sample_ids,
+        "train_sample_id_kind": "index",
+        "reference_sample_id_kind": "index",
+        "train_source_size": len(train_set),
+        "reference_source_size": len(reference_set),
+        "train_source_catalog_sha256": source_catalog_sha256(
+            train_source_id, range(len(train_set))
+        ),
+        "reference_source_catalog_sha256": source_catalog_sha256(
+            reference_source_id, range(len(reference_set))
+        ),
         "train_role": "train",
         "reference_role": "heldout_reference",
-        "train_source_id": f"torchvision_flowers102:{train_split}",
-        "reference_source_id": f"torchvision_flowers102:{reference_split}",
+        "train_source_id": train_source_id,
+        "reference_source_id": reference_source_id,
         "train_split": train_split,
         "reference_split": reference_split,
         "display_shape": (
@@ -231,7 +257,9 @@ def load_afhq_v2_bundle(config):
     transform = _build_transform(config)
 
     train_set = datasets.ImageFolder(base_dir / train_split, transform=transform)
-    reference_set = datasets.ImageFolder(base_dir / reference_split, transform=transform)
+    reference_set = datasets.ImageFolder(
+        base_dir / reference_split, transform=transform
+    )
 
     train_indices = seeded_indices(
         len(train_set), int(config.data.n_train), int(config.training.seed)
@@ -244,6 +272,16 @@ def load_afhq_v2_bundle(config):
 
     train_tensor = maybe_flatten(train_tensor, config)
     reference_tensor = maybe_flatten(reference_tensor, config)
+    train_source_id = f"afhq_v2:{train_split}"
+    reference_source_id = f"afhq_v2:{reference_split}"
+    train_catalog = relative_path_sample_ids(
+        (path for path, _ in train_set.samples),
+        base_dir / train_split,
+    )
+    reference_catalog = relative_path_sample_ids(
+        (path for path, _ in reference_set.samples),
+        base_dir / reference_split,
+    )
 
     return {
         "train": train_tensor.contiguous(),
@@ -254,10 +292,24 @@ def load_afhq_v2_bundle(config):
         "reference_class_counts": _class_count_summary(reference_labels),
         "train_indices": train_indices,
         "reference_indices": reference_indices,
+        "train_sample_ids": _selected_catalog_ids(train_catalog, train_indices),
+        "reference_sample_ids": _selected_catalog_ids(
+            reference_catalog, reference_indices
+        ),
+        "train_sample_id_kind": "relative_path",
+        "reference_sample_id_kind": "relative_path",
+        "train_source_size": len(train_set),
+        "reference_source_size": len(reference_set),
+        "train_source_catalog_sha256": source_catalog_sha256(
+            train_source_id, train_catalog
+        ),
+        "reference_source_catalog_sha256": source_catalog_sha256(
+            reference_source_id, reference_catalog
+        ),
         "train_role": "train",
         "reference_role": "heldout_reference",
-        "train_source_id": f"afhq_v2:{train_split}",
-        "reference_source_id": f"afhq_v2:{reference_split}",
+        "train_source_id": train_source_id,
+        "reference_source_id": reference_source_id,
         "train_split": train_split,
         "reference_split": reference_split,
         "display_shape": (
@@ -280,10 +332,7 @@ def load_ffhq128_bundle(config):
     disjoint.
     """
     root = config.data.root
-    subdir = str(
-        getattr(config.data, "dataset_subdir", "")
-        or "ffhq/thumbnails128x128"
-    )
+    subdir = str(getattr(config.data, "dataset_subdir", "") or "ffhq/thumbnails128x128")
     base_dir = _resolve_existing_dir(
         root,
         (
@@ -305,6 +354,9 @@ def load_ffhq128_bundle(config):
 
     train_tensor = maybe_flatten(train_tensor, config)
     reference_tensor = maybe_flatten(reference_tensor, config)
+    source_id = "ffhq128:all"
+    source_catalog = relative_path_sample_ids(dataset.files, base_dir)
+    source_fingerprint = source_catalog_sha256(source_id, source_catalog)
 
     return {
         "train": train_tensor.contiguous(),
@@ -315,10 +367,20 @@ def load_ffhq128_bundle(config):
         "reference_class_counts": _class_count_summary(reference_labels),
         "train_indices": train_indices,
         "reference_indices": reference_indices,
+        "train_sample_ids": _selected_catalog_ids(source_catalog, train_indices),
+        "reference_sample_ids": _selected_catalog_ids(
+            source_catalog, reference_indices
+        ),
+        "train_sample_id_kind": "relative_path",
+        "reference_sample_id_kind": "relative_path",
+        "train_source_size": len(dataset),
+        "reference_source_size": len(dataset),
+        "train_source_catalog_sha256": source_fingerprint,
+        "reference_source_catalog_sha256": source_fingerprint,
         "train_role": "train",
         "reference_role": "same_corpus_holdout",
-        "train_source_id": "ffhq128:all",
-        "reference_source_id": "ffhq128:all",
+        "train_source_id": source_id,
+        "reference_source_id": source_id,
         "train_split": "seeded_partition",
         "reference_split": "seeded_partition",
         "display_shape": (

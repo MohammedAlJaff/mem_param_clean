@@ -15,7 +15,11 @@ import torch.nn.functional as F
 from torchvision import datasets
 from torchvision.datasets.mnist import read_image_file, read_label_file
 
-from mem_param_src.datasets.common import maybe_flatten, seeded_indices
+from mem_param_src.datasets.common import (
+    maybe_flatten,
+    seeded_indices,
+    source_catalog_sha256,
+)
 
 MNIST_NUM_CLASSES = 10
 
@@ -150,7 +154,9 @@ def _class_count_summary(labels, num_classes=MNIST_NUM_CLASSES):
     Convert label counts into a JSON-friendly `{class_id: count}` dict.
     """
     counts = torch.bincount(labels.to(torch.int64), minlength=num_classes)
-    return {str(class_id): int(counts[class_id].item()) for class_id in range(num_classes)}
+    return {
+        str(class_id): int(counts[class_id].item()) for class_id in range(num_classes)
+    }
 
 
 def load_mnist_bundle(config):
@@ -209,9 +215,7 @@ def load_mnist_bundle(config):
         "reference subset",
     )
 
-    train_tensor = (
-        train_data[train_indices].float().div(127.5).sub(1.0).unsqueeze(1)
-    )
+    train_tensor = train_data[train_indices].float().div(127.5).sub(1.0).unsqueeze(1)
     reference_tensor = (
         test_data[reference_indices].float().div(127.5).sub(1.0).unsqueeze(1)
     )
@@ -222,6 +226,10 @@ def load_mnist_bundle(config):
     reference_tensor = _maybe_resize_images(reference_tensor, config)
     train_tensor = maybe_flatten(train_tensor, config)
     reference_tensor = maybe_flatten(reference_tensor, config)
+    train_source_id = "torchvision_mnist:train"
+    reference_source_id = "torchvision_mnist:test"
+    train_sample_ids = [int(item) for item in train_indices.tolist()]
+    reference_sample_ids = [int(item) for item in reference_indices.tolist()]
 
     return {
         "train": train_tensor.contiguous(),
@@ -237,10 +245,22 @@ def load_mnist_bundle(config):
         "class_balance_adjustments": class_balance_adjustments,
         "train_indices": train_indices,
         "reference_indices": reference_indices,
+        "train_sample_ids": train_sample_ids,
+        "reference_sample_ids": reference_sample_ids,
+        "train_sample_id_kind": "index",
+        "reference_sample_id_kind": "index",
+        "train_source_size": int(train_data.shape[0]),
+        "reference_source_size": int(test_data.shape[0]),
+        "train_source_catalog_sha256": source_catalog_sha256(
+            train_source_id, range(int(train_data.shape[0]))
+        ),
+        "reference_source_catalog_sha256": source_catalog_sha256(
+            reference_source_id, range(int(test_data.shape[0]))
+        ),
         "train_role": "train",
         "reference_role": "heldout_reference",
-        "train_source_id": "torchvision_mnist:train",
-        "reference_source_id": "torchvision_mnist:test",
+        "train_source_id": train_source_id,
+        "reference_source_id": reference_source_id,
         "train_split": "train",
         "reference_split": "test",
         "display_shape": (

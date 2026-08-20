@@ -1,6 +1,10 @@
 """Base configuration helpers for first-party studies."""
 
+import importlib.util
+import json
 import os
+from collections.abc import Mapping
+from pathlib import Path
 
 from ml_collections import ConfigDict
 
@@ -78,7 +82,7 @@ def get_base_config():
     training.start_time = 0.01
     training.end_time = 0.99
     training.use_safe_division = True
-    training.denominator_epsilon = 0.01
+    training.safe_div_denom_eps = 0.01
 
     evaluation = config.evaluation = ConfigDict()
     evaluation.n_samples = 64
@@ -89,6 +93,7 @@ def get_base_config():
     evaluation.chunk_size = 256
     evaluation.loss_eval_times = (0.5, 0.75)
     evaluation.loss_eval_batch_size = 0
+    evaluation.sliced_w2_n_directions = 128
 
     sampling = config.sampling = ConfigDict()
     sampling.method = "heun"
@@ -96,8 +101,8 @@ def get_base_config():
     sampling.start_time = 0.01
     sampling.end_time = 0.99
     sampling.use_safe_division = True
-    sampling.denominator_epsilon = 0.01
-    sampling.output = "final_sample"
+    sampling.safe_div_denom_eps = 0.01
+    sampling.output = "x_1"
 
     outputs = config.outputs = ConfigDict()
     outputs.run_name = "run"
@@ -167,29 +172,149 @@ def clone_config(config):
     return ConfigDict(config_to_dict(config))
 
 
+def _is_config_mapping(value):
+    """Return whether a value is a ConfigDict or standard mapping."""
+    return isinstance(value, (ConfigDict, Mapping))
+
+
 def _set_dotted(config, dotted_key, value):
-    """Set one nested config field using a dotted key."""
+    """Set one existing leaf field using a dotted key."""
     parts = dotted_key.split(".")
+    if not dotted_key or any(not part for part in parts):
+        raise ValueError(f"Invalid configuration field: {dotted_key!r}")
+
     cursor = config
     for part in parts[:-1]:
         if part not in cursor:
-            cursor[part] = ConfigDict()
+            raise ValueError(f"Unknown configuration field: {dotted_key!r}")
         cursor = cursor[part]
-    cursor[parts[-1]] = value
+        if not _is_config_mapping(cursor):
+            raise ValueError(f"Configuration field is not a section: {part!r}")
+
+    leaf = parts[-1]
+    if leaf not in cursor:
+        raise ValueError(f"Unknown configuration field: {dotted_key!r}")
+    if _is_config_mapping(cursor[leaf]):
+        raise ValueError(
+            f"Configuration override must name a leaf field: {dotted_key!r}"
+        )
+
+    try:
+        cursor[leaf] = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Invalid value for configuration field {dotted_key!r}: {value!r}"
+        ) from exc
 
 
 def apply_overrides(config, overrides):
-    """Apply dotted-key overrides onto an existing config in place."""
+    """Apply strict dotted-key overrides onto an existing config in place."""
     for dotted_key, value in overrides.items():
-        if value is None:
-            continue
         _set_dotted(config, dotted_key, value)
     return config
 
 
+def parse_cli_overrides(items, allowed_sections=None):
+    """Parse repeatable ``KEY=VALUE`` arguments into strict config overrides."""
+    overrides = {}
+    allowed_sections = set(allowed_sections or ())
+
+    for item in items or ():
+        if "=" not in item:
+            raise ValueError(
+                f"Configuration override must use KEY=VALUE syntax: {item!r}"
+            )
+        dotted_key, raw_value = item.split("=", 1)
+        dotted_key = dotted_key.strip()
+        if not dotted_key:
+            raise ValueError(f"Configuration override has an empty key: {item!r}")
+        if allowed_sections and dotted_key.split(".", 1)[0] not in allowed_sections:
+            allowed = ", ".join(sorted(allowed_sections))
+            raise ValueError(
+                f"Override {dotted_key!r} is not allowed here. "
+                f"Expected a field under: {allowed}."
+            )
+
+        raw_value = raw_value.strip()
+        try:
+            value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            value = raw_value
+        overrides[dotted_key] = value
+
+    return overrides
+
+
+def _config_leaves(value, prefix=""):
+    """Yield dotted leaf fields from a nested config or mapping."""
+    for key, item in value.items():
+        dotted_key = f"{prefix}.{key}" if prefix else str(key)
+        if _is_config_mapping(item):
+            yield from _config_leaves(item, dotted_key)
+        else:
+            yield dotted_key, item
+
+
+def apply_config_overlay(config, overlay, allowed_sections=None):
+    """Apply a partial config after checking its allowed top-level sections."""
+    allowed_sections = set(allowed_sections or ())
+    if allowed_sections:
+        unexpected = sorted(set(overlay.keys()) - allowed_sections)
+        if unexpected:
+            allowed = ", ".join(sorted(allowed_sections))
+            raise ValueError(
+                "Evaluation config contains forbidden sections: "
+                f"{', '.join(unexpected)}. Allowed sections: {allowed}."
+            )
+
+    return apply_overrides(config, dict(_config_leaves(overlay)))
+
+
+def load_python_config(path, allowed_sections=None):
+    """Load a Python config file through its required ``get_config`` function."""
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Configuration file does not exist: {path}")
+
+    module_name = f"_mem_param_config_{path.stem}_{abs(hash(str(path)))}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"Cannot import configuration file: {path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    get_config = getattr(module, "get_config", None)
+    if not callable(get_config):
+        raise ValueError(f"Configuration file must define get_config(): {path}")
+
+    config = get_config()
+    if isinstance(config, ConfigDict):
+        loaded = config
+    elif isinstance(config, Mapping):
+        loaded = ConfigDict(config)
+    else:
+        raise TypeError(
+            "get_config() must return a ConfigDict or mapping, "
+            f"got {type(config).__name__}"
+        )
+
+    if allowed_sections:
+        unexpected = sorted(set(loaded.keys()) - set(allowed_sections))
+        if unexpected:
+            allowed = ", ".join(sorted(allowed_sections))
+            raise ValueError(
+                "Evaluation config contains forbidden sections: "
+                f"{', '.join(unexpected)}. Allowed sections: {allowed}."
+            )
+    return loaded
+
+
 __all__ = [
+    "apply_config_overlay",
     "apply_overrides",
     "clone_config",
     "config_to_dict",
     "get_base_config",
+    "load_python_config",
+    "parse_cli_overrides",
 ]

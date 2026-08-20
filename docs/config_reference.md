@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Updated: 2026-08-16
+Updated: 2026-08-20
 
 This is the human-readable reference for every field currently created by
 `mem_param_src.config.get_base_config()`.
@@ -9,9 +9,9 @@ The programmatic defaults live in [`mem_param_src/config.py`](../mem_param_src/c
 When a setting is added, renamed, or removed, update both files. A test checks
 that every leaf field in the base config is mentioned here.
 
-The clean repository does not yet have a reusable command-line runner. In this
-document, “flag” means a dotted configuration field such as
-`sampling.use_safe_division`. Actual old `--command-line` flags are kept in a
+The clean repository has separate image and synthetic training and evaluation
+commands. A repeatable `--set` flag changes one existing dotted configuration
+field, such as `sampling.use_safe_division`. Old command-line flags remain in a
 separate legacy section near the end.
 
 ## How to read this reference
@@ -19,8 +19,8 @@ separate legacy section near the end.
 The `Use` column has four labels:
 
 - **Active**: read by current clean source code or the sanity notebook.
-- **Runner-owned**: declared for the reusable runner that still needs to be
-  migrated. The clean repository does not yet execute it end to end.
+- **Runner-owned**: read or resolved by the reusable training and evaluation
+  commands.
 - **Derived**: normally computed by a runner or runtime helper; avoid setting it
   manually unless reproducing a saved run.
 - **Reserved**: named in the configuration, but not implemented yet.
@@ -39,22 +39,26 @@ cfg.framework.loss_space = "x"             # "x", "eps", or "v"
 cfg.training.start_time = 0.01
 cfg.training.end_time = 0.99
 cfg.training.use_safe_division = True
-cfg.training.denominator_epsilon = 0.01
+cfg.training.safe_div_denom_eps = 0.01
 
 cfg.sampling.start_time = 0.01
 cfg.sampling.end_time = 0.99
 cfg.sampling.use_safe_division = True
-cfg.sampling.denominator_epsilon = 0.01
+cfg.sampling.safe_div_denom_eps = 0.01
 cfg.sampling.method = "heun"
 cfg.sampling.n_steps = 50
-cfg.sampling.output = "final_sample"
+cfg.sampling.output = "x_1"
 ```
 
 Safe division is enabled with `use_safe_division = True`. Exact division is
 selected with `False`.
 
+Training and inference use independent controls. The training loss reads
+`training.use_safe_division`. Sampling reads `sampling.use_safe_division`.
+Resolved run records must save both values.
+
 The safe-division setting is not free: it changes the conversion equation when
-the denominator magnitude is below `denominator_epsilon`. For the linear FM
+the denominator magnitude is below `safe_div_denom_eps`. For the linear FM
 path:
 
 - an `x` prediction converted to `eps` or `v` divides by `1 - t`;
@@ -63,7 +67,7 @@ path:
   the same endpoint singularity.
 
 With the paired defaults `start_time = 0.01`, `end_time = 0.99`, and
-`denominator_epsilon = 0.01`, the clamp threshold matches the smallest ideal
+`safe_div_denom_eps = 0.01`, the clamp threshold matches the smallest ideal
 FM path coefficient inside the configured interval. Safe division should
 therefore act mainly as a boundary guard instead of changing a broad part of
 the interval. Floating-point rounding can still activate it at an endpoint.
@@ -177,6 +181,27 @@ Legacy dataset guidance:
 The legacy synthetic values are useful smoke/study starting points, not a
 single recommended paper scale.
 
+#### Saved data partitions
+
+One finite source dataset can contribute three disjoint roles:
+
+- `train` contains the selected examples used by the optimizer;
+- `reference` contains selected held-out examples used as an evaluation
+  baseline;
+- unused examples remain in the source dataset and are not copied into the run.
+
+The reference partition is not automatically the complete complement of the
+training partition. Each image loader records stable sample identifiers in
+exact tensor order. Indexed datasets use split-relative integer indices. Local
+folder datasets use relative file paths.
+
+Every version-2 run saves `data_bundle.pt` and `data_manifest.json`. The bundle
+contains exact post-transform tensors, labels, indices, and loader metadata.
+The manifest records source sizes, ordered-catalog SHA-256 values, selected
+sample identifiers, tensor SHA-256 values, and the selection seed. Standalone
+evaluation validates the manifest against the saved bundle without opening the
+original dataset.
+
 ### Training
 
 | Setting | Default | Meaning and guidance | Use |
@@ -198,7 +223,7 @@ single recommended paper scale.
 | `training.start_time` | `0.01` | Smallest uniformly sampled training time. Must satisfy `0 < start < end < 1`. | Active |
 | `training.end_time` | `0.99` | Largest uniformly sampled training time. Must satisfy `0 < start < end < 1`. | Active |
 | `training.use_safe_division` | `True` | `True`: clamp small conversion denominators. `False`: use the exact mathematical division. | Active |
-| `training.denominator_epsilon` | `0.01` | Minimum denominator magnitude when training safe division is enabled. It matches the default distance from either path endpoint. | Active |
+| `training.safe_div_denom_eps` | `0.01` | Minimum denominator magnitude when training safe division is enabled. It matches the default distance from either path endpoint. | Active |
 
 Legacy runner budgets were `10,000` steps for the synthetic MLP and `30,000`
 for the image UNet. Both used a `bonnaire-1m` checkpoint schedule by default,
@@ -217,6 +242,7 @@ budgets and schedules are historical starting points, not clean defaults.
 | `evaluation.chunk_size` | `256` | Query chunk size for distance metrics. Change for memory/performance only. | Active |
 | `evaluation.loss_eval_times` | `(0.5, 0.75)` | Fixed times used for checkpoint loss probes in addition to random-time loss. | Runner-owned |
 | `evaluation.loss_eval_batch_size` | `0` | Batch size for loss probes. Legacy image runner used `0` as an automatic/full-batch sentinel; synthetic used the training batch cap. | Runner-owned |
+| `evaluation.sliced_w2_n_directions` | `128` | Number of fixed intrinsic-space directions saved for synthetic sliced-Wasserstein evaluation. | Active |
 
 The old synthetic runner used `ratio_threshold=0.3`, `chunk_size=512`, and
 `128` sliced-Wasserstein directions. The clean image metrics already report a
@@ -231,8 +257,16 @@ rho sweep, which is safer than treating one threshold as universally correct.
 | `sampling.start_time` | `0.01` | First ODE time. Independent from the training start time. Must satisfy `0 < start < end < 1`. | Active |
 | `sampling.end_time` | `0.99` | Final ODE time. Independent from the training end time. | Active |
 | `sampling.use_safe_division` | `True` | Safe or exact division used when converting model outputs to sampling velocity. | Active |
-| `sampling.denominator_epsilon` | `0.01` | Minimum denominator magnitude for sampling conversions. It matches the default distance from either path endpoint. | Active |
-| `sampling.output` | `"final_sample"` | `"final_sample"` returns the result after the final solver step. `"clean_prediction"` is named but raises `NotImplementedError`. | Active/Reserved |
+| `sampling.safe_div_denom_eps` | `0.01` | Minimum denominator magnitude for sampling conversions. It matches the default distance from either path endpoint. | Active |
+| `sampling.output` | `"x_1"` | `"x_1"` returns the conventional data-endpoint sample. `"x_t_max"` returns the integrated state at the configured maximum time. | Active |
+
+The model equations call the interpolated state `z_t`. The public output name
+`x_t_max` follows the selected sampling-output terminology. It returns that
+integrated state at `sampling.end_time` without an additional model call.
+
+The `x_1` output is the conventional data-endpoint sample. The sampler evaluates
+the model at `(x_t_max, t_max)` and applies the path conversion to data space.
+This conversion does not add another ODE interval from `t_max` to one.
 
 Legacy sampling-step defaults differed by task:
 
@@ -287,6 +321,41 @@ dataset, model, endpoint range, and parameterization sweep.
 | `tracking.wandb.notes` | `""` | Free-text run notes. Do not encode factors only in notes. | Runner-owned |
 | `tracking.wandb.strict` | `False` | If `True`, tracking failures abort the run; if `False`, training may continue with a warning. | Runner-owned |
 
+## Clean runner commands
+
+Training commands load one Python experiment config through `get_config()`.
+They reject unknown `--set` fields and non-empty run directories.
+
+```bash
+mem-param-image-train \
+  --config configs/runners/flowers102_smoke.py \
+  --run-dir outputs/flowers_run \
+  --set framework.prediction_space=v \
+  --evaluate-after-training
+
+mem-param-synthetic-train \
+  --config configs/runners/gmm_smoke.py \
+  --run-dir outputs/gmm_run
+```
+
+Evaluation commands require only the saved run directory. They load the saved
+config, data manifest, tensors, fixed noise, metric state, and checkpoints.
+They never rebuild the dataset.
+
+```bash
+mem-param-image-eval --run-dir outputs/flowers_run
+
+mem-param-synthetic-eval \
+  --run-dir outputs/gmm_run \
+  --eval-config configs/eval/exact_division.py \
+  --eval-name exact_division \
+  --set sampling.output=x_1
+```
+
+An optional evaluation config may contain only `sampling` and `evaluation`
+sections. The setting order is saved run, evaluation config, then `--set`.
+Changed evaluation settings require a new `--eval-name`.
+
 ## Findings from the old runners
 
 The inspected old working repository was:
@@ -318,7 +387,7 @@ migration inventory, not commands that currently work here.
 | --- | --- | --- |
 | `schedule.t_min` | Split into `training.start_time` and `sampling.start_time` | Training and inference ranges must be independent. |
 | `schedule.t_max` | Split into `training.end_time` and `sampling.end_time` | Same reason. |
-| `schedule.denom_eps` | Split into the two `denominator_epsilon` fields | Training and sampling division policies must be independent. |
+| `schedule.denom_eps` | Split into the two `safe_div_denom_eps` fields | Training and sampling division policies must be independent. |
 | implicit safe division | Two `use_safe_division` flags | Exact versus clamped division is now explicit. |
 | `schedule.time_sampling` | Removed | Clean training uses uniform times only. |
 | `schedule.logit_mu` | Removed | Logit-normal time sampling was removed. |
@@ -328,8 +397,8 @@ migration inventory, not commands that currently work here.
 | `network.patch_size`, `depth`, `heads` | Removed | JiT/transformer backbone is not retained. |
 | `network.bottleneck_dim`, `proj_dropout`, `attn_dropout` | Removed | Same JiT scope removal. |
 | `network.in_context_len`, `in_context_start` | Removed | Same JiT scope removal. |
-| old `sampling.output="state"` | `sampling.output="final_sample"` | Plain output name. |
-| old `sampling.output="clean_x"` | `sampling.output="clean_prediction"` | Plain and scientifically accurate name; still not implemented. |
+| old `sampling.output="state"` | `sampling.output="x_t_max"` | State after the final solver step. |
+| old `sampling.output="clean_x"` | `sampling.output="x_1"` | Conventional data-endpoint sample from the final solver state. |
 
 ### Legacy image-runner CLI inventory
 
@@ -418,7 +487,7 @@ flags were:
 | `--sampling_steps` | `128` | `sampling.n_steps`. |
 | `--ratio_threshold` | `0.3` | `evaluation.ratio_threshold`. |
 | `--chunk_size` | `512` | `evaluation.chunk_size`. |
-| `--sliced_w2_projections` | `128` | Fixed sliced-Wasserstein direction count; no clean config field yet. |
+| `--sliced_w2_projections` | `128` | Replaced by `evaluation.sliced_w2_n_directions`. |
 | `--wandb_entity` | environment or `maj90` | `tracking.wandb.entity`. |
 | `--wandb_notes` | empty | `tracking.wandb.notes`. |
 | `--wandb_strict` | off | `tracking.wandb.strict`. |
@@ -481,7 +550,7 @@ Use these as operational starting points:
 - `framework.family = "fm"`;
 - `framework.loss_weighting = "unit"`;
 - `sampling.method = "heun"`;
-- `sampling.output = "final_sample"`;
+- `sampling.output = "x_1"`;
 - `runtime.precision = "fp32"` for correctness baselines;
 - held-out reference data and fixed saved noise for checkpoint comparisons;
 - multiple seeds and a rho sensitivity sweep for reported results.

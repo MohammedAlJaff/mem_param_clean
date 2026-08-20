@@ -6,4 +6,5 @@ dependencies:
   - pip>=24
   - setuptools>=68
   - wheel
-  - ml-collections
+  - pip:
+      - "-e .[image,evaluation,dev]"

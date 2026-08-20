@@ -136,10 +136,10 @@ class GDFM(nn.Module):
             ("use_safe_division",),
             required=True,
         )
-        self.training_denominator_epsilon = _cfg_value(
+        self.training_safe_div_denom_eps = _cfg_value(
             config,
             ("training",),
-            ("denominator_epsilon",),
+            ("safe_div_denom_eps",),
             required=True,
         )
         self._validate_training_settings()
@@ -173,7 +173,7 @@ class GDFM(nn.Module):
         """Check the required training-time and division settings."""
         start = float(self.training_start_time)
         end = float(self.training_end_time)
-        epsilon = float(self.training_denominator_epsilon)
+        epsilon = float(self.training_safe_div_denom_eps)
 
         if not math.isfinite(start) or not math.isfinite(end):
             raise ValueError("training.start_time and training.end_time must be finite")
@@ -186,7 +186,7 @@ class GDFM(nn.Module):
             raise ValueError("training.use_safe_division must be true or false")
         if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
             raise ValueError(
-                "training.denominator_epsilon must be a finite number between 0 and 1"
+                "training.safe_div_denom_eps must be a finite number between 0 and 1"
             )
 
     def _setup_loss_weighting(self):
@@ -230,7 +230,7 @@ class GDFM(nn.Module):
         start_time,
         end_time,
         use_safe_division,
-        denominator_epsilon,
+        safe_div_denom_eps,
         output,
         device=None,
     ):
@@ -241,7 +241,7 @@ class GDFM(nn.Module):
             z: initial noise tensor, already in the ambient data space
             n_steps: number of equal solver steps from `start_time` to `end_time`
             method: `"euler"` or `"heun"`
-            output: `"final_sample"`; `"clean_prediction"` is not implemented
+            output: `"x_t_max"` for the solver state or `"x_1"` for the data endpoint
         """
         from mem_param_src.sampling import sample
 
@@ -253,7 +253,7 @@ class GDFM(nn.Module):
             start_time=start_time,
             end_time=end_time,
             use_safe_division=use_safe_division,
-            denominator_epsilon=denominator_epsilon,
+            safe_div_denom_eps=safe_div_denom_eps,
             output=output,
             device=device,
         )
@@ -291,7 +291,7 @@ class GDFM(nn.Module):
             source=self.prediction_space,
             target=self.loss_space,
             use_safe_division=self.training_use_safe_division,
-            denominator_epsilon=self.training_denominator_epsilon,
+            safe_div_denom_eps=self.training_safe_div_denom_eps,
         )
         target = self.get_true_target(x, eps, t, self.loss_space)
 
@@ -370,7 +370,7 @@ class GDFM(nn.Module):
         raise ValueError(f"Unknown target space: {space}")
 
     def _x_hat_to_eps_hat(
-        self, x_hat, z, t, use_safe_division, denominator_epsilon
+        self, x_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Convert an `x` prediction into an `eps` prediction at the same `z_t`.
@@ -379,11 +379,11 @@ class GDFM(nn.Module):
             z - self.a(t) * x_hat,
             self.b(t),
             use_safe_division,
-            denominator_epsilon,
+            safe_div_denom_eps,
         )
 
     def _eps_hat_to_x_hat(
-        self, eps_hat, z, t, use_safe_division, denominator_epsilon
+        self, eps_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Convert an `eps` prediction into an `x` prediction at the same `z_t`.
@@ -392,33 +392,33 @@ class GDFM(nn.Module):
             z - self.b(t) * eps_hat,
             self.a(t),
             use_safe_division,
-            denominator_epsilon,
+            safe_div_denom_eps,
         )
 
     def _x_hat_to_v_hat(
-        self, x_hat, z, t, use_safe_division, denominator_epsilon
+        self, x_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Convert an `x` prediction into a velocity prediction.
         """
         eps_hat = self._x_hat_to_eps_hat(
-            x_hat, z, t, use_safe_division, denominator_epsilon
+            x_hat, z, t, use_safe_division, safe_div_denom_eps
         )
         return self.da_dt(t) * x_hat + self.db_dt(t) * eps_hat
 
     def _eps_hat_to_v_hat(
-        self, eps_hat, z, t, use_safe_division, denominator_epsilon
+        self, eps_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Convert an `eps` prediction into a velocity prediction.
         """
         x_hat = self._eps_hat_to_x_hat(
-            eps_hat, z, t, use_safe_division, denominator_epsilon
+            eps_hat, z, t, use_safe_division, safe_div_denom_eps
         )
         return self.da_dt(t) * x_hat + self.db_dt(t) * eps_hat
 
     def _v_hat_to_x_hat(
-        self, v_hat, z, t, use_safe_division, denominator_epsilon
+        self, v_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Recover an `x` prediction from a velocity prediction.
@@ -431,11 +431,11 @@ class GDFM(nn.Module):
             b * v_hat - db * z,
             da * b - a * db,
             use_safe_division,
-            denominator_epsilon,
+            safe_div_denom_eps,
         )
 
     def _v_hat_to_eps_hat(
-        self, v_hat, z, t, use_safe_division, denominator_epsilon
+        self, v_hat, z, t, use_safe_division, safe_div_denom_eps
     ):
         """
         Recover an `eps` prediction from a velocity prediction.
@@ -448,7 +448,7 @@ class GDFM(nn.Module):
             da * z - a * v_hat,
             da * b - a * db,
             use_safe_division,
-            denominator_epsilon,
+            safe_div_denom_eps,
         )
 
     def convert(
@@ -460,7 +460,7 @@ class GDFM(nn.Module):
         target,
         *,
         use_safe_division,
-        denominator_epsilon,
+        safe_div_denom_eps,
     ):
         """
         Convert one prediction tensor between the supported target spaces.
@@ -470,7 +470,7 @@ class GDFM(nn.Module):
             - `eps`
             - `v`
         """
-        self._validate_division_settings(use_safe_division, denominator_epsilon)
+        self._validate_division_settings(use_safe_division, safe_div_denom_eps)
 
         if source == target:
             return prediction
@@ -494,28 +494,28 @@ class GDFM(nn.Module):
             z_t,
             t_b,
             use_safe_division,
-            denominator_epsilon,
+            safe_div_denom_eps,
         )
 
-    def _validate_division_settings(self, use_safe_division, denominator_epsilon):
+    def _validate_division_settings(self, use_safe_division, safe_div_denom_eps):
         """Check one explicit division choice."""
         if not isinstance(use_safe_division, bool):
             raise ValueError("use_safe_division must be true or false")
 
-        epsilon = float(denominator_epsilon)
+        epsilon = float(safe_div_denom_eps)
         if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
             raise ValueError(
-                "denominator_epsilon must be a finite number between 0 and 1"
+                "safe_div_denom_eps must be a finite number between 0 and 1"
             )
 
     def _divide(
-        self, numerator, denominator, use_safe_division, denominator_epsilon
+        self, numerator, denominator, use_safe_division, safe_div_denom_eps
     ):
         """
         Divide either exactly or with a configured minimum denominator size.
 
         Safe division changes the equation whenever the denominator magnitude is
-        smaller than `denominator_epsilon`.
+        smaller than `safe_div_denom_eps`.
         """
         if not use_safe_division:
             return numerator / denominator
@@ -523,7 +523,7 @@ class GDFM(nn.Module):
         sign = denominator.sign()
         sign = torch.where(sign == 0, torch.ones_like(sign), sign)
         safe_denominator = sign * denominator.abs().clamp(
-            min=float(denominator_epsilon)
+            min=float(safe_div_denom_eps)
         )
         return numerator / safe_denominator
 

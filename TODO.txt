@@ -1,5 +1,5 @@
 MEM_PARAM_CLEAN OPERATIONAL TODO
-Updated: 2026-08-18
+Updated: 2026-08-20
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -16,39 +16,11 @@ close an item. When an item is complete, record the result in
 MIGRATION_JOURNAL.md and remove it from this file.
 
 
-NOW: MAKE THE CLEAN REPOSITORY SAFE AND REPRODUCIBLE
-
-[ ] T002 - Declare the real runtime and test dependencies.
-    Problem: environment.yml and pyproject.toml currently declare only the
-    minimal shell dependencies. The source also needs PyTorch; image data and
-    metrics need optional packages such as torchvision and torch-fidelity; the
-    sanity notebook needs matplotlib and Jupyter.
-    Next action: Separate required dependencies from image, evaluation, and
-    development extras without pinning machine-specific GPU builds.
-    Done when: A fresh documented environment can import the package, run the
-    tests, and execute the GMM sanity notebook.
-
-[ ] T003 - Run a real torch-fidelity integration check.
-    Problem: The local memcompgen environment does not contain torch-fidelity.
-    Current FID tests mock the library boundary and do not run Inception.
-    Next action: In the complete project environment, compute FID on a tiny
-    tensor pair and test one torch-fidelity feature-encoder call.
-    Done when: Real feature extraction and FID finish successfully and the
-    command/result are recorded in MIGRATION_JOURNAL.md.
-
-
-NOW: SETTLE SAMPLING OUTPUT AND ENDPOINT POLICY
-
-[ ] T013 - Implement sampling.output = "clean_prediction".
-    Problem: The flag exists, but selecting it deliberately raises
-    NotImplementedError. Only sampling.output = "final_sample" works today.
-    Next action: Define and test the clean-data prediction made at
-    sampling.end_time for Euler and Heun.
-    Done when: Both output choices have explicit, numerically tested behavior.
+NOW: SETTLE SAFE-DIVISION AND ENDPOINT POLICY
 
 [ ] T014 - Choose safe-division settings for the actual experiment ranges.
     Problem: The current paired default uses start/end = 0.01/0.99 and
-    denominator_epsilon = 0.01, so the clamp threshold matches the smallest
+    safe_div_denom_eps = 0.01, so the clamp threshold matches the smallest
     ideal FM coefficient in the configured interval. This still needs empirical
     validation before paper runs.
     Next action: Compare exact division and several epsilon values over the
@@ -63,38 +35,13 @@ NOW: SETTLE SAMPLING OUTPUT AND ENDPOINT POLICY
     Done when: Any added distribution has a clear scientific reason and tests.
 
 
-NEXT: BUILD ONE SCRIPTABLE END-TO-END PATH
-
-[ ] T004 - Add the smallest reusable training runner.
-    Problem: The GMM path trains only inside the sanity notebook.
-    Next action: Port only the shared optimizer and training-loop pieces needed
-    for a short GMM command-line run.
-    Done when: One command runs config -> GMM data -> training -> Heun sampling
-    -> metrics without notebook-owned training logic.
-
-[ ] T005 - Add the run-artifact contract.
-    Problem: The clean repo does not yet save the exact inputs required for
-    reproducible checkpoint evaluation.
-    Next action: Save resolved config, train tensor, reference tensor, z_init,
-    checkpoints, metric records, and synthetic geometry under one run folder.
-    Done when: A completed GMM smoke run can be reproduced using only its saved
-    run directory.
-
-[ ] T006 - Add saved-run checkpoint replay.
-    Problem: There is no clean checkpoint-evaluation entrypoint.
-    Next action: Load the saved config, tensors, z_init, geometry, and model
-    checkpoint; do not rebuild the dataset.
-    Done when: Replaying a saved checkpoint produces deterministic samples and
-    a metric record without reading the original data source.
-
-
 NEXT: FINISH IMAGE VALIDATION
 
 [ ] T007 - Decide which image datasets remain in the clean repo and test them.
-    Problem: Image loader modules were ported, but only the GMM loader has an
-    end-to-end runtime check in the clean repository.
-    Next action: Review MNIST, CelebA32 grayscale, Flowers102, AFHQ-v2, and
-    FFHQ128 one by one; retain and test only the loaders needed by the paper.
+    Problem: Flowers102 now has an end-to-end runner check, but the remaining
+    image loaders do not have equivalent integration checks.
+    Next action: Review MNIST, CelebA32 grayscale, AFHQ-v2, and FFHQ128 one by
+    one; retain and test only the loaders needed by the paper.
     Done when: Every retained loader returns the documented, leakage-checked
     data bundle and has a focused test or smoke command.
 

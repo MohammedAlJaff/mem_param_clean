@@ -52,11 +52,11 @@ class _ConstantVelocityModel(nn.Module):
         target,
         *,
         use_safe_division,
-        denominator_epsilon,
+        safe_div_denom_eps,
     ):
         del state, t
         self.conversion_settings.append(
-            (use_safe_division, denominator_epsilon, source, target)
+            (use_safe_division, safe_div_denom_eps, source, target)
         )
         return prediction
 
@@ -68,19 +68,21 @@ class TestTrainingSettings(unittest.TestCase):
         self.assertNotIn("schedule", config)
         self.assertEqual(config.training.start_time, 0.01)
         self.assertEqual(config.training.end_time, 0.99)
-        self.assertEqual(config.training.denominator_epsilon, 0.01)
+        self.assertIs(config.training.use_safe_division, True)
+        self.assertEqual(config.training.safe_div_denom_eps, 0.01)
         self.assertEqual(config.sampling.start_time, 0.01)
         self.assertEqual(config.sampling.end_time, 0.99)
-        self.assertEqual(config.sampling.denominator_epsilon, 0.01)
+        self.assertIs(config.sampling.use_safe_division, True)
+        self.assertEqual(config.sampling.safe_div_denom_eps, 0.01)
         self.assertAlmostEqual(
             1.0 - config.training.end_time,
-            config.training.denominator_epsilon,
+            config.training.safe_div_denom_eps,
         )
         self.assertAlmostEqual(
             1.0 - config.sampling.end_time,
-            config.sampling.denominator_epsilon,
+            config.sampling.safe_div_denom_eps,
         )
-        self.assertEqual(config.sampling.output, "final_sample")
+        self.assertEqual(config.sampling.output, "x_1")
 
     def test_training_does_not_borrow_missing_sampling_setting(self):
         config = get_base_config()
@@ -117,7 +119,7 @@ class TestDivisionChoice(unittest.TestCase):
             source="v",
             target="eps",
             use_safe_division=False,
-            denominator_epsilon=0.05,
+            safe_div_denom_eps=0.05,
         )
         safe_noise = model.convert(
             velocity,
@@ -126,7 +128,7 @@ class TestDivisionChoice(unittest.TestCase):
             source="v",
             target="eps",
             use_safe_division=True,
-            denominator_epsilon=0.05,
+            safe_div_denom_eps=0.05,
         )
 
         self.assertTrue(torch.allclose(exact_noise, noise, atol=2.0e-6))
@@ -146,7 +148,7 @@ class TestDivisionChoice(unittest.TestCase):
             source="x",
             target="eps",
             use_safe_division=False,
-            denominator_epsilon=0.05,
+            safe_div_denom_eps=0.05,
         )
         safe_noise = model.convert(
             clean,
@@ -155,7 +157,7 @@ class TestDivisionChoice(unittest.TestCase):
             source="x",
             target="eps",
             use_safe_division=True,
-            denominator_epsilon=0.05,
+            safe_div_denom_eps=0.05,
         )
 
         self.assertTrue(torch.allclose(exact_noise, noise, atol=2.0e-4))
@@ -192,23 +194,27 @@ class TestSamplingSettings(unittest.TestCase):
         expected = torch.tensor([0.2, 0.35, 0.5, 0.65, 0.8])
         self.assertTrue(torch.allclose(times, expected))
 
-    def test_final_sample_reaches_sampling_end_time(self):
+    def test_x_t_max_reaches_sampling_end_time(self):
         model = _ConstantVelocityModel(2.0)
         initial = torch.zeros(3, 2)
 
-        final_state = sample(
-            model,
-            initial,
-            n_steps=3,
-            method="heun",
-            start_time=0.2,
-            end_time=0.8,
-            use_safe_division=False,
-            denominator_epsilon=0.05,
-            output="final_sample",
-        )
+        for method in ("euler", "heun"):
+            with self.subTest(method=method):
+                final_state = sample(
+                    model,
+                    initial,
+                    n_steps=3,
+                    method=method,
+                    start_time=0.2,
+                    end_time=0.8,
+                    use_safe_division=False,
+                    safe_div_denom_eps=0.05,
+                    output="x_t_max",
+                )
 
-        self.assertTrue(torch.allclose(final_state, torch.full_like(initial, 1.2)))
+                self.assertTrue(
+                    torch.allclose(final_state, torch.full_like(initial, 1.2))
+                )
         self.assertTrue(model.conversion_settings)
         self.assertTrue(
             all(
@@ -217,19 +223,27 @@ class TestSamplingSettings(unittest.TestCase):
             )
         )
 
-    def test_clean_prediction_is_reserved_but_not_implemented(self):
-        with self.assertRaisesRegex(NotImplementedError, "clean_prediction"):
-            sample(
-                _ConstantVelocityModel(0.0),
-                torch.zeros(1, 2),
-                n_steps=2,
-                method="euler",
-                start_time=0.1,
-                end_time=0.9,
-                use_safe_division=True,
-                denominator_epsilon=0.05,
-                output="clean_prediction",
-            )
+    def test_x_1_returns_conventional_data_endpoint_sample(self):
+        clean = torch.tensor([[2.0, -1.0]])
+        initial = torch.zeros_like(clean)
+
+        for method in ("euler", "heun"):
+            with self.subTest(method=method):
+                model = _small_model(prediction_space="x", loss_space="x")
+                model.net = _FixedPrediction(clean)
+                clean_prediction = sample(
+                    model,
+                    initial,
+                    n_steps=2,
+                    method=method,
+                    start_time=0.1,
+                    end_time=0.9,
+                    use_safe_division=True,
+                    safe_div_denom_eps=0.05,
+                    output="x_1",
+                )
+
+                self.assertTrue(torch.equal(clean_prediction, clean))
 
     def test_invalid_sampling_settings_fail_clearly(self):
         model = _ConstantVelocityModel(0.0)
@@ -244,8 +258,8 @@ class TestSamplingSettings(unittest.TestCase):
                 start_time=0.1,
                 end_time=0.9,
                 use_safe_division=True,
-                denominator_epsilon=0.05,
-                output="final_sample",
+                safe_div_denom_eps=0.05,
+                output="x_t_max",
             )
         with self.assertRaisesRegex(ValueError, "sampling.start_time"):
             sample(
@@ -256,8 +270,8 @@ class TestSamplingSettings(unittest.TestCase):
                 start_time=0.9,
                 end_time=0.1,
                 use_safe_division=True,
-                denominator_epsilon=0.05,
-                output="final_sample",
+                safe_div_denom_eps=0.05,
+                output="x_t_max",
             )
         with self.assertRaisesRegex(ValueError, "sampling.output"):
             sample(
@@ -268,7 +282,7 @@ class TestSamplingSettings(unittest.TestCase):
                 start_time=0.1,
                 end_time=0.9,
                 use_safe_division=True,
-                denominator_epsilon=0.05,
+                safe_div_denom_eps=0.05,
                 output="prediction",
             )
 
