@@ -44,6 +44,10 @@ def get_config():
     config.evaluation.batch_size = 2
     config.evaluation.chunk_size = 4
 
+    # Reuse all four saved noise tensors for checkpoint previews.
+    config.generation_monitor.n_samples = 4
+    config.monitoring.batch_size = 2
+
     config.sampling.n_steps = 2
     config.sampling.output = "x_1"
     return config

@@ -16,14 +16,15 @@ def _flatten_batch(tensor):
 
 
 def resolve_rho(rho=None, config=None):
-    """Return the nearest-neighbor ratio threshold."""
+    """Return the canonical threshold for the nearest-neighbor ratio ``r``."""
     if rho is not None:
         return float(rho)
     if config is not None and hasattr(config, "evaluation"):
         evaluation = config.evaluation
-        if hasattr(evaluation, "ratio_threshold"):
-            return float(evaluation.ratio_threshold)
-    return 0.5
+        if hasattr(evaluation, "f_mem_threshold"):
+            return float(evaluation.f_mem_threshold)
+        raise ValueError("evaluation.f_mem_threshold is required.")
+    return 0.3
 
 
 def _resolve_batch_size(value, name):

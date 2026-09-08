@@ -182,9 +182,17 @@ class TestProjectedImageMemorization(unittest.TestCase):
 
 
 class TestImageMetricRecords(unittest.TestCase):
+    def test_legacy_threshold_name_is_rejected(self):
+        config = get_base_config()
+        del config.evaluation.f_mem_threshold
+        config.evaluation.ratio_threshold = 0.5
+
+        with self.assertRaisesRegex(ValueError, "evaluation.f_mem_threshold"):
+            nearest_neighbors.resolve_rho(config=config)
+
     def test_checkpoint_record_has_threshold_sweep_and_delta(self):
         config = get_base_config()
-        config.evaluation.ratio_threshold = 0.5
+        config.evaluation.f_mem_threshold = 0.3
         train = torch.tensor(
             [
                 [[[0.0, 0.0], [0.0, 0.0]]],
@@ -203,6 +211,7 @@ class TestImageMetricRecords(unittest.TestCase):
         )
 
         self.assertEqual(record["step"], 5)
+        self.assertEqual(record["rho"], 0.3)
         self.assertAlmostEqual(
             record["delta_f_mem"],
             record["f_mem"] - record["baseline_f_mem"],

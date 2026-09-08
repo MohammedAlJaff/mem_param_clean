@@ -1,0 +1,79 @@
+PAPER NOTES AND DRAFT TEXT
+
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
+Keep paper text and ideas here. Mark what is known and what still needs testing.
+Use TODO.txt for open tasks and MIGRATION_JOURNAL.md for completed work.
+
+WRITING RULE
+Use plain, standard English throughout the paper, notes, docs, and discussion.
+Write like a clear technical manual, with a natural voice. Use short sentences,
+active verbs, and concrete words. Keep one main idea per sentence. Keep exact
+scientific terms when needed. Cut filler and grand claims. Keep the text alive
+through clear questions and specific observations. State the evidence and its
+limits simply. Do not turn a proposed explanation into a result.
+
+
+001 - BACK TO BASICS: GENERATION AND MEMORIZATION
+Added: 2026-09-07
+Status: Draft framing. The proposed comparison still needs evidence.
+Use in: Introduction, related work, or discussion.
+
+DRAFT PARAGRAPH
+Li and He (2025) show that predicting clean data can make large-patch pixel
+Transformers work where noise prediction fails. We ask what happens when both
+work. Does predicting clean data or noise change when a model starts to
+memorize, and how much it memorizes? We study this question by tracking sample
+quality and memorization together under matched conditions.
+
+SHORT FORM
+When both methods generate useful samples, does what they predict change what
+they memorize?
+
+WHAT THE SOURCE SAYS
+The reported failure concerns large-patch pixel Transformers. Resolution alone
+is not the explanation: token dimension and network capacity matter too. The
+paper also notes that low-dimensional latents make noise prediction easier.
+Our question adds memorization to this picture.
+
+IDEA TO TEST
+Use one fixed autoencoder and compare x-, eps-, and v-prediction in its latent
+space. Here x means the clean latent. A 32 x 32 x 4 latent is one possible
+setting, with 4,096 values. Confirm its shape and scaling for the chosen encoder.
+This experiment is proposed; it has not been validated here. A pixel-space
+setting where all methods work could answer the same question.
+
+WHAT WE NEED TO CHECK
+- Both methods must generate useful samples. Low loss alone does not show this.
+  Failed generation with low f_mem is not evidence of better generalization.
+- Keep data, architecture, optimizer, training budget, and sampling settings
+  matched. Record any differences.
+- Separate the prediction target from the loss. Compare x/v, eps/v, and v/v
+  under a common velocity loss as well as the diagonal objectives.
+- Track quality and memorization across checkpoints and seeds. Compare fixed
+  training budgets and comparable quality, with a stated checkpoint rule.
+- Keep any autoencoder fixed. Record its source and reconstruction quality.
+  Check decoded samples against the saved training and held-out images.
+- Let the results establish which method memorizes more. Do not assume an order.
+
+RELATED OPEN QUESTION
+Why does eps/eps work in the old CelebA32 study but fail in the Flowers102 run?
+This is T016 in TODO.txt. It remains unresolved. See:
+protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md
+
+SOURCE
+Tianhong Li and Kaiming He (2025).
+Back to Basics: Let Denoising Generative Models Denoise.
+arXiv:2511.13720v1, 17 November 2025. Sections 1, 2, 3.2, and 4.2.
+https://arxiv.org/abs/2511.13720
+https://arxiv.org/html/2511.13720v1
+Checked online on 2026-09-07.

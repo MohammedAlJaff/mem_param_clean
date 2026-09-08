@@ -1,5 +1,16 @@
 # Agent Guide
 
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
 Canonical instructions for agents and contributors working in this repo.
 
 ## Session Start
@@ -36,6 +47,12 @@ Key measurements:
 
 - The user is a researcher. Use simple wording and precise research
   terminology.
+- Apply plain, standard English to paper drafts, notes, documentation, comments,
+  and discussion. Write like a clear technical manual, with a natural voice.
+  Use short sentences, active verbs, concrete words, and one main idea per
+  sentence. Keep necessary scientific terms. Cut filler and grand claims.
+  Give the text life through clear questions and specific observations.
+  State evidence and uncertainty plainly. Keep the stricter notebook rules below.
 - Do not use slang, hype wording, playful labels, or informal phrases.
 - Prefer direct descriptions of methods, assumptions, metrics, results,
   blockers, and next actions.
@@ -53,6 +70,30 @@ Examples:
 - Avoid: "The runner wires everything together."
   Use: "The runner constructs the config, launches training, and optionally
   runs checkpoint evaluation."
+
+## Collaboration and Code Understanding
+
+- Help the user retain ownership of the research and understand the code.
+  Completing work should also make its structure easier for the user to follow.
+- Before a substantial implementation, give a small map of the relevant files.
+  State what each part does and how data moves between them. Explain the main
+  design choice and its research purpose. Keep this brief and concrete.
+- After implementation, show a short usage example in the style of a PyTorch
+  or scikit-learn example: imports, a minimal call, and the expected output.
+  Use actual project APIs. Label pseudocode clearly. State whether the example
+  was executed. Explain important tensor shapes and saved artifacts when relevant.
+- Link to the entrypoint and the few files that own the behavior. Explain where
+  the user can change a setting or inspect a result. A list of changed files
+  alone is not an explanation.
+- Keep the high-level layout in `docs/repo_map.md`. When a task changes that
+  layout, update the map. Put reusable usage examples in the relevant existing
+  documentation or requested notebook and link to them in the response.
+  Keep completed decisions and checks in `MIGRATION_JOURNAL.md`.
+- Explain one conceptual step at a time in plain English. Prefer a small code
+  example over a long abstract explanation. Scale detail to the change; simple
+  edits do not need a full walkthrough.
+- Keep the user involved in meaningful scientific and design choices. Do not
+  turn routine implementation into repeated approval requests or quizzes.
 
 ## Engineering Discipline
 
@@ -103,6 +144,8 @@ Examples:
 - Prefer math-first, teaching-first comments and docstrings.
 - Use paper notation directly when the paper defines the quantity: `rho`, `r`,
   `d1`, `d2`, `N`, `tau`, and `t`.
+- Use `evaluation.f_mem_threshold` for the configured `rho`. Its canonical
+  value is `0.3`. Do not add `evaluation.ratio_threshold` as an alias.
 - Use canonical metric keys in return dictionaries, JSON, and W&B logs. Do not
   add duplicate aliases such as `nn_ratio`, `ratios`, or `ratio_threshold` in
   memorization metric records.

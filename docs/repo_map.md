@@ -1,5 +1,16 @@
 # Repository Map
 
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
 Current skeleton:
 
 ```text
@@ -51,6 +62,13 @@ Probable destinations:
 - Generated outputs do not enter the clean repo by default.
 
 Boundary rules:
+
+- Image monitoring: `runners/image_train.py` reads `--f-mem-monitor` and
+  `--f-mem-samples`. `runners/training.py` calls `runners/image_monitoring.py`
+  at preview checkpoints. It samples once for grids and optional f_mem, using
+  `metrics/image/projection.py` and shared `metrics/nearest_neighbors.py`.
+  JSON records and the fixed projection stay in the run's `monitoring/` folder.
+  `runners/tracking.py` sends scalar records and grids to W&B when enabled.
 
 - `mem_param_src/` is library code only.
 - Job files can call live entrypoints, but must not own study logic.

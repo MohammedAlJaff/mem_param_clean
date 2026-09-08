@@ -1,5 +1,16 @@
 # Preservation
 
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
 The old repository was backed up before this clean repository was created.
 
 Backup directory:

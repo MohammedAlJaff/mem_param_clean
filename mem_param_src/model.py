@@ -194,10 +194,22 @@ class GDFM(nn.Module):
         Bind the training-loss weight function.
 
         Unit weighting means `w(t) = 1` for all samples and all times.
-        Common-loss controls are selected with `loss_space`, not here.
+        The equivalent options express matched `x` or `eps` losses as a
+        weighted velocity loss for a native `v/v` model.
         """
         if self.loss_weighting in ("unit", "constant"):
             self.w = self._w_unit
+            return
+        if self.loss_weighting in ("x_equivalent", "eps_equivalent"):
+            if self.prediction_space != "v" or self.loss_space != "v":
+                raise ValueError(
+                    f"loss_weighting={self.loss_weighting!r} requires "
+                    "prediction_space='v' and loss_space='v'."
+                )
+            self.w = {
+                "x_equivalent": self._w_x_equivalent,
+                "eps_equivalent": self._w_eps_equivalent,
+            }[self.loss_weighting]
             return
         if self.loss_weighting == "equal":
             raise ValueError(
@@ -348,6 +360,14 @@ class GDFM(nn.Module):
     def _w_unit(self, t):
         """Unit loss weighting: `w(t) = 1`."""
         return torch.ones_like(t)
+
+    def _w_x_equivalent(self, t):
+        """Match `x/x` MSE with `v/v` MSE: `w(t) = (1 - t)^2`."""
+        return self.b(t).square()
+
+    def _w_eps_equivalent(self, t):
+        """Match `eps/eps` MSE with `v/v` MSE: `w(t) = t^2`."""
+        return self.a(t).square()
 
     # =========================================================================
     # Target-space conversions

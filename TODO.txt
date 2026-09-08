@@ -1,5 +1,17 @@
 MEM_PARAM_CLEAN OPERATIONAL TODO
-Updated: 2026-08-20
+
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
+Updated: 2026-09-08
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -14,6 +26,52 @@ HOW TO USE THIS FILE
 Work on one narrow item at a time. Do not port a whole old directory just to
 close an item. When an item is complete, record the result in
 MIGRATION_JOURNAL.md and remove it from this file.
+
+
+NEXT SESSION: REVIEW MNIST EPS/EPS GENERATION
+
+The larger 10k run completed: W&B en9xtd1x. Loss is low, but most final
+samples remain noisy or saturated. Start with its saved grids and metrics.
+Choose one matched comparison before launching more training; width and
+training duration changed together in this run. T017 records the requested
+attention comparison. The new optional projected f_mem monitor is tested and
+ready for a future run, but was off in this completed run.
+See the 2026-09-08 closeout in MIGRATION_JOURNAL.md for the full handoff.
+
+T016 remains open. Its historical clamp replay and dimension comparisons
+have not been completed; the MNIST runs do not resolve that contradiction.
+
+[ ] T016 - Explain why eps/eps succeeds on CelebA32 but fails in the Flowers102 sanity run.
+    Problem: The old CelebA32 study contains 21 completed eps/eps runs with
+    useful FID values. The clean Flowers102 run converges in loss but generates
+    noise. These protocols differ in sampling division, endpoints, data,
+    architecture, learning rate, training budget, output, and runtime.
+    Evidence: See
+    protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md.
+    Next action: Replay the fixed Flowers102 checkpoints with the historical
+    0.05 clamp. Then compare the same Flowers images as RGB64, RGB32, and
+    grayscale32 under one matched protocol. Recover one old CelebA32 checkpoint
+    for matched old-versus-clean replay before a full reproduction run.
+    Done when: A matched multi-seed comparison identifies the causal protocol
+    change or interaction and reproduces useful CelebA32 eps/eps samples.
+
+
+MNIST EPS/EPS FOLLOW-UP
+
+[ ] T017 - Test eps/eps generation with and without attention.
+    Question: Does attention improve or worsen generation under the same
+    eps/eps training and sampling protocol?
+    Important: attn_resolutions=() disables optional attention only. The current
+    UNet always includes middle-block attention. Add an explicit tested control
+    for a genuinely attention-free model before running this comparison.
+    Compare the larger MNIST UNet with all attention off, middle attention only,
+    and optional attention at 16/8 pixels if needed. Keep widths, depth, data,
+    optimizer, update budget, time sampling, exact division, and z_init fixed.
+    Record parameter counts; attention adds parameters. Repeat across seeds.
+    Inspect raw sample ranges, fixed-noise grids, and generation quality beside
+    loss and f_mem. Low loss or low f_mem alone cannot establish success.
+    Done when: A saved comparison shows how attention affects sample quality
+    and stability, with the precise attention locations recorded.
 
 
 NOW: SETTLE SAFE-DIVISION AND ENDPOINT POLICY
@@ -38,10 +96,11 @@ NOW: SETTLE SAFE-DIVISION AND ENDPOINT POLICY
 NEXT: FINISH IMAGE VALIDATION
 
 [ ] T007 - Decide which image datasets remain in the clean repo and test them.
-    Problem: Flowers102 now has an end-to-end runner check, but the remaining
-    image loaders do not have equivalent integration checks.
-    Next action: Review MNIST, CelebA32 grayscale, AFHQ-v2, and FFHQ128 one by
-    one; retain and test only the loaders needed by the paper.
+    Status: MNIST, CIFAR10, CelebA32, and Flowers102 have local loader
+    validation. MNIST also has completed online monitored training runs.
+    Next action: Decide whether AFHQ-v2 and FFHQ128 are needed by the paper;
+    their local data integrations remain unverified. Retain and test only
+    the loaders needed by the study.
     Done when: Every retained loader returns the documented, leakage-checked
     data bundle and has a focused test or smoke command.
 
@@ -61,7 +120,11 @@ LATER: PORT ONLY AFTER LIVE ENTRYPOINTS EXIST
     Done when: Each retained source class has direct tests; tests do not depend
     on generated outputs or the old repository.
 
-[ ] T010 - Add tracking and visualization as separate concerns.
+[~] T010 - Add tracking and visualization as separate concerns.
+    Completed: Separate W&B tracking, fixed-noise image previews, and optional
+    projected f_mem records during training. Online MNIST logging and offline
+    projected-metric integration passed.
+    Remaining: Review plotting from saved records for the selected study.
     Done when: Metric computation returns data only, tracking formats records,
     and visualization writes figures from saved records/tensors.
 

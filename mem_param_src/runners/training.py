@@ -1,6 +1,7 @@
 """Shared optimizer loop for image and synthetic runs."""
 
 import math
+import time
 from pathlib import Path
 
 import torch
@@ -21,6 +22,12 @@ from mem_param_src.runners.artifacts import (
     save_torch,
     update_run_record,
     write_json,
+)
+from mem_param_src.runners.tracking import (
+    finish_wandb,
+    log_wandb,
+    resolve_wandb_identity,
+    start_wandb,
 )
 
 
@@ -189,9 +196,75 @@ def _make_sliced_directions(config, bundle):
     return normalize_directions(directions)
 
 
+def _record_image_monitor(
+    model,
+    z_init,
+    config,
+    device,
+    run_dir,
+    wandb_run,
+    step,
+    f_mem_state=None,
+):
+    """Save and optionally log one fixed-noise checkpoint panel."""
+    from mem_param_src.runners.image_monitoring import (
+        generate_monitor_samples,
+        compute_monitor_f_mem,
+        save_fixed_range_grid,
+    )
+
+    monitor_dir = Path(run_dir) / "monitoring"
+    # Generate once; the grid and optional metric use prefixes of this batch.
+    samples = generate_monitor_samples(model, z_init, config, device)
+    sample_grid_path = save_fixed_range_grid(
+        samples[: int(config.generation_monitor.n_samples)],
+        monitor_dir / f"samples_step_{int(step):06d}.png",
+    )
+    print(f"saved generation monitor: {sample_grid_path}", flush=True)
+
+    values = {
+        "generation/step": int(step),
+        "generation/samples": sample_grid_path,
+    }
+    if f_mem_state is not None:
+        record = {
+            "step": int(step),
+            **compute_monitor_f_mem(samples, config, f_mem_state),
+        }
+        write_json(monitor_dir / f"f_mem_step_{int(step):06d}.json", record)
+        print(
+            f"projected f_mem step={step} n={record['n_samples']} f_mem={record['f_mem']:.6f}",
+            flush=True,
+        )
+        values.update(
+            {
+                f"generation/random_projected_pixels/{key}": record[key]
+                for key in ("f_mem", "mean_r", "rho", "n_samples", "N")
+            }
+        )
+    return log_wandb(wandb_run, values)
+
+
 def train_run(config, run_dir, *, run_kind, device="auto"):
     """Train one image or synthetic run and save its replay artifacts."""
     validate_run_kind(config, run_kind)
+    if run_kind != "image" and bool(config.tracking.wandb.enabled):
+        raise ValueError("W&B training logs currently support image runs only.")
+    if run_kind != "image" and bool(config.generation_monitor.enabled):
+        raise ValueError("Generation monitoring currently supports image runs only.")
+    f_mem_settings = config.random_projected_f_mem
+    if bool(f_mem_settings.enabled):
+        if run_kind != "image" or not bool(config.generation_monitor.enabled):
+            raise ValueError("f_mem monitoring requires image generation monitoring.")
+        if int(f_mem_settings.n_samples) < 1:
+            raise ValueError("random_projected_f_mem.n_samples must be at least 1.")
+        if f_mem_settings.projection_seed is None:
+            f_mem_settings.projection_seed = int(config.training.seed) + 3001
+        config.evaluation.sample_bank_size = max(
+            int(config.evaluation.sample_bank_size),
+            int(f_mem_settings.n_samples),
+            int(config.generation_monitor.n_samples),
+        )
     device = resolve_device(device)
     configure_runtime(config, device)
     run_dir = prepare_run_dir(run_dir)
@@ -202,10 +275,14 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         device=device,
     )
 
+    wandb_run = None
+    success = False
     try:
         bundle = build_data_bundle(config)
         _validate_bundle(bundle, run_kind, config)
         train_tensor = bundle["train"].detach().cpu().contiguous()
+        if bool(f_mem_settings.enabled) and train_tensor.shape[0] < 2:
+            raise ValueError("f_mem monitoring requires at least two training images.")
 
         batch_cap = int(config.training.batch_cap)
         if batch_cap < 1:
@@ -213,6 +290,8 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         config.training.batch_size = min(int(train_tensor.shape[0]), batch_cap)
         checkpoint_steps = resolve_checkpoint_steps(config)
         config.training.resolved_ckpt_steps = checkpoint_steps
+        if run_kind == "image" and bool(config.tracking.wandb.enabled):
+            resolve_wandb_identity(config)
 
         log_every = int(config.training.log_every)
         if log_every < 1:
@@ -233,6 +312,11 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         )
         z_init = _make_z_init(config, train_tensor)
         save_torch(run_dir / "z_init.pt", z_init)
+        f_mem_state = None
+        if bool(f_mem_settings.enabled):
+            from mem_param_src.runners.image_monitoring import prepare_f_mem_monitor
+
+            f_mem_state = prepare_f_mem_monitor(config, train_tensor, run_dir)
         if run_kind == "synthetic":
             directions = _make_sliced_directions(config, bundle)
             save_torch(run_dir / "sliced_directions.pt", directions)
@@ -248,6 +332,19 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
             n_train=int(train_tensor.shape[0]),
             n_reference=int(bundle["reference"].shape[0]),
         )
+        if run_kind == "image":
+            wandb_run = start_wandb(config, run_dir)
+            if bool(config.generation_monitor.enabled):
+                wandb_run = _record_image_monitor(
+                    model,
+                    z_init,
+                    config,
+                    device,
+                    run_dir,
+                    wandb_run,
+                    0,
+                    f_mem_state,
+                )
 
         loader_generator = torch.Generator().manual_seed(int(config.training.seed))
         loader = DataLoader(
@@ -263,6 +360,7 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         history = []
         checkpoint_set = set(checkpoint_steps)
         n_steps = int(config.training.n_training_steps)
+        training_start = time.perf_counter()
 
         model.train()
         for step in range(1, n_steps + 1):
@@ -288,15 +386,45 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
                 history.append({"step": int(step), "loss": loss_value})
                 if bool(config.training.show_progress):
                     print(f"step {step}/{n_steps} loss={loss_value:.6f}", flush=True)
+                if run_kind == "image":
+                    # W&B observes completed updates and does not control optimization.
+                    wandb_run = log_wandb(
+                        wandb_run,
+                        {
+                            "train/step": int(step),
+                            "train/loss": loss_value,
+                            "train/learning_rate": float(
+                                optimizer.param_groups[0]["lr"]
+                            ),
+                            "train/elapsed_seconds": (
+                                time.perf_counter() - training_start
+                            ),
+                            "train/progress": float(step) / float(n_steps),
+                        },
+                    )
             if step in checkpoint_set:
                 save_checkpoint(run_dir, step, model)
+                if run_kind == "image" and bool(config.generation_monitor.enabled):
+                    wandb_run = _record_image_monitor(
+                        model,
+                        z_init,
+                        config,
+                        device,
+                        run_dir,
+                        wandb_run,
+                        step,
+                        f_mem_state,
+                    )
 
         write_json(run_dir / "train_history.json", history)
         update_run_record(run_dir, state="trained", final_step=n_steps)
+        success = True
         return Path(run_dir)
     except Exception as exc:
         update_run_record(run_dir, state="failed", error=str(exc))
         raise
+    finally:
+        finish_wandb(wandb_run, success)
 
 
 __all__ = ["CHECKPOINT_SCHEDULES", "resolve_checkpoint_steps", "train_run"]

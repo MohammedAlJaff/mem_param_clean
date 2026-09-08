@@ -1,5 +1,16 @@
 # Migration Journal
 
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
 This journal tracks the clean repository build in `mem_param_clean`.
 
 ## 2026-08-10T15:28:28Z - Create clean repository shell
@@ -1350,3 +1361,922 @@ dataset rebuild during standalone evaluation: not used by design and regression 
 limitation: selected tensor hashes do not hash unused raw source files
 limitation: live AFHQ v2, FFHQ, and CelebA32 catalogs were not available for runtime checks
 ```
+
+
+## 2026-08-20T16:48:03Z - Execute a 10k Flowers102 runner sanity notebook
+
+### Decision
+Add `notebooks/sanity/flowers102_runner_artifact_sanity.ipynb`. Run the
+installed `mem-param-image-train` command as one blocking subprocess. Continue
+the notebook only after training and checkpoint evaluation finish.
+
+Use eight Flowers102 training images at `64 x 64` resolution. Keep the tested
+669,251-parameter UNet with `v` prediction and `v` loss. Use Adam, batch size
+eight, learning rate `1e-3`, and 10,000 optimizer updates. Save checkpoints at
+steps 0, 2,500, 5,000, 7,500, and 10,000.
+
+Replay all five checkpoints with one saved 64-sample noise bank. Use 50 Heun
+steps and return `x_1`. Display the exact eight-image training tensor and the
+64 final samples with `torchvision.utils.make_grid`.
+
+After the runner returns, verify the complete artifact tree, resolved config,
+run state, tensor shapes, stable sample identifiers, manifest hashes,
+checkpoint schedule, loss history, metric records, and final sample tensor.
+Do not rebuild the Flowers102 dataset during these checks.
+
+Keep the notebook linear. It contains no function or class definitions. Start
+every code cell with a purpose comment and apply the repository notebook text
+rules.
+
+### Result
+The full MPS run finished in 11.67 minutes. The first recorded loss was
+`1.338079`. The final recorded loss was `0.030367`. All losses and all 64 final
+samples were finite. The saved sample range was `[-1.115, 1.126]` before the
+display clamp.
+
+Pixel-space `f_mem` values at steps 0, 2,500, 5,000, 7,500, and 10,000 were
+`0.0`, `0.03125`, `0.0`, `0.21875`, and `0.265625`. The final value represents
+17 of 64 generated samples at `rho = 0.5`. Held-out `f_mem` stayed zero. Mean
+`r` changed from `0.995849` at step zero to `0.688950` at step 10,000.
+
+The final grid visibly concentrates on the eight training-image modes. This
+single small run verifies runner behavior. It does not establish a paper-scale
+memorization result or a parameterization comparison.
+
+The complete run directory is
+`outputs/sanity/flowers102_runner_64_n8_10k_20260820T162900Z` and uses 22 MB.
+The directory remains excluded from Git. The executed notebook contains the
+plots and compact evidence outputs.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, MPS
+two-update notebook preflight: 11/11 code cells executed, zero errors
+full notebook execution: 11/11 code cells executed, zero errors
+runner return code: 0
+runner state: evaluated
+optimizer updates: 10000
+checkpoint files: 5/5
+checkpoint metric records: 5/5
+final x_1 tensor: [64, 3, 64, 64], finite
+data-manifest full hash validation: passed
+artifact-tree assertions: passed
+torchvision training and sample grids: rendered and visually inspected
+nbformat validation: passed
+code-cell syntax compilation: passed
+top purpose comments: 11/11
+notebook function and class definitions: 0
+notebook text line-length check: passed
+full pytest suite: 33 passed, 4 subtests passed
+git diff whitespace check: passed
+limitation: one seed and eight training images provide integration evidence only
+limitation: current image metrics use pixels and do not establish perceptual identity
+```
+
+
+## 2026-08-20T18:59:24Z - Standardize the configured f_mem threshold
+
+### Decision
+Rename `evaluation.ratio_threshold` to `evaluation.f_mem_threshold`. Set its
+canonical value to `0.3`. Do not keep the old name as an alias. Keep `rho` as
+the mathematical symbol and as the metric-record key.
+
+Keep the image sensitivity fields at `rho = 0.3`, `0.5`, and `0.7`. The
+configured threshold selects the canonical `f_mem` field. The other fields are
+diagnostics and do not change the primary threshold.
+
+Reject a resolved config that has an `evaluation` section but lacks
+`evaluation.f_mem_threshold`. This prevents old saved settings from silently
+using a new default. Keep the earlier `rho = 0.5` Flowers run unchanged as
+historical evidence.
+
+Training and sampling still enable safe division by default with
+`safe_div_denom_eps = 0.01`. The Flowers sanity run uses `v` prediction and `v`
+loss. Its training conversion and sampling velocity conversion do not divide.
+The final linear-path conversion from `v` to `x_1` has denominator one. Safe
+division is therefore enabled but does not clamp any conversion in this run.
+
+### Result
+Re-execute the Flowers sanity notebook with the canonical threshold. The new
+MPS run finished in 12.05 minutes. Its final canonical `f_mem` was `0.015625`
+at `rho = 0.3`. The auxiliary final values were `0.265625` at `rho = 0.5` and
+`0.484375` at `rho = 0.7`. The generated grid remains concentrated around the
+eight training images.
+
+The complete new run directory is
+`outputs/sanity/flowers102_runner_64_n8_10k_20260820T184554Z`. It remains
+excluded from Git.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU and MPS
+targeted runner, metric, config, and sampling tests: 34 passed, 4 subtests passed
+full pytest suite: 34 passed, 4 subtests passed
+Ruff on mem_param_src and tests: passed
+GMM sanity notebook: 11/11 code cells executed, zero errors
+GMM top purpose comments: 11/11
+Flowers sanity notebook: 11/11 code cells executed, zero errors
+Flowers top purpose comments: 11/11
+Flowers runner return code: 0
+Flowers run state: evaluated
+optimizer updates: 10000
+checkpoint files: 5/5
+checkpoint metric records: 5/5
+metric record rho: 0.3 for every checkpoint
+final x_1 tensor: [64, 3, 64, 64], finite
+training and final sample grids: rendered and visually inspected
+limitation: the run does not exercise a division that approaches zero
+limitation: T014 remains open until the scientific safe-division policy is fixed
+```
+
+
+## 2026-08-20T19:28:26Z - Run eps/eps with exact division on Flowers102
+
+### Decision
+Add `notebooks/sanity/flowers102_runner_eps_eps_exact_division_sanity.ipynb`.
+Preserve the executed `v/v` notebook and its run artifacts.
+
+Repeat the 10,000-update Flowers102 protocol with `eps` prediction and `eps`
+loss. Disable safe division for training and sampling. Keep the inactive
+denominator epsilon at `0.01`. Keep the architecture, optimizer, data budget,
+seed, checkpoint schedule, sampler, evaluation threshold, and sample count
+fixed.
+
+The `eps/eps` training loss does not require a target-space conversion. The
+training safe-division flag is therefore inactive. Sampling converts `eps` to
+velocity as `v_hat = (z_t - eps_hat) / t`. Exact sampling uses `t` directly.
+
+Replay the same trained checkpoints in a named `safe_sampling` evaluation.
+This changes only `sampling.use_safe_division` to `True`. Use the saved data
+and fixed noise bank for both evaluations.
+
+### Result
+The full MPS run completed in 11.85 minutes. The first recorded `eps` loss was
+`0.993115`. The final recorded loss was `0.007049`. Do not compare this loss
+directly with the `v` loss because the targets have different scales.
+
+All 64 final samples were finite, but the qualitative result failed. The saved
+sample range was `[-14.723, 16.013]`, and only `31.56%` of scalar values were
+inside `[-1, 1]`. The grid contained colored noise instead of flower images.
+
+Final `f_mem` was zero at `rho = 0.3`, `0.5`, and `0.7`. Final mean `d1` was
+`270.293`, and final mean `r` was `0.988833`. The controlled `v/v` run had
+final mean `d1 = 39.953`, mean `r = 0.688950`, and canonical
+`f_mem = 0.015625`.
+
+The exact and safe sampling evaluations produced bitwise-identical tensors and
+identical metrics. Their maximum absolute sample difference was zero. The
+sampling grid starts at `t = 0.01`, and safe division clamps only denominators
+smaller than `0.01`. The safe clamp therefore does not activate.
+
+The exact data tensors, sample identifiers, `z_init`, and initial model state
+matched the controlled `v/v` run. Under these controls, the observed failure is
+associated with the `eps/eps` parameterization, not with the safe-division
+flag. A plausible mechanism is the `1/t` amplification of prediction error.
+The amplification reaches `100` at the first sampling time. This run does not
+separate model error from the 50-step uniform solver discretization.
+
+The complete run directory is
+`outputs/sanity/flowers102_runner_eps_eps_exact_64_n8_10k_20260820T191129Z`.
+It remains excluded from Git.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU preflight and MPS full run
+two-update eps/eps exact-division preflight: passed
+full notebook execution: 11/11 code cells executed, zero errors
+top purpose comments: 11/11
+runner return code: 0
+runner state after default evaluation: evaluated
+optimizer updates: 10000
+checkpoint files: 5/5
+checkpoint metric records: 5/5
+final x_1 tensor: [64, 3, 64, 64], finite
+data tensor equality with v/v control: exact
+sample identifier equality with v/v control: exact
+z_init equality with v/v control: exact
+initial model state equality with v/v control: exact
+safe versus exact final samples: bitwise equal
+safe versus exact checkpoint metrics: equal
+final sample grid: rendered and visually inspected
+notebook schema and code-cell compilation: passed
+git diff whitespace check: passed
+limitation: one seed and eight training images provide integration evidence only
+limitation: T014 remains open until the scientific safe-division policy is fixed
+```
+
+
+## 2026-08-20T19:35:48Z - Add diagonal-equivalent velocity loss weights
+
+### Decision
+Keep `framework.loss_weighting = "unit"` as the default. Add two optional
+weightings for native `v/v` training:
+
+```text
+x_equivalent:   w(t) = (1 - t)^2
+eps_equivalent: w(t) = t^2
+```
+
+For the linear FM path,
+`z_t = t x + (1-t) eps` and `v = x - eps`. A velocity prediction implies
+`x_hat = z_t + (1-t) v_hat` and `eps_hat = z_t - t v_hat`. Therefore,
+the `x` prediction error is `(1-t)` times the velocity error. The `eps`
+prediction error is `-t` times the velocity error.
+
+Do not normalize these weights. Their raw scale makes the weighted `v/v` MSE
+equal to the corresponding diagonal `x/x` or `eps/eps` MSE for the same
+implied prediction.
+
+Require both `framework.prediction_space = "v"` and
+`framework.loss_space = "v"` for these options. Reject their use with another
+prediction or loss space. This keeps the options scoped to the requested
+native velocity control.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+analytical x-equivalent weight values: passed
+analytical eps-equivalent weight values: passed
+weighted v/v loss equals implied x/x loss: passed
+weighted v/v loss equals implied eps/eps loss: passed
+invalid non-v/v configurations: rejected
+strict runner override parsing for x_equivalent: passed
+two-update x_equivalent synthetic runner preflight: passed
+two-update eps_equivalent synthetic runner preflight: passed
+focused tests: 25 passed, 6 subtests passed
+full pytest suite: 37 passed, 6 subtests passed
+Ruff lint on mem_param_src and tests: passed
+git diff whitespace check: passed
+limitation: repository-wide Ruff formatting still reports older model.py formatting
+```
+
+
+## 2026-08-20T20:49:15Z - Diagnose eps/eps solver resolution
+
+### Decision
+Create `protoypinging_and_trubbleshoting/eps_eps_sampling` with separate
+`scripts` and `notebooks` directories. Preserve the requested top-level name.
+
+Add `replay_heun_resolution.py`. Replay the saved Flowers102 `eps/eps`
+checkpoints with 200 and 500 uniform Heun steps. Keep the checkpoints, data
+tensors, fixed `z_init`, device, time interval, exact division, `x_1` output,
+sample count, and evaluation settings fixed. Change only `sampling.n_steps`.
+
+Add `measure_eps_conditioning.py`. Pair the eight saved training images with
+the saved noise prefix. Measure epsilon error and induced velocity error on
+exact path states at nine fixed times. Check the implemented conversion against
+the direct linear-path formula.
+
+Add and execute `eps_eps_heun_resolution.ipynb`. Use linear code cells with no
+function or class definitions. Start every code cell with a purpose comment.
+Show the exact training tensor, matched 50-, 200-, and 500-step sample grids,
+checkpoint metrics, sample differences, and endpoint-conditioning errors.
+
+### Result
+The 200- and 500-step evaluations completed on MPS for all five checkpoints.
+All final tensors were finite. Increasing solver resolution did not recover
+flower samples. The 50-, 200-, and 500-step grids all contained colored noise.
+
+The final raw sample ranges were `[-14.723, 16.013]`, `[-14.627, 15.847]`, and
+`[-14.618, 15.833]`. Their fractions inside `[-1, 1]` were `0.3156`, `0.3175`,
+and `0.3177`. Final mean `d1` changed from `270.293` to `268.527` and
+`268.379`. Every final `f_mem` value remained zero at rho `0.3`, `0.5`, and
+`0.7`.
+
+Matched 50- and 200-step samples had RMSE `0.029318`. Matched 200- and 500-step
+samples had RMSE `0.002376`. Their convergence ratio was `0.081034`. The small
+200-to-500 change and unchanged failure show that coarse Heun resolution is not
+the main cause for this saved model.
+
+On exact path states at `t = 0.01`, epsilon RMSE was `0.027713`. The induced
+velocity RMSE was `2.771305` because the conversion amplified error by `100`.
+The implemented conversion matched `(z_t - eps_hat) / t` within `2.25e-5`.
+The relative velocity-MSE identity error stayed below `1.3e-7`. Conversion
+arithmetic is therefore not the observed failure source.
+
+The evidence implicates the learned epsilon field and its endpoint
+conditioning. This test does not separate the diagonal training objective,
+the pure-noise start approximation, and off-path error accumulation. The next
+controlled model comparison is native `v/v` with `eps_equivalent` weighting.
+T014 remains open because this test did not compare active clamp thresholds.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, MPS
+200-step checkpoint replays: 5/5
+500-step checkpoint replays: 5/5
+fixed z_init samples per checkpoint: 64
+final sample tensors: finite, shape [64, 3, 64, 64]
+endpoint probes: 9 times, 8 fixed train-noise pairs
+executed notebook: 12/12 code cells, zero errors
+notebook function and class definitions: 0
+notebook top purpose comments: 12/12
+notebook schema validation: passed
+notebook artifact-reuse execution: passed
+sample grids and diagnostic plots: rendered and visually inspected
+standalone script Ruff lint and formatting: passed
+full pytest suite: 37 passed, 6 subtests passed
+git diff whitespace check: passed
+limitation: the endpoint probe uses exact path states, not generated trajectory states
+limitation: one seed and eight training images provide diagnostic evidence only
+```
+
+
+## 2026-08-20T20:59:13Z - Catalogue the unresolved eps/eps cross-protocol contradiction
+
+### Decision
+Do not generalize the failed Flowers102 sanity result into a claim that
+`eps/eps` cannot generate images. Record the result as an unresolved
+cross-protocol contradiction.
+
+Add
+`protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md` as the
+durable problem catalogue. Add T016 as an open research task. Keep T014 open
+because the sampling division policy remains unsettled.
+
+### Historical evidence
+The old CelebA32 evaluation table contains 21 completed `eps/eps` runs across
+seven training-set sizes and three seeds. Each run has 72 checkpoint rows.
+This gives 1,512 checkpoint evaluations with Heun-50 sampling and 10,000
+generated samples per checkpoint.
+
+The best FID across each run ranges from `6.0959` through `19.8533`. Its median
+across all 21 runs is `11.8436`. At `N_train = 16384`, the three best FID values
+range from `6.0959` through `7.3663`. These saved values provide direct evidence
+that the old `eps/eps` protocol produced useful CelebA32 samples.
+
+The old project documentation also reports that `eps/eps` memorizes later and
+less than `x/x`. That ordering remains visible at the best-FID checkpoints.
+The user separately reports visually good CelebA32 grayscale samples.
+
+The current old checkout does not contain the checkpoint tree referenced by
+the evaluation CSV. Therefore, this catalogue pass did not replay or inspect
+the historical sample tensors.
+
+### Current Flowers102 evidence
+The clean run uses eight fixed RGB Flowers102 images at `64 x 64`, a
+669,251-parameter UNet, Adam at `1e-3`, and 10,000 updates. The diagonal epsilon
+loss decreased from `0.993115` to `0.007049`, but the final samples remained
+colored noise.
+
+Replays with 50, 200, and 500 Heun steps converged to the same failed result.
+The 200-to-500 sample RMSE is `0.002376`. At `t = 0.01`, epsilon RMSE is
+`0.027713`, while induced velocity RMSE is `2.771305`. The tested conversion
+matches the direct linear-path formula.
+
+These checks exclude coarse Heun resolution and the checked conversion
+arithmetic as primary explanations for this saved model. They do not identify
+the cause.
+
+### Important protocol difference
+The historical sampler starts at `t = 0.001` and always applies safe division
+with epsilon `0.05`. The clean failed run starts at `t = 0.01` and uses exact
+division. The earlier clean safe replay used epsilon `0.01`, so its clamp did
+not activate.
+
+The old early conversion limits epsilon sensitivity to about `21`. The clean
+exact conversion reaches sensitivity `100` at its first time. This difference
+is a credible cause, but it is not established.
+
+Other uncontrolled differences include dataset, image dimension, model
+capacity, attention, dropout, learning rate, optimizer updates, batch size,
+output convention, precision, device, and evaluation protocol.
+
+### Next tests
+1. Replay the fixed Flowers102 checkpoints with a `0.05` sampling clamp.
+2. Replay the same checkpoints with the complete historical sampling policy.
+3. Recover one historical CelebA32 checkpoint and replay it through both codes.
+4. Reproduce one old CelebA32 `eps/eps` run through the clean runner.
+5. Build a matched bridge that changes one protocol factor at a time.
+6. Compare exact-path errors with generated-trajectory errors.
+7. Run the `v/v` plus `eps_equivalent` representation control afterward.
+
+### Checks
+```text
+old evaluation CSV: 1,512 eps/eps rows across 21 runs
+old run grid: seven N_train values times three seeds
+old checkpoint count: 72 rows per run
+historical sampler: Heun, 50 steps, [0.001, 0.999], safe epsilon 0.05
+historical output: integrated state at t_max
+clean failed sampler: Heun, 50 steps, [0.01, 0.99], exact division, x_1 output
+historical checkpoints in current old checkout: not found
+status: open and unresolved
+```
+
+
+## 2026-08-20T21:04:00Z - Close the session and set the next priority
+
+### Decision
+End the 2026-08-20 research session without starting another experiment.
+Make T016 the first task for 2026-08-21.
+
+Start by replaying the saved Flowers102 checkpoints with the historical `0.05`
+sampling clamp. Keep the checkpoints, `z_init`, sampling interval, output, and
+evaluation settings fixed. This test changes only the active clamp threshold.
+
+After that control, test the complete historical sampling policy in a separate
+named evaluation. Do not start retraining before these replay controls finish.
+
+Treat input dimensionality as the second explicit question. The old CelebA32
+state has 1,024 values, while the failed Flowers102 state has 12,288 values.
+After the replay controls, compare the same Flowers image identities at RGB64,
+RGB32, and grayscale32. Keep the resolved training and sampling protocol fixed.
+
+Report per-coordinate errors and L2 distances normalized by `sqrt(D)`. Raw
+pixel distances are not directly comparable across these tensor shapes.
+
+### Session state
+```text
+first next task: T016
+problem status: open and unresolved
+first test: fixed Flowers102 replay with safe_div_denom_eps = 0.05
+second test: matched Flowers RGB64, RGB32, and grayscale32 dimensionality screen
+new experiment started during closeout: no
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-01T10:44:34Z - Add image training loss and sample monitoring
+
+### Decision
+Add W&B monitoring only to the image training runner. Keep W&B and generation
+monitoring disabled by default. Do not add a tracker class, callback system,
+resume behavior, synthetic tracking, or train-time scientific evaluation.
+
+Derive the W&B project from dataset and model. Derive the run name from
+dataset, model, training-set size, batch cap, prediction and loss spaces,
+training steps, and seed. Derive the comparison group from dataset, model, and
+training steps.
+
+Log loss, learning rate, elapsed time, and progress when training history is
+recorded. Generate qualitative image grids at step zero and saved checkpoints.
+Reuse the same saved `z_init` prefix at every step and display every grid with
+the fixed `[-1, 1]` range. Do not calculate FID, `f_mem`, nearest-neighbor
+statistics, or validation losses in the training loop.
+
+### Result
+The image command now supports `--wandb`, `--no-wandb`, `--wandb-mode`,
+`--generation-monitor`, and `--no-generation-monitor`. W&B state is finished
+in the training loop's `finally` block. Non-strict W&B failures disable logging
+and let model updates continue.
+
+The generation monitor temporarily uses evaluation mode, samples without
+gradients, restores the previous model mode, rejects non-finite samples, and
+saves one PNG per monitoring step inside the run directory. The Flowers102
+smoke configuration uses all four tensors in its saved noise bank.
+
+The final monitored two-update Flowers102 run logged loss at steps one and two.
+It saved and uploaded sample grids at steps zero, one, and two with no duplicate
+final grid. A second two-update run logged loss with generation monitoring
+disabled and created no monitoring directory.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+W&B version: 0.27.0
+focused runner tests: 17 passed
+full pytest suite: 43 passed, 6 subtests passed
+Ruff lint on mem_param_src, tests, and smoke config: passed
+Ruff formatting on changed Python files: passed
+git diff whitespace check: passed
+monitored offline run: /private/tmp/mem_param_wandb_monitor_verified_20260901/run
+monitored W&B run id: dwjx5boy
+monitored sample grids: steps 0, 1, and 2 only
+loss-only offline run: /private/tmp/mem_param_wandb_loss_only_20260901/run
+loss-only monitoring directory: absent
+sample grids: rendered and visually inspected
+limitation: W&B online authentication was not tested because api_key is unset
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-01T11:28:27Z - Download and verify CelebA locally
+
+### Decision
+Use Torchvision's official CelebA downloader. Store the dataset under the
+git-ignored root `data/celeba`. Verify the first-party grayscale loader with
+`download=False` after extraction.
+
+### Result
+Torchvision downloaded and extracted 202,599 aligned images. The complete
+local directory uses 3.1 GB. The clean loader produced four training and four
+validation tensors with shape `[1, 32, 32]`. All checked values were finite and
+inside `[-1, 1]`.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+Torchvision CelebA total samples: 202,599
+extracted aligned image files: 202,599
+train source size: 162,770
+validation source size: 19,867
+train tensor: [4, 1, 32, 32], finite
+validation tensor: [4, 1, 32, 32], finite
+loader mode: download=False
+local size: 3.1 GB
+git ignore boundary: /data/ confirmed
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-01T11:47:21Z - Validate configurable CelebA image shapes
+
+### Decision
+Preserve the historical 140-pixel aligned-face crop. Make the subsequent
+resize, final square crop, and channel conversion follow `data.resize_size`,
+`data.image_size`, and `data.image_channels`.
+
+Use the same four seeded CelebA identities for every visual comparison. Check
+grayscale and RGB at 16, 32, 64, and 512 pixels. Keep normalization fixed at
+`[-1, 1]`.
+
+### Result
+The complete local loader produced all eight requested tensor configurations.
+Every tensor had the requested shape, contained only finite values, and stayed
+inside `[-1, 1]`. The matched panels show the expected loss of detail at small
+sizes and preserved color in RGB mode.
+
+The 512-pixel variants are upsampled from the 140-pixel crop. They verify tensor
+shape and channel handling but do not contain additional source information.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+real CelebA loader variants: 8/8 passed with download=False
+resolutions: 16, 32, 64, 512
+channels: grayscale 1, RGB 3
+matched seeded identities across variants: confirmed
+fixed normalized range: [-1, 1]
+focused transform tests: 2 passed, 8 subtests passed
+full pytest suite: 45 passed, 14 subtests passed
+Ruff lint on mem_param_src and tests: passed
+Ruff formatting on changed Python files: passed
+git diff whitespace check: passed
+visual panels: rendered and inspected
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-01T12:18:12Z - Validate the first-party image dataset loaders
+
+### Decision
+Add CIFAR-10 to the first-party data bundle dispatcher. Permit MNIST to emit
+one grayscale channel or three repeated grayscale channels. Use one executed
+notebook to test the public loaders for MNIST, CIFAR-10, Flowers102, and CelebA.
+
+Compare fixed source identities across image sizes and channel modes. Check
+nested fixed training subsets, different seeded memberships, exact repeated
+loads, finite values, and the fixed `[-1, 1]` range. Keep `download=False` so
+the notebook proves local data readiness.
+
+### Result
+The executed notebook passed all available loader checks. It validated 32
+size-channel configurations, 12 fixed training-set configurations, four seed
+comparisons, and four exact repeat comparisons. Eight embedded figures make
+the transformations and subset changes directly visible.
+
+AFHQ-v2 and FFHQ128 remain `NOT TESTED` because their local data is absent.
+The 512-pixel checks verify output shape and deterministic preprocessing. They
+do not imply that low-resolution sources contain additional image detail.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+notebook: notebooks/sanity/image_dataset_loader_validation.ipynb
+notebook execution: 15/15 code cells executed, 0 error outputs
+embedded figures: 8 rendered and visually inspected
+required local datasets: 4/4 passed with download=False
+size-channel configurations: 32/32 passed
+resolutions: 16, 32, 64, 512
+channels: grayscale 1, RGB 3
+training-set sizes: 4, 8, 16; 12/12 passed
+seed comparisons: seeds 7 and 19; 4/4 different memberships
+deterministic repeats: 4/4 exact tensors and source indices
+notebook structure and language checks: passed
+full pytest suite: 47 passed, 14 subtests passed
+Ruff lint on mem_param_src and tests: passed
+Ruff formatting on changed Python files: passed
+git diff whitespace check: passed
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-01T12:47:17Z - Centralize deterministic image bundle construction
+
+### Decision
+Keep `mem_param_src.datasets.build_data_bundle(config)` as the public entrypoint.
+Move dataset dispatch out of `common.py`. Put deterministic image selection,
+exact class balancing, subset materialization, bundle assembly, and provenance
+fields in one shared image pipeline.
+
+Keep only source-specific behavior in the dataset adapters. Preserve MNIST and
+CIFAR tensor interpolation, the CelebA 140-pixel crop, Flowers split handling,
+and folder-specific AFHQ/FFHQ identities. Apply the existing
+`balance_train_classes` and `balance_reference_classes` settings to both MNIST
+and CIFAR-10. Require exact balanced counts to be divisible by ten.
+
+### Result
+The available real datasets produce the same tensors, indices, shapes, and
+source identifiers as before the refactor. The six core real-image files now
+contain 985 lines, compared with 1,394 before this refactor. Dataset adapters
+open their source and then call the shared image pipeline.
+
+Real MNIST and CIFAR-10 balance checks selected two examples from every class
+for both training and reference subsets at `N=20`. The visual dataset notebook
+passed every previous assertion through the new path.
+
+AFHQ-v2 and FFHQ128 remain runtime-unverified because their local data is
+absent. Their source-specific adapters remain pending the dataset-retention
+decision in T007.
+
+### Checks
+```text
+environment: memcompgen, macOS arm64, CPU
+pre/post real tensor hashes: exact match for MNIST, CIFAR-10, Flowers102, CelebA
+pre/post source indices and identifiers: exact match
+real balanced MNIST: 2 examples per class in train and reference
+real balanced CIFAR-10: 2 examples per class in train and reference
+focused loader and runner tests: 24 passed, 8 subtests passed
+full pytest suite: 50 passed, 14 subtests passed
+notebook execution: 15/15 code cells executed, 0 error outputs
+notebook loader assertions: all passed
+Ruff lint on mem_param_src and tests: passed
+Ruff formatting on changed Python files: passed
+git diff whitespace check: passed
+repository commit created: no
+repository push performed: no
+```
+
+
+## 2026-09-07 - Start a paper wording and ideas file
+
+### Decision
+Add root-level `PAPER_NOTES.txt` for draft prose, research framing, source
+references, and assumptions that need evidence. Link it from `README.md`.
+Keep operational tasks in `TODO.txt`.
+
+The first entry relates the proposed memorization study to Li and He's
+`Back to Basics: Let Denoising Generative Models Denoise`. Frame the question
+around regimes where the compared parameterizations produce useful samples.
+Mark the latent-autoencoder setting as proposed, not an established result.
+
+### Checks
+- Read the original arXiv v1 source online; record its URL and relevant sections.
+- Read back the notes and check documentation whitespace.
+- No runtime tests: this change only adds research notes and a discovery link.
+
+
+## 2026-09-07 - Simplify paper wording and record the writing rule
+
+- Shortened the first PAPER_NOTES.txt entry and put the draft paragraph first.
+- Added a plain-English writing rule to PAPER_NOTES.txt and AGENTS.md for future
+  paper text, documentation, comments, and discussion.
+- Kept the source, proposed experiment, and evidence limits.
+- Read back the edited text and checked whitespace. No code changed.
+
+
+## 2026-09-07 - Record how implementation should support user understanding
+
+- Added a collaboration rule to AGENTS.md: explain the relevant file layout,
+  data flow, design choice, and a short usage example for substantial changes.
+- Require real API examples or clearly labelled pseudocode, with execution
+  status and links to the implementation and saved results.
+- Use docs/repo_map.md for the layout and existing documentation for reusable
+  examples. Keep explanations brief and involve the user in meaningful choices.
+- Checked the documentation diff for whitespace. No runtime code changed.
+
+
+## 2026-09-07 - Prepare the online Flowers102 monitoring demonstration
+
+- Added configs/runners/flowers102_wandb_demo.py and a README launch command.
+- Selected v/v, eight RGB32 images, 1,000 updates, and 16 fixed-noise previews.
+- Local memcompgen config import passed. Checkpoints resolve to 0/250/500/750/1000.
+- Initial launch stopped before training: CLI booleans require lowercase true;
+  the corrected command then found MPS unavailable inside the sandbox.
+- Automatic approval review rejected the host-access online launch because the
+  destination and upload contents were not explicit. No online run started.
+- Prepared an explicit maj90/flowers102-unet destination and a command that
+  disables W&B code and Git capture. Await user confirmation of the destination
+  and upload contents before retrying.
+
+
+## 2026-09-07 - Change the proposed monitoring run to MNIST
+
+- Replaced the unrun Flowers demo config with configs/runners/mnist_wandb_demo.py.
+- Selected eight grayscale MNIST images at 32 x 32, 1,000 updates, and a two-level
+  UNet with 32 base channels, one residual block per level, and no attention.
+- Kept v/v, seed 7, online W&B, and 16 previews every 250 updates.
+- Local memcompgen loader check passed with download=False: train [8,1,32,32],
+  reference [16,1,32,32]. Checkpoints resolve to 0/250/500/750/1000.
+- Updated the README command. Training remains unstarted pending confirmation
+  of the explicit W&B destination and upload contents after the review rejection.
+
+
+## 2026-09-07 - Complete the online MNIST monitoring run
+
+- User approved uploads to maj90/mnist-unet. Launched the README command with
+  WANDB_DISABLE_CODE=true and WANDB_DISABLE_GIT=true using host GPU access.
+- Environment: local memcompgen, MPS, W&B 0.27.0. Runner exited with code 0.
+- Config: configs/runners/mnist_wandb_demo.py. Eight grayscale 32 x 32 images,
+  1,000 updates, v/v, seed 7, 668,097-parameter UNet, and 50-step Heun sampling.
+- Run: outputs/mnist_wandb_live_20260907_01.
+- W&B: https://wandb.ai/maj90/mnist-unet/runs/xg3q5n39.
+- W&B reported successful sync of five media files and training history.
+  run.json records success=true, no warning, and final state evaluated.
+- First logged loss: 1.891039. Final logged loss: 0.149338. These are batch losses.
+- Training log elapsed time: 35.30 seconds; this excludes some setup and evaluation.
+- Verified five grids and metric records at steps 0/250/500/750/1000.
+- Final sample tensor: [16,1,32,32], all finite. Final pixel f_mem=0 at rho=0.3.
+- Viewed the final PNG: digit-like samples are visible. This is a small workflow
+  demonstration; it does not establish model quality or a memorization ordering.
+- Post-training metrics are saved locally; the training W&B run logs loss and
+  previews, not the later checkpoint evaluation metrics.
+
+
+## 2026-09-07 - Disable safe division in the MNIST demo config
+
+- Set training.use_safe_division and sampling.use_safe_division to False in
+  configs/runners/mnist_wandb_demo.py. Time limits remain [0.01,0.99].
+- Local memcompgen config-load assertions passed for both flags.
+- Completed run artifacts retain their original settings. No new run launched.
+
+
+## 2026-09-07 - Select eps/eps for the next MNIST demo
+
+- Set framework.prediction_space and framework.loss_space to eps in
+  configs/runners/mnist_wandb_demo.py. Both safe-division flags remain disabled.
+- Local memcompgen config-load assertions passed. No new run launched.
+
+
+## 2026-09-07 - Run MNIST eps/eps with exact division and online monitoring
+
+- Ran configs/runners/mnist_wandb_demo.py in local memcompgen on MPS using
+  WANDB_DISABLE_CODE=true and WANDB_DISABLE_GIT=true. Runner exit code: 0.
+- Run directory: outputs/mnist_wandb_eps_eps_exact_20260907_01.
+- W&B: https://wandb.ai/maj90/mnist-unet/runs/xfc8d7un.
+- Eight grayscale MNIST images at 32 x 32, 1,000 updates, small UNet, eps/eps,
+  seed 7. Both safe-division flags disabled. Heun-50, [0.01,0.99], x_1 output.
+- W&B reported successful sync of five media files and training history.
+- First batch loss: 0.995535. Final batch loss: 0.009982. Logged training elapsed
+  time: 41.14 seconds, excluding some setup and post-training evaluation.
+- Verified run state evaluated, W&B success=true, and five checkpoint records.
+- Final samples: [16,1,32,32], all finite; raw range [-12.5795,15.4053].
+- Inspected the final grid: a few digit-like samples, many saturated or noisy.
+  Low epsilon loss did not imply useful generation across the sample bank.
+- Final pixel f_mem=0 at rho=0.3. Do not interpret this as better generalization
+  because generation quality is poor. One seed and 16 samples are diagnostic only.
+- The run's saved data-bundle and manifest hashes match the earlier v/v demo.
+  The earlier run enabled safe division; this run disabled it. Preserve this
+  distinction when describing the comparison.
+
+
+## 2026-09-07 - Increase MNIST UNet capacity and plan the attention comparison
+
+- Updated configs/runners/mnist_wandb_demo.py to 64 base channels, multipliers
+  (1,2,4), two residual blocks per level, and 10,000 updates. Kept eps/eps,
+  exact division, eight images, seed, optimizer, and preview schedule.
+- Added T017 to TODO.txt: compare eps/eps with and without attention under
+  matched settings. True attention-off needs control of the middle block too.
+- Corrected the previous no-attention description: attn_resolutions=() skips
+  optional encoder attention but the middle SelfAttention always executes.
+  This was also true for the earlier small-UNet runs.
+- Local memcompgen CPU check: model construction and loss/backward passed on
+  [2,1,32,32] inputs, with finite loss and gradients. Parameters: 14,088,449.
+  Three attention modules exist; two encoder modules are bypassed with ().
+- Updated README with current settings and separate historical run links.
+- No training launched. A larger/longer run alone cannot isolate capacity from
+  training-budget effects; the attention comparison remains a separate task.
+
+
+## 2026-09-07 - Verify the official Bonnaire network
+
+- Read Bonnaire et al., arXiv:2505.17638v2, and the official repository at
+  de6d4c3abecdce49b6e8ae3dc7898d098228457b. Recorded pinned source links and
+  the comparison in docs/config_reference.md.
+- The main text says multipliers (1,2,3); Appendix A and released training code
+  use (1,2,4). Official attention is four-head at 16/8 pixels in both encoder
+  and decoder, plus the middle block. Dropout is 0.1; GroupNorm uses 8 groups.
+- Read the downloaded Unet.py before importing it from /tmp. Local memcompgen
+  CPU checks instantiated widths 16/32/64 and passed finite [1,1,32,32] forwards.
+  Trainable counts: 1,010,657 / 4,023,233 / 16,054,145; each has 11 attention blocks.
+- The local BonnaireUNet differs in attention placement/heads, normalization,
+  time embedding/conditioning, and initialization. It is not an exact replica.
+- No network implementation or run config changed. No training launched.
+
+
+## 2026-09-07 - Select channel multipliers (1,2,3) for the MNIST demo
+
+- Changed configs/runners/mnist_wandb_demo.py as requested. With base width 64,
+  the three channel widths are 64/128/192. Trainable parameters: 9,393,985.
+- Kept num_res_blocks=2: two blocks per encoder level, three per decoder level,
+  and two middle blocks. Updated README to match the current configuration.
+- Local memcompgen CPU model construction and loss/backward passed with finite
+  loss and gradients on [2,1,32,32] input. No training launched.
+
+
+## 2026-09-07 - Launch the larger 10k MNIST eps/eps run
+
+- Launched configs/runners/mnist_wandb_demo.py on MPS in local memcompgen with
+  online W&B and code/Git capture disabled. User requested this run.
+- Run: outputs/mnist_wandb_eps_eps_123_10k_20260907_01.
+- W&B: https://wandb.ai/maj90/mnist-unet/runs/en9xtd1x.
+- Config: eight grayscale 32 x 32 images, channels 64/128/192, 9,393,985
+  parameters, eps/eps, exact division, seed 7, 10,000 updates. Save previews and
+  checkpoints every 250 updates; run evaluation after training.
+- Startup verified: online logging active, initial grid saved, finite loss
+  through the first 250 updates. State at this entry: training, not complete.
+
+
+## 2026-09-07 - Add optional projected f_mem during image generation monitoring
+
+- Reviewed ../mem_par/src/mp_training/trainer.py preparation/run functions and
+  ../mem_par/src/mp_metrics/metrics_images.py. The old metric is already present
+  in metrics/image/projection.py and uses shared nearest_neighbors.py math.
+- Direct CPU comparison used identical seeded tensors, exact training copies,
+  and out-of-range queries. Old/clean projection matrices and complete metric
+  records matched exactly (f_mem=0.25 at rho=0.3). No duplicate metric port added.
+- Added --f-mem-monitor / --no-f-mem-monitor and --f-mem-samples. Default is off;
+  enabling requires generation monitoring. Sample count alone does not enable it.
+- The grid and metric share one sample batch at step zero and checkpoints. Use
+  the larger sample count, keep the grid prefix small, and expand the saved noise
+  bank before saving the resolved config. Projection seed defaults to seed+3001.
+- Cache/save the projected actual training tensors and projection in monitoring/.
+  Write f_mem_step_<step>.json at each checkpoint and log canonical fields under
+  generation/random_projected_pixels/ in W&B. W&B remains optional.
+- Approximation follows old preprocessing: clamp normalized pixels to [0,1],
+  resize to 16x16, fixed 256-dimensional Gaussian projection, and d1/d2 ratio.
+  Use the clean configured rho=0.3. Interpret alongside generation quality;
+  this is distinct from full-resolution post-hoc metrics and FID.
+- Local memcompgen: 53 tests and 14 subtests passed. Ruff lint and whitespace
+  checks passed. Tests cover CLI settings, gating, fixed-noise sample reuse,
+  larger metric count, grid prefix, exact training matches, artifacts, and logs.
+- Real W&B 0.27.0 offline integration: /private/tmp/mem_param_f_mem_monitor_20260907_02.
+  Two CPU MNIST updates; three grids/records at 0/1/2; n_samples=8, N=4, rho=0.3.
+  W&B history contains f_mem/mean_r/rho/n_samples/N; finish success=true.
+- Initial offline test was blocked by sandbox service sockets; host-access retry
+  passed. No test data was uploaded. No new research training run launched.
+- Existing 10k process/config is unchanged; the new option applies to new runs.
+
+
+## 2026-09-08 - Session closeout and next-session handoff
+
+Completed this session:
+- Added PAPER_NOTES.txt for reusable paper prose. Recorded the Li and He
+  comparison: study memorization where both parameterizations can generate
+  useful samples. This is a research question, not an established result.
+- Saved the standing plain-English and code-understanding rule in project
+  notes and the requested persistent memory notes. Explain file roles, data
+  flow, and a short usage example when making substantial changes.
+- Completed three online monitored MNIST runs: small v/v (xg3q5n39), small
+  exact eps/eps (xfc8d7un), and larger exact eps/eps (en9xtd1x). All use eight
+  training images at 32x32 and saved noise for checkpoint previews.
+- Audited the official Bonnaire network and recorded source links and local
+  differences in docs/config_reference.md. Our UNet is not an exact replica.
+  The selected larger config uses widths 64/128/192, two encoder residual
+  blocks per level, and 9,393,985 parameters. Middle attention remains active.
+- Added optional projected f_mem during image generation monitoring. Reused
+  the existing clean metric after comparison with the old source. Use
+  --generation-monitor --f-mem-monitor --f-mem-samples 512 on a new run.
+  README.md contains the command; docs/config_reference.md explains the
+  approximation; docs/repo_map.md shows the file roles. No FID was added.
+
+Final larger-run result, checked at closeout:
+- Local directory: outputs/mnist_wandb_eps_eps_123_10k_20260907_01.
+- W&B: https://wandb.ai/maj90/mnist-unet/runs/en9xtd1x.
+- run.json reports evaluated, final_step=10000, W&B success=true and inactive.
+  There are 41 checkpoints and 41 fixed-noise grids, including step zero.
+- Final batch loss: 0.0094292928. Final full-pixel f_mem=0 at rho=0.3;
+  mean_r=0.9801455. The saved 16x1x32x32 samples are finite, with raw range
+  [-14.439889, 28.545033]. Visual inspection shows mostly noise or saturation,
+  with a few digit-like samples. Low loss did not establish useful generation.
+  Low f_mem here cannot support a better-generalization claim.
+- This run changed capacity and training duration together. It does not
+  isolate either factor. It predates the new train-time f_mem option, which
+  was off. No attention ablation or matched multi-seed comparison was run.
+
+Next session:
+- Begin with the larger run's saved grids and evaluation records. Select one
+  matched comparison before launching more training. T017 holds the requested
+  attention experiment; a true middle-attention-off option is still needed.
+- T016 remains the separate unresolved Flowers102/CelebA32 contradiction.
+  Historical clamp replay and dimension controls remain undone.
+- Updated TODO.txt to replace its stale dated starting instruction and record
+  completed loader/monitoring work. Corrected README's pending-run statement.
+
+Validation and publication scope:
+- Closeout check in local memcompgen: python -m pytest -q passed 53 tests and
+  14 subtests. Ruff passed for mem_param_src, tests, and configs. Whitespace
+  checks passed. These complement the runtime and offline integration checks
+  recorded above; they are not a new online f_mem research run.
+- The requested commit includes the accumulated clean-repository changes since
+  the prior commit, including earlier dataset validation, objective-weight
+  controls, and executable diagnostic notebooks. Earlier journal entries
+  retain their provenance; they are not all work performed today.
+- Publish the current codex/reproducible-runners branch to origin as requested.
+  Raw data, training outputs, and checkpoints remain local and Git-ignored.
+  Notebook figures remain included as executable research evidence.

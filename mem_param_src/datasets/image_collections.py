@@ -1,49 +1,20 @@
-"""
-Canonical loaders for external image collections used in research runs.
-
-The datasets here share the same downstream tensor contract as MNIST and
-CelebA32: deterministic train/reference subsets, optional labels, source
-indices, display shape metadata, and image tensors normalized to `[-1, 1]`.
-"""
+"""Source adapters for Flowers102, AFHQ-v2, and FFHQ128."""
 
 from pathlib import Path
 
-import torch
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
-from mem_param_src.datasets.common import (
-    maybe_flatten,
-    relative_path_sample_ids,
-    seeded_indices,
-    source_catalog_sha256,
-)
+from mem_param_src.datasets.common import relative_path_sample_ids
+from mem_param_src.datasets.image import build_image_bundle
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
-def _image_channels(config):
-    """
-    Read and validate the configured image channel count.
-    """
-    channels = int(config.data.image_channels)
-    if channels not in (1, 3):
-        raise ValueError(
-            "Image collection loaders support 1 or 3 channels, "
-            f"got config.data.image_channels={channels}"
-        )
-    return channels
-
-
 def _build_transform(config):
-    """
-    Build a square image transform for external image datasets.
-
-    The transform returns tensors in `[-1, 1]`, matching the model input range
-    used by the image runner.
-    """
+    """Build the shared deterministic image-collection transform."""
     image_size = int(config.data.image_size)
     if image_size <= 0:
         raise ValueError(
@@ -51,67 +22,33 @@ def _build_transform(config):
             f"got {image_size}"
         )
 
-    channels = _image_channels(config)
-    resize_size = int(getattr(config.data, "resize_size", 0) or image_size)
-    mean = (0.5,) * channels
-    std = (0.5,) * channels
+    channels = int(config.data.image_channels)
+    if channels not in (1, 3):
+        raise ValueError(
+            "Image collection loaders support 1 or 3 channels, "
+            f"got config.data.image_channels={channels}"
+        )
 
-    ops = [
+    resize_size = int(getattr(config.data, "resize_size", 0) or image_size)
+    operations = [
         transforms.Resize(resize_size),
         transforms.CenterCrop(image_size),
     ]
     if channels == 1:
-        ops.append(transforms.Grayscale(num_output_channels=1))
+        operations.append(transforms.Grayscale(num_output_channels=1))
     else:
-        ops.append(transforms.Lambda(lambda image: image.convert("RGB")))
-    ops.extend(
+        operations.append(transforms.Lambda(lambda image: image.convert("RGB")))
+    operations.extend(
         [
             transforms.ToTensor(),
-            transforms.Normalize(mean, std),
+            transforms.Normalize((0.5,) * channels, (0.5,) * channels),
         ]
     )
-    return transforms.Compose(ops)
-
-
-def _stack_subset(dataset, indices):
-    """
-    Materialize transformed samples selected by integer indices.
-
-    The training loop expects a dense tensor, not a lazy torchvision dataset.
-    This also makes the exact selected subset available as a saved artifact.
-    """
-    images = []
-    labels = []
-    for index in indices.tolist():
-        image, label = dataset[index]
-        images.append(image)
-        labels.append(int(label))
-    return torch.stack(images), torch.as_tensor(labels, dtype=torch.long)
-
-
-def _selected_catalog_ids(catalog, indices):
-    """Select stable sample identifiers in exact tensor order."""
-    return [catalog[int(index)] for index in indices.tolist()]
-
-
-def _class_count_summary(labels):
-    """
-    Convert arbitrary integer label counts into a JSON-friendly dict.
-    """
-    if labels.numel() == 0:
-        return {}
-    counts = torch.bincount(labels.to(torch.int64))
-    return {
-        str(class_id): int(counts[class_id].item())
-        for class_id in range(counts.numel())
-        if int(counts[class_id].item()) > 0
-    }
+    return transforms.Compose(operations)
 
 
 def _resolve_existing_dir(root, candidates, dataset_name):
-    """
-    Return the first existing candidate directory under `root`.
-    """
+    """Return the first existing source directory."""
     root = Path(root)
     for candidate in candidates:
         path = root / candidate
@@ -124,12 +61,7 @@ def _resolve_existing_dir(root, candidates, dataset_name):
 
 
 class RecursiveImageDataset(Dataset):
-    """
-    Minimal image dataset for folders without class subdirectories.
-
-    FFHQ thumbnails are treated as one unlabeled image collection. Labels are
-    fixed to zero because class labels are not part of that study.
-    """
+    """Read one unlabeled recursive image directory in stable path order."""
 
     def __init__(self, root, transform=None):
         self.root = Path(root)
@@ -154,100 +86,50 @@ class RecursiveImageDataset(Dataset):
 
 
 def load_flowers102_bundle(config):
-    """
-    Return a deterministic Oxford Flowers102 train/reference bundle.
-
-    The runner profiles use the official large test split for training and the
-    official train split as held-out reference data. This gives enough training
-    images while keeping train/reference sources distinct.
-    """
-    root = config.data.root
-    transform = _build_transform(config)
+    """Open the configured Flowers102 splits and use the shared pipeline."""
     train_split = str(getattr(config.data, "train_split", "train"))
     reference_split = str(getattr(config.data, "reference_split", "val"))
     if reference_split == "valid":
         reference_split = "val"
-
+    transform = _build_transform(config)
     train_set = datasets.Flowers102(
-        root=root,
+        root=config.data.root,
         split=train_split,
         transform=transform,
         download=bool(config.data.download),
     )
     reference_set = datasets.Flowers102(
-        root=root,
+        root=config.data.root,
         split=reference_split,
         transform=transform,
         download=bool(config.data.download),
     )
 
-    train_indices = seeded_indices(
-        len(train_set), int(config.data.n_train), int(config.training.seed)
+    return build_image_bundle(
+        config,
+        {
+            "train": {
+                "dataset": train_set,
+                "source_id": f"torchvision_flowers102:{train_split}",
+            },
+            "reference": {
+                "dataset": reference_set,
+                "source_id": f"torchvision_flowers102:{reference_split}",
+            },
+            "train_split": train_split,
+            "reference_split": reference_split,
+            "num_classes": 102,
+            "include_empty_classes": False,
+        },
     )
-    reference_indices = seeded_indices(
-        len(reference_set), int(config.data.n_test), int(config.training.seed) + 1
-    )
-    train_tensor, train_labels = _stack_subset(train_set, train_indices)
-    reference_tensor, reference_labels = _stack_subset(reference_set, reference_indices)
-
-    train_tensor = maybe_flatten(train_tensor, config)
-    reference_tensor = maybe_flatten(reference_tensor, config)
-    train_source_id = f"torchvision_flowers102:{train_split}"
-    reference_source_id = f"torchvision_flowers102:{reference_split}"
-    train_sample_ids = [int(item) for item in train_indices.tolist()]
-    reference_sample_ids = [int(item) for item in reference_indices.tolist()]
-
-    return {
-        "train": train_tensor.contiguous(),
-        "train_labels": train_labels,
-        "train_class_counts": _class_count_summary(train_labels),
-        "reference": reference_tensor.contiguous(),
-        "reference_labels": reference_labels,
-        "reference_class_counts": _class_count_summary(reference_labels),
-        "train_indices": train_indices,
-        "reference_indices": reference_indices,
-        "train_sample_ids": train_sample_ids,
-        "reference_sample_ids": reference_sample_ids,
-        "train_sample_id_kind": "index",
-        "reference_sample_id_kind": "index",
-        "train_source_size": len(train_set),
-        "reference_source_size": len(reference_set),
-        "train_source_catalog_sha256": source_catalog_sha256(
-            train_source_id, range(len(train_set))
-        ),
-        "reference_source_catalog_sha256": source_catalog_sha256(
-            reference_source_id, range(len(reference_set))
-        ),
-        "train_role": "train",
-        "reference_role": "heldout_reference",
-        "train_source_id": train_source_id,
-        "reference_source_id": reference_source_id,
-        "train_split": train_split,
-        "reference_split": reference_split,
-        "display_shape": (
-            int(config.data.image_channels),
-            int(config.data.image_size),
-            int(config.data.image_size),
-        ),
-    }
 
 
 def load_afhq_v2_bundle(config):
-    """
-    Return a deterministic AFHQ-v2 train/reference bundle.
-
-    AFHQ-v2 is read from local ImageFolder-style splits. The returned bundle
-    follows the same tensor/label/index contract as torchvision datasets.
-    """
-    root = config.data.root
+    """Open local AFHQ-v2 folders and use the shared pipeline."""
     subdir = str(getattr(config.data, "dataset_subdir", "") or "afhq_v2")
     base_dir = _resolve_existing_dir(
-        root,
-        (
-            subdir,
-            "afhq_v2",
-            "external/stargan-v2/data",
-        ),
+        config.data.root,
+        (subdir, "afhq_v2", "external/stargan-v2/data"),
         "AFHQ-v2",
     )
     train_split = str(getattr(config.data, "train_split", "train"))
@@ -255,25 +137,11 @@ def load_afhq_v2_bundle(config):
     if reference_split in ("valid", "val"):
         reference_split = "test"
     transform = _build_transform(config)
-
     train_set = datasets.ImageFolder(base_dir / train_split, transform=transform)
     reference_set = datasets.ImageFolder(
-        base_dir / reference_split, transform=transform
+        base_dir / reference_split,
+        transform=transform,
     )
-
-    train_indices = seeded_indices(
-        len(train_set), int(config.data.n_train), int(config.training.seed)
-    )
-    reference_indices = seeded_indices(
-        len(reference_set), int(config.data.n_test), int(config.training.seed) + 1
-    )
-    train_tensor, train_labels = _stack_subset(train_set, train_indices)
-    reference_tensor, reference_labels = _stack_subset(reference_set, reference_indices)
-
-    train_tensor = maybe_flatten(train_tensor, config)
-    reference_tensor = maybe_flatten(reference_tensor, config)
-    train_source_id = f"afhq_v2:{train_split}"
-    reference_source_id = f"afhq_v2:{reference_split}"
     train_catalog = relative_path_sample_ids(
         (path for path, _ in train_set.samples),
         base_dir / train_split,
@@ -283,58 +151,35 @@ def load_afhq_v2_bundle(config):
         base_dir / reference_split,
     )
 
-    return {
-        "train": train_tensor.contiguous(),
-        "train_labels": train_labels,
-        "train_class_counts": _class_count_summary(train_labels),
-        "reference": reference_tensor.contiguous(),
-        "reference_labels": reference_labels,
-        "reference_class_counts": _class_count_summary(reference_labels),
-        "train_indices": train_indices,
-        "reference_indices": reference_indices,
-        "train_sample_ids": _selected_catalog_ids(train_catalog, train_indices),
-        "reference_sample_ids": _selected_catalog_ids(
-            reference_catalog, reference_indices
-        ),
-        "train_sample_id_kind": "relative_path",
-        "reference_sample_id_kind": "relative_path",
-        "train_source_size": len(train_set),
-        "reference_source_size": len(reference_set),
-        "train_source_catalog_sha256": source_catalog_sha256(
-            train_source_id, train_catalog
-        ),
-        "reference_source_catalog_sha256": source_catalog_sha256(
-            reference_source_id, reference_catalog
-        ),
-        "train_role": "train",
-        "reference_role": "heldout_reference",
-        "train_source_id": train_source_id,
-        "reference_source_id": reference_source_id,
-        "train_split": train_split,
-        "reference_split": reference_split,
-        "display_shape": (
-            int(config.data.image_channels),
-            int(config.data.image_size),
-            int(config.data.image_size),
-        ),
-        "class_to_idx": dict(train_set.class_to_idx),
-    }
+    return build_image_bundle(
+        config,
+        {
+            "train": {
+                "dataset": train_set,
+                "catalog": train_catalog,
+                "sample_id_kind": "relative_path",
+                "source_id": f"afhq_v2:{train_split}",
+            },
+            "reference": {
+                "dataset": reference_set,
+                "catalog": reference_catalog,
+                "sample_id_kind": "relative_path",
+                "source_id": f"afhq_v2:{reference_split}",
+            },
+            "train_split": train_split,
+            "reference_split": reference_split,
+            "num_classes": len(train_set.classes),
+            "include_empty_classes": False,
+            "class_to_idx": dict(train_set.class_to_idx),
+        },
+    )
 
 
 def load_ffhq128_bundle(config):
-    """
-    Return a deterministic FFHQ thumbnail bundle.
-
-    FFHQ does not ship with train/validation splits. We therefore draw one
-    disjoint seeded partition from the full image collection and mark the
-    bundle as a same-source holdout through matching source ids. The common
-    leakage guard then verifies that the saved train/reference indices are
-    disjoint.
-    """
-    root = config.data.root
+    """Open FFHQ thumbnails and create one disjoint same-source holdout."""
     subdir = str(getattr(config.data, "dataset_subdir", "") or "ffhq/thumbnails128x128")
     base_dir = _resolve_existing_dir(
-        root,
+        config.data.root,
         (
             subdir,
             "ffhq/thumbnails128x128",
@@ -344,53 +189,24 @@ def load_ffhq128_bundle(config):
         "FFHQ thumbnails",
     )
     dataset = RecursiveImageDataset(base_dir, transform=_build_transform(config))
-    count = int(config.data.n_train) + int(config.data.n_test)
-    combined = seeded_indices(len(dataset), count, int(config.training.seed))
-    train_indices = combined[: int(config.data.n_train)]
-    reference_indices = combined[int(config.data.n_train) :]
-
-    train_tensor, train_labels = _stack_subset(dataset, train_indices)
-    reference_tensor, reference_labels = _stack_subset(dataset, reference_indices)
-
-    train_tensor = maybe_flatten(train_tensor, config)
-    reference_tensor = maybe_flatten(reference_tensor, config)
-    source_id = "ffhq128:all"
-    source_catalog = relative_path_sample_ids(dataset.files, base_dir)
-    source_fingerprint = source_catalog_sha256(source_id, source_catalog)
-
-    return {
-        "train": train_tensor.contiguous(),
-        "train_labels": train_labels,
-        "train_class_counts": _class_count_summary(train_labels),
-        "reference": reference_tensor.contiguous(),
-        "reference_labels": reference_labels,
-        "reference_class_counts": _class_count_summary(reference_labels),
-        "train_indices": train_indices,
-        "reference_indices": reference_indices,
-        "train_sample_ids": _selected_catalog_ids(source_catalog, train_indices),
-        "reference_sample_ids": _selected_catalog_ids(
-            source_catalog, reference_indices
-        ),
-        "train_sample_id_kind": "relative_path",
-        "reference_sample_id_kind": "relative_path",
-        "train_source_size": len(dataset),
-        "reference_source_size": len(dataset),
-        "train_source_catalog_sha256": source_fingerprint,
-        "reference_source_catalog_sha256": source_fingerprint,
-        "train_role": "train",
-        "reference_role": "same_corpus_holdout",
-        "train_source_id": source_id,
-        "reference_source_id": source_id,
-        "train_split": "seeded_partition",
-        "reference_split": "seeded_partition",
-        "display_shape": (
-            int(config.data.image_channels),
-            int(config.data.image_size),
-            int(config.data.image_size),
-        ),
+    catalog = relative_path_sample_ids(dataset.files, base_dir)
+    source = {
+        "dataset": dataset,
+        "catalog": catalog,
+        "sample_id_kind": "relative_path",
+        "source_id": "ffhq128:all",
     }
 
-
-if __name__ == "__main__":
-    print("mem_param_src.datasets.image_collections example")
-    print("supported loaders: flowers102, afhq_v2, ffhq128")
+    return build_image_bundle(
+        config,
+        {
+            "train": source,
+            "reference": source,
+            "train_split": "seeded_partition",
+            "reference_split": "seeded_partition",
+            "reference_role": "same_corpus_holdout",
+            "shared_partition": True,
+            "num_classes": 1,
+            "include_empty_classes": False,
+        },
+    )

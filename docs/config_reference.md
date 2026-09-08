@@ -1,5 +1,16 @@
 # Configuration Reference
 
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, precise terms, and a natural
+voice. Help the researcher understand and own the work. For substantial changes,
+show the relevant files, how the parts connect, and a small usage example with
+expected outputs. Use real code or clearly labelled pseudocode. State what was
+tested. Link to the implementation, settings, and results. Keep reusable examples
+in the relevant docs and the layout in docs/repo_map.md. Involve the researcher
+in meaningful choices without routine approval requests. Apply this rule to
+future notes and documentation. Full guidance: root AGENTS.md, Collaboration
+and Code Understanding.
+
 Updated: 2026-08-20
 
 This is the human-readable reference for every field currently created by
@@ -91,7 +102,7 @@ The final paper setting remains subject to validation; see T014 in
 | `framework.family` | `"fm"` | Interpolation family. Only linear flow matching (`"fm"`) is supported in the clean model. | Active |
 | `framework.prediction_space` | `"x"` | Meaning of the network output: clean data (`"x"`), noise (`"eps"`), or path velocity (`"v"`). Sweep all three for the parameterization study. | Active |
 | `framework.loss_space` | `"x"` | Space in which prediction and target are compared: `"x"`, `"eps"`, or `"v"`. Keep fixed when running a common-loss control. | Active |
-| `framework.loss_weighting` | `"unit"` | Scalar time weight. `"unit"` means every sampled training time has weight one. | Active |
+| `framework.loss_weighting` | `"unit"` | Scalar time weight. Use `"unit"` for `w(t) = 1`. Native `v/v` training also accepts `"x_equivalent"` for `w(t) = (1-t)^2` and `"eps_equivalent"` for `w(t) = t^2`. | Active |
 
 Recommended comparisons are not one universal default:
 
@@ -99,6 +110,14 @@ Recommended comparisons are not one universal default:
 - common velocity-loss control: `x/v`, `eps/v`, and `v/v`;
 - all other architecture, data, optimizer, sampler, and evaluation settings
   should remain fixed inside one comparison.
+
+For the linear FM path, a velocity prediction implies
+`x_hat = z_t + (1-t) v_hat` and `eps_hat = z_t - t v_hat`. Therefore,
+`x_equivalent` makes the weighted `v/v` MSE equal to the corresponding `x/x`
+MSE. Similarly, `eps_equivalent` makes it equal to the corresponding
+`eps/eps` MSE. These two weighting options are valid only for native `v/v`
+training. The implementation does not normalize the weights because the raw
+factors preserve equality with the diagonal objectives.
 
 ### Network
 
@@ -135,27 +154,67 @@ The 32-pixel profile was described in the old runner as Bonnaire-close, not as
 a DDPM reproduction. These profiles are legacy evidence and have not yet been
 validated in the clean repository.
 
+#### Official Bonnaire architecture check (2026-09-07)
+
+The local `BonnaireUNet` is an approximation, not the released network.
+Checked the official repository at commit
+`de6d4c3abecdce49b6e8ae3dc7898d098228457b`:
+
+- [Training constructor](https://github.com/tbonnair/Why-Diffusion-Models-Don-t-Memorize/blob/de6d4c3abecdce49b6e8ae3dc7898d098228457b/Experiments/src/Training/run_Unet.py#L114-L121)
+- [Network implementation](https://github.com/tbonnair/Why-Diffusion-Models-Don-t-Memorize/blob/de6d4c3abecdce49b6e8ae3dc7898d098228457b/Experiments/src/Utils/Unet.py)
+- [Paper, Appendix A](https://arxiv.org/html/2505.17638v2#A1)
+
+The released CelebA constructor uses grayscale input/output, multipliers
+`(1, 2, 4)`, attention flags `(False, True, True)`, and dropout `0.1`.
+It has two residual blocks per encoder level, three per decoder level, and
+two middle blocks. Attention uses four heads at 16/8 pixels in encoder and
+decoder, plus the middle block. GroupNorm uses eight groups. Time conditioning
+adds projected embeddings; the time table uses integer DDPM steps 0--999.
+
+Local CPU instantiation of that exact source gave 1,010,657 / 4,023,233 /
+16,054,145 trainable parameters at widths 16 / 32 / 64. All three passed a
+finite forward check with input/output shape `[1, 1, 32, 32]` in `memcompgen`.
+These counts exclude the frozen sinusoidal lookup table.
+
+The paper's main text says `(1, 2, 3)`; its appendix and released code agree on
+`(1, 2, 4)`. Use the pinned code when specifying the released architecture.
+Our backbone instead uses single-head attention, up to 32 normalization groups,
+scale/shift time conditioning, and zero-initialized residual/output layers.
+It has no decoder attention. Optional encoder attention is shared within a
+level and skipped at the deepest level; middle attention always runs.
+Setting `attn_resolutions=(16, 8)` alone does not reproduce the official model.
+
+The paper trains a DDPM noise predictor. Our linear Flow Matching path is a
+separate protocol choice, even if we later adopt the official backbone.
+
 ### Data
 
 | Setting | Default | Meaning and guidance | Use |
 | --- | --- | --- | --- |
-| `data.dataset` | `"gmm_subspace"` | Internal loader key. Supported clean keys are `gmm_subspace`, `torus3d`, `mnist`, `celeba32_grey`, `flowers102`, `afhq_v2`, and `ffhq128`. | Active |
+| `data.dataset` | `"gmm_subspace"` | Internal loader key. Supported clean keys are `gmm_subspace`, `torus3d`, `mnist`, `cifar10`, `celeba32_grey`, `flowers102`, `afhq_v2`, and `ffhq128`. | Active |
 | `data.root` | `"data"` | Root directory for real datasets. Synthetic loaders do not use it. | Active for images |
 | `data.dataset_subdir` | `""` | Optional dataset folder under `data.root`; mainly used by AFHQ-v2 and FFHQ. | Active for selected images |
 | `data.download` | `False` | Allow torchvision to download supported datasets. Prefer `False` on cluster jobs after staging data. | Active for torchvision data |
 | `data.train_split` | `"train"` | Source split used for optimization. | Active for image collections |
 | `data.reference_split` | `"valid"` | Held-out/reference split used for evaluation. Never silently reuse training data. | Active for image collections |
-| `data.resize_size` | `0` | Resize before center crop. `0` means use `data.image_size`. | Active for image collections |
+| `data.resize_size` | `0` | Resize before the final center crop. `0` means use `data.image_size`. | Active for CelebA and image collections |
 | `data.n_train` | `256` | Number of real or synthetic examples used for optimization. Use at least `2` for nearest-neighbor metrics. | Active |
 | `data.n_test` | `256` | Number of held-out/reference examples. Use at least `1`; larger banks give steadier quality estimates. | Active |
 | `data.ambient_dim` | `256` | Observed dimension `D` for the torus embedding. The current GMM loader instead reads `data.data_dim`. | Active for torus |
 | `data.intrinsic_dim` | `4` | True linear subspace dimension `d` for the GMM. Require `1 <= d <= data.data_dim`. The torus has fixed local dimension two. | Active for GMM |
 | `data.data_dim` | `256` | Emitted GMM vector dimension and MLP input dimension. Keep equal to `data.ambient_dim` in synthetic studies until these duplicate names are cleaned up. | Active for GMM/MLP |
 | `data.image_size` | `0` | Square model resolution. Must be positive for image loaders and UNet models. | Active for images |
-| `data.image_channels` | `0` | Number of image channels. Clean image loaders support `1` or `3`. | Active for images |
+| `data.image_channels` | `0` | Number of image channels. Image loaders support `1` or `3`. MNIST RGB repeats grayscale values and adds no color information. | Active for images |
 | `data.flatten` | `False` | Flatten each example after loading. Keep `False` for UNet images. | Active |
-| `data.balance_train_classes` | `False` | Ask the MNIST loader for a class-balanced training subset. | Active for MNIST |
-| `data.balance_reference_classes` | `False` | Ask the MNIST loader for a class-balanced reference subset. | Active for MNIST |
+| `data.balance_train_classes` | `False` | Select the same training count from each class. The count must be divisible by ten. | Active for MNIST/CIFAR-10 |
+| `data.balance_reference_classes` | `False` | Select the same reference count from each class. The count must be divisible by ten. | Active for MNIST/CIFAR-10 |
+
+Enable exact class balance through the existing runner override surface:
+
+```bash
+--set data.balance_train_classes=true \
+--set data.balance_reference_classes=true
+```
 | `data.allow_same_source_reference` | `False` | Permit train/reference subsets from one corpus only when saved indices prove they are disjoint. Keep `False` except for an explicit FFHQ-style partition. | Active |
 | `data.n_clusters` | `10` | Number of Gaussian components in the controlled GMM. Require at least `1`. | Active for GMM |
 | `data.sigma_z` | `0.5` | Standard deviation inside each intrinsic GMM component. Must be positive. | Active for GMM |
@@ -173,6 +232,10 @@ Legacy dataset guidance:
   `2.0` and `0.5`.
 - Image runner: public dataset labels were `mnist`, `celeba`, `flowers`,
   `afhq`, and `ffhq`; these resolved to the internal loader keys above.
+- CelebA preserves the historical 140-pixel aligned-face crop. It then uses
+  `data.resize_size`, applies the final `data.image_size` crop, and emits
+  grayscale or RGB according to `data.image_channels`. Sizes above 140 add no
+  source detail because they upsample the cropped image.
 - Flowers102 used official `test` for training and official `train` for held-out
   reference because the official training split is small.
 - FFHQ used one seeded, disjoint same-corpus partition and therefore required
@@ -237,16 +300,16 @@ budgets and schedules are historical starting points, not clean defaults.
 | `evaluation.n_samples` | `64` | Number of generated samples evaluated from the saved noise bank. Must not exceed the available bank. | Runner-owned; notebook active |
 | `evaluation.sample_bank_size` | `1024` | Number of fixed initial-noise samples saved for replay across checkpoints. Legacy runners used `1024`. | Runner-owned |
 | `evaluation.batch_size` | `64` | No-grad evaluation batch size. Reduce for memory, not scientific meaning. | Runner-owned |
-| `evaluation.ratio_threshold` | `0.5` | Memorization threshold `rho` in `f_mem = mean(d1/d2 < rho)`. Report sensitivity; clean image records sweep `0.3`, `0.5`, and `0.7`. | Active |
+| `evaluation.f_mem_threshold` | `0.3` | Canonical threshold `rho` in `f_mem = mean(d1/d2 < rho)`. Clean image records also save the auxiliary `0.3`, `0.5`, and `0.7` sweep. | Active |
 | `evaluation.sample_panel_count` | `8` | Number of examples shown/saved in qualitative panels. | Runner-owned |
 | `evaluation.chunk_size` | `256` | Query chunk size for distance metrics. Change for memory/performance only. | Active |
 | `evaluation.loss_eval_times` | `(0.5, 0.75)` | Fixed times used for checkpoint loss probes in addition to random-time loss. | Runner-owned |
 | `evaluation.loss_eval_batch_size` | `0` | Batch size for loss probes. Legacy image runner used `0` as an automatic/full-batch sentinel; synthetic used the training batch cap. | Runner-owned |
 | `evaluation.sliced_w2_n_directions` | `128` | Number of fixed intrinsic-space directions saved for synthetic sliced-Wasserstein evaluation. | Active |
 
-The old synthetic runner used `ratio_threshold=0.3`, `chunk_size=512`, and
-`128` sliced-Wasserstein directions. The clean image metrics already report a
-rho sweep, which is safer than treating one threshold as universally correct.
+The old synthetic runner used its legacy `ratio_threshold=0.3` flag. The clean
+configuration names the same scientific choice `f_mem_threshold`. The image
+records retain a rho sweep for threshold-sensitivity analysis.
 
 ### Sampling
 
@@ -285,13 +348,14 @@ dataset, model, endpoint range, and parameterization sweep.
 | --- | --- | --- | --- |
 | `outputs.run_name` | `"run"` | Human-readable run identifier used in artifact paths and logs. | Runner-owned |
 | `monitoring.batch_size` | `64` | No-grad batch size for train-time monitors. Old image runner defaulted it to `batch_cap`. | Runner-owned |
-| `generation_monitor.enabled` | `False` | Generate fixed-noise qualitative samples during training. | Runner-owned |
-| `generation_monitor.n_samples` | `64` | Size of the fixed-noise subset available to the qualitative monitor. | Runner-owned |
-| `generation_monitor.show` | `True` | Display monitor figures interactively. Disable for headless cluster jobs while still saving them. | Runner-owned |
-| `random_projected_f_mem.n_samples` | `512` | Fixed-noise generated samples used by the projected-pixel memorization monitor. | Runner-owned |
+| `generation_monitor.enabled` | `False` | Save fixed-noise image grids at step zero and every image-training checkpoint. | Runner-owned |
+| `generation_monitor.n_samples` | `64` | Number of saved `z_init` samples used in every checkpoint grid. Must not exceed `evaluation.sample_bank_size`. | Runner-owned |
+| `generation_monitor.show` | `True` | Reserved display preference. The command runner saves PNG files without opening interactive windows. | Reserved |
+| `random_projected_f_mem.enabled` | `False` | Enable rough projected-pixel f_mem at image preview checkpoints. Requires generation monitoring. | Runner-owned |
+| `random_projected_f_mem.n_samples` | `512` | Generated samples used by f_mem, separate from grid size. The runner expands and saves the noise bank as needed when enabled. | Runner-owned |
 | `random_projected_f_mem.resize_size` | `16` | Image resolution before random projection. | Runner-owned |
 | `random_projected_f_mem.projection_dim` | `256` | Dimension of the fixed random projection. | Runner-owned |
-| `random_projected_f_mem.projection_seed` | `None` | Projection seed. Legacy image runner derived `training.seed + 3001` when omitted. | Runner-owned/Derived |
+| `random_projected_f_mem.projection_seed` | `None` | Derives `training.seed + 3001` when enabled; saved in the resolved config. | Runner-owned/Derived |
 
 ### Runtime
 
@@ -312,11 +376,13 @@ dataset, model, endpoint range, and parameterization sweep.
 | `tracking.console.summary_every_seconds` | `60.0` | Wall-clock interval for time-based summaries. | Runner-owned |
 | `tracking.console.stage_banners` | `True` | Print clear stage transitions such as data, training, and evaluation. | Runner-owned |
 | `tracking.console.tee_to_attempt_log` | `True` | Mirror console output into the run attempt log. | Runner-owned |
-| `tracking.wandb.enabled` | `False` | Enable Weights & Biases logging. Keep disabled until run identity and artifact behavior are reviewed. | Runner-owned |
-| `tracking.wandb.mode` | `"offline"` | `"offline"` or `"online"`. Offline avoids network dependence on cluster jobs. | Runner-owned |
-| `tracking.wandb.project` | `""` | Project name. Empty means the future runner must choose one. | Runner-owned |
+| `tracking.wandb.enabled` | `False` | Enable W&B loss and progress logging for image training. Synthetic tracking is not supported. | Runner-owned |
+| `tracking.wandb.mode` | `"offline"` | `"offline"` or `"online"`. The image `--wandb` flag selects online mode unless `--wandb-mode` overrides it. | Runner-owned |
+| `tracking.wandb.project` | `""` | Project name. Empty derives `{dataset}-{model}`. | Runner-owned/Derived |
+| `tracking.wandb.name` | `""` | Run name. Empty derives dataset, model, `N`, batch cap, prediction/loss spaces, training steps, and seed. | Runner-owned/Derived |
+| `tracking.wandb.group` | `""` | Comparison group. Empty derives dataset, model, and training steps. | Runner-owned/Derived |
 | `tracking.wandb.entity` | `WANDB_ENTITY` or `"maj90"` | W&B entity/account, read from the environment when available. | Runner-owned |
-| `tracking.wandb.dir` | `"logs/wandb"` | Local W&B storage directory. | Runner-owned |
+| `tracking.wandb.dir` | `"logs/wandb"` | Local W&B storage directory relative to the selected run directory. | Runner-owned |
 | `tracking.wandb.tags` | `[]` | List of run tags. Keep scientific factors machine-readable. | Runner-owned |
 | `tracking.wandb.notes` | `""` | Free-text run notes. Do not encode factors only in notes. | Runner-owned |
 | `tracking.wandb.strict` | `False` | If `True`, tracking failures abort the run; if `False`, training may continue with a warning. | Runner-owned |
@@ -333,10 +399,44 @@ mem-param-image-train \
   --set framework.prediction_space=v \
   --evaluate-after-training
 
+mem-param-image-train \
+  --config configs/runners/flowers102_smoke.py \
+  --run-dir outputs/flowers_wandb_run \
+  --wandb \
+  --generation-monitor
+
 mem-param-synthetic-train \
   --config configs/runners/gmm_smoke.py \
   --run-dir outputs/gmm_run
 ```
+
+The image runner logs loss, learning rate, elapsed time, and progress at
+`training.log_every`. Run `wandb login` before online tracking. Checkpoint
+monitoring saves `monitoring/samples_step_<step>.png` from the same `z_init`
+prefix at step zero and every checkpoint. Omit `--generation-monitor` to keep
+W&B loss tracking without the sampling cost. These grids are qualitative
+monitors, not checkpoint evaluation metrics.
+
+Add `--f-mem-monitor --f-mem-samples 512` with `--generation-monitor` for a
+rough memorization check. `--no-f-mem-monitor` disables it. The sample-count
+flag alone does not enable the calculation. It works with or without W&B.
+The grid and metric share one generated batch from saved `z_init` prefixes.
+The grid retains `generation_monitor.n_samples` images. Generation uses the
+larger of the two counts, batched with `monitoring.batch_size`.
+
+This monitor reuses the old runner's fixed random-projected pixel metric:
+normalize/clamp to [0,1], resize to 16 x 16, then project to 256 dimensions.
+It compares against all saved training images at `evaluation.f_mem_threshold`
+(rho=0.3). It is not FID or the full-resolution post-training pixel metric.
+Clamping can hide unstable raw magnitudes; interpret f_mem beside image grids
+and generation quality. A small generated count gives a coarse estimate.
+
+Projection and cached training vectors are saved under `monitoring/` as
+`f_mem_projection.pt` and `f_mem_train_vectors.pt`. Each checkpoint writes
+`f_mem_step_<step>.json`, including sample count, rho, metric space, and distances.
+W&B logs `generation/random_projected_pixels/f_mem`, `mean_r`, `rho`, `n_samples`,
+and `N` against `generation/step`. Projection settings live in the saved config
+and metric records. The disabled option adds no metric sampling or artifacts.
 
 Evaluation commands require only the saved run directory. They load the saved
 config, data manifest, tensors, fixed noise, metric state, and checkpoints.
@@ -485,7 +585,7 @@ flags were:
 | `--eval_sample_bank_size` | `1024` | Evaluation fixed-noise bank. |
 | `--sampling_method` | `heun`; `euler/heun` | `sampling.method`. |
 | `--sampling_steps` | `128` | `sampling.n_steps`. |
-| `--ratio_threshold` | `0.3` | `evaluation.ratio_threshold`. |
+| `--ratio_threshold` | `0.3` | Legacy name for `evaluation.f_mem_threshold`. |
 | `--chunk_size` | `512` | `evaluation.chunk_size`. |
 | `--sliced_w2_projections` | `128` | Replaced by `evaluation.sliced_w2_n_directions`. |
 | `--wandb_entity` | environment or `maj90` | `tracking.wandb.entity`. |

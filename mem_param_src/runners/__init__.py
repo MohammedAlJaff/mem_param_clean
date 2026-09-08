@@ -5,6 +5,7 @@ import torch
 
 IMAGE_DATASETS = (
     "mnist",
+    "cifar10",
     "celeba32_grey",
     "flowers102",
     "afhq_v2",
@@ -52,11 +53,6 @@ def configure_runtime(config, device):
         raise ValueError("The first runner supports runtime.precision='fp32' only.")
     if str(config.runtime.autocast_dtype) != "none":
         raise ValueError("The first runner does not use autocast.")
-    if bool(config.tracking.wandb.enabled):
-        raise ValueError("The first runner does not support W&B.")
-    if bool(config.generation_monitor.enabled):
-        raise ValueError("The first runner does not support live generation monitors.")
-
     if device.type == "cuda":
         tf32_enabled = bool(config.runtime.tf32_enabled)
         torch.backends.cuda.matmul.allow_tf32 = tf32_enabled

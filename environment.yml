@@ -7,4 +7,4 @@ dependencies:
   - setuptools>=68
   - wheel
   - pip:
-      - "-e .[image,evaluation,dev]"
+      - "-e .[image,evaluation,tracking,dev]"

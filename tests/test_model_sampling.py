@@ -10,10 +10,11 @@ from mem_param_src.model import GDFM
 from mem_param_src.sampling import sample, time_grid
 
 
-def _small_model(*, prediction_space="x", loss_space="x"):
+def _small_model(*, prediction_space="x", loss_space="x", loss_weighting="unit"):
     config = get_base_config()
     config.framework.prediction_space = prediction_space
     config.framework.loss_space = loss_space
+    config.framework.loss_weighting = loss_weighting
     config.data.data_dim = 2
     config.network.hidden_dim = 8
     config.network.n_layers = 1
@@ -66,6 +67,7 @@ class TestTrainingSettings(unittest.TestCase):
         config = get_base_config()
 
         self.assertNotIn("schedule", config)
+        self.assertEqual(config.framework.loss_weighting, "unit")
         self.assertEqual(config.training.start_time, 0.01)
         self.assertEqual(config.training.end_time, 0.99)
         self.assertIs(config.training.use_safe_division, True)
@@ -74,6 +76,8 @@ class TestTrainingSettings(unittest.TestCase):
         self.assertEqual(config.sampling.end_time, 0.99)
         self.assertIs(config.sampling.use_safe_division, True)
         self.assertEqual(config.sampling.safe_div_denom_eps, 0.01)
+        self.assertEqual(config.evaluation.f_mem_threshold, 0.3)
+        self.assertNotIn("ratio_threshold", config.evaluation)
         self.assertAlmostEqual(
             1.0 - config.training.end_time,
             config.training.safe_div_denom_eps,
@@ -101,6 +105,77 @@ class TestTrainingSettings(unittest.TestCase):
         self.assertGreaterEqual(float(times.min()), 0.2)
         self.assertLess(float(times.max()), 0.4)
         self.assertFalse(hasattr(model, "_sample_t_logit_normal"))
+
+
+class TestVelocityLossWeighting(unittest.TestCase):
+    def test_effective_weights_match_linear_fm_coefficients(self):
+        times = torch.tensor([0.2, 0.5, 0.8])
+        x_equivalent = _small_model(
+            prediction_space="v",
+            loss_space="v",
+            loss_weighting="x_equivalent",
+        )
+        eps_equivalent = _small_model(
+            prediction_space="v",
+            loss_space="v",
+            loss_weighting="eps_equivalent",
+        )
+
+        self.assertTrue(torch.allclose(x_equivalent.w(times), (1.0 - times) ** 2))
+        self.assertTrue(torch.allclose(eps_equivalent.w(times), times**2))
+
+    def test_weighted_velocity_losses_match_diagonal_losses(self):
+        clean = torch.tensor([[2.0, -1.0], [0.5, 3.0]])
+        noise = torch.tensor([[1.0, 0.25], [-2.0, 1.5]])
+        times = torch.tensor([0.2, 0.8])
+        time_scale = times[:, None]
+        velocity = clean - noise
+        velocity_error = torch.tensor([[0.4, -0.2], [-0.3, 0.1]])
+        velocity_prediction = velocity + velocity_error
+
+        x_prediction = clean + (1.0 - time_scale) * velocity_error
+        eps_prediction = noise - time_scale * velocity_error
+
+        v_as_x = _small_model(
+            prediction_space="v",
+            loss_space="v",
+            loss_weighting="x_equivalent",
+        )
+        v_as_x.net = _FixedPrediction(velocity_prediction)
+        x_diagonal = _small_model(prediction_space="x", loss_space="x")
+        x_diagonal.net = _FixedPrediction(x_prediction)
+
+        v_as_eps = _small_model(
+            prediction_space="v",
+            loss_space="v",
+            loss_weighting="eps_equivalent",
+        )
+        v_as_eps.net = _FixedPrediction(velocity_prediction)
+        eps_diagonal = _small_model(prediction_space="eps", loss_space="eps")
+        eps_diagonal.net = _FixedPrediction(eps_prediction)
+
+        self.assertTrue(
+            torch.allclose(
+                v_as_x.compute_loss(clean, eps=noise, t=times),
+                x_diagonal.compute_loss(clean, eps=noise, t=times),
+            )
+        )
+        self.assertTrue(
+            torch.allclose(
+                v_as_eps.compute_loss(clean, eps=noise, t=times),
+                eps_diagonal.compute_loss(clean, eps=noise, t=times),
+            )
+        )
+
+    def test_equivalent_weights_require_native_velocity_training(self):
+        for weighting in ("x_equivalent", "eps_equivalent"):
+            with self.subTest(weighting=weighting):
+                with self.assertRaisesRegex(ValueError, "requires.*prediction_space"):
+                    _small_model(
+                        prediction_space="x",
+                        loss_space="v",
+                        loss_weighting=weighting,
+                    )
 
 
 class TestDivisionChoice(unittest.TestCase):

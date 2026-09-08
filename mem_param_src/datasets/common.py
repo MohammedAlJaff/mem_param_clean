@@ -1,10 +1,10 @@
 """
 Shared data-bundle helpers for first-party studies.
 
-This file contains the small helpers used by every dataset loader:
+This file contains the shared bundle and provenance helpers:
 - deterministic subset selection from a larger dataset
 - optional flattening when a study wants vectors instead of image tensors
-- dataset-name dispatch into the correct loader
+- finite-source identity and train/reference leakage validation
 
 Canonical bundle contract:
     train:              the tensor seen by the optimizer
@@ -289,80 +289,3 @@ def validate_data_bundle(bundle, config):
     }
     bundle["data_validation"] = validation
     return bundle
-
-
-def build_data_bundle(config):
-    """
-    Dispatch from `config.data.dataset` to the corresponding canonical loader.
-
-    Every loader returns the same high-level bundle contract documented at the
-    top of this module.
-    """
-    dataset_name = config.data.dataset
-
-    if dataset_name == "mnist":
-        from mem_param_src.datasets.mnist import load_mnist_bundle
-
-        bundle = load_mnist_bundle(config)
-    elif dataset_name == "gmm_subspace":
-        from mem_param_src.datasets.gmm import load_gmm_subspace_bundle
-
-        bundle = load_gmm_subspace_bundle(config)
-    elif dataset_name == "torus3d":
-        from mem_param_src.datasets.torus import load_torus3d_bundle
-
-        bundle = load_torus3d_bundle(config)
-    elif dataset_name == "celeba32_grey":
-        from mem_param_src.datasets.celeba32 import load_celeba32_bundle
-
-        bundle = load_celeba32_bundle(config)
-    elif dataset_name == "flowers102":
-        from mem_param_src.datasets.image_collections import load_flowers102_bundle
-
-        bundle = load_flowers102_bundle(config)
-    elif dataset_name == "afhq_v2":
-        from mem_param_src.datasets.image_collections import load_afhq_v2_bundle
-
-        bundle = load_afhq_v2_bundle(config)
-    elif dataset_name == "ffhq128":
-        from mem_param_src.datasets.image_collections import load_ffhq128_bundle
-
-        bundle = load_ffhq128_bundle(config)
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-
-    return validate_data_bundle(bundle, config)
-
-
-if __name__ == "__main__":
-    from mem_param_src.config import get_base_config
-
-    torch.manual_seed(0)
-
-    print("mem_param_src.datasets.common example")
-
-    # Show the two small helper contracts first: seeded subset selection and
-    # optional flattening of image-shaped tensors.
-    indices = seeded_indices(size=10, count=4, seed=3)
-    image_batch = torch.randn(2, 1, 4, 4)
-
-    # Build a tiny synthetic-data config so `build_data_bundle(...)` is runnable.
-    config = get_base_config()
-    config.data.dataset = "gmm_subspace"
-    config.data.n_train = 8
-    config.data.n_test = 6
-    config.data.data_dim = 8
-    config.data.intrinsic_dim = 2
-    config.data.n_clusters = 3
-    config.data.flatten = False
-
-    # Materialize the helper outputs and then the full bundle contract.
-    flattened = maybe_flatten(image_batch, config)
-    bundle = build_data_bundle(config)
-
-    # The key check here is that every loader returns the same bundle keys.
-    print(f"seeded_indices        : {indices.tolist()}")
-    print(f"maybe_flatten shape   : {tuple(flattened.shape)}")
-    print(f"bundle keys           : {sorted(bundle.keys())}")
-    print(f"train shape           : {tuple(bundle['train'].shape)}")
-    print(f"reference shape       : {tuple(bundle['reference'].shape)}")

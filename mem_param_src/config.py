@@ -88,7 +88,7 @@ def get_base_config():
     evaluation.n_samples = 64
     evaluation.sample_bank_size = 1024
     evaluation.batch_size = 64
-    evaluation.ratio_threshold = 0.5
+    evaluation.f_mem_threshold = 0.3
     evaluation.sample_panel_count = 8
     evaluation.chunk_size = 256
     evaluation.loss_eval_times = (0.5, 0.75)
@@ -116,6 +116,7 @@ def get_base_config():
     generation_monitor.show = True
 
     random_projected_f_mem = config.random_projected_f_mem = ConfigDict()
+    random_projected_f_mem.enabled = False
     random_projected_f_mem.n_samples = 512
     random_projected_f_mem.resize_size = 16
     random_projected_f_mem.projection_dim = 256
@@ -140,6 +141,8 @@ def get_base_config():
     tracking.wandb.enabled = False
     tracking.wandb.mode = "offline"
     tracking.wandb.project = ""
+    tracking.wandb.name = ""
+    tracking.wandb.group = ""
     tracking.wandb.entity = _default_wandb_entity("maj90")
     tracking.wandb.dir = "logs/wandb"
     tracking.wandb.tags = []

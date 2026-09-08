@@ -3,7 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import torch
 
@@ -35,8 +35,11 @@ from mem_param_src.runners.evaluation import (
     evaluate_image_run,
     evaluate_synthetic_run,
 )
+from mem_param_src.runners.image_monitoring import generate_monitor_samples
+from mem_param_src.runners.image_train import main as image_train_main
 from mem_param_src.runners.synthetic_eval import main as synthetic_eval_main
 from mem_param_src.runners.synthetic_train import main as synthetic_train_main
+from mem_param_src.runners.tracking import resolve_wandb_identity
 from mem_param_src.runners.training import resolve_checkpoint_steps, train_run
 
 
@@ -140,7 +143,10 @@ class TestRunnerConfiguration(unittest.TestCase):
                 "training.n_training_steps=7",
                 "sampling.use_safe_division=false",
                 "framework.prediction_space=v",
+                "framework.loss_space=v",
+                "framework.loss_weighting=x_equivalent",
                 "network.channel_mult=[1, 2]",
+                "evaluation.f_mem_threshold=0.3",
             ]
         )
         apply_overrides(config, overrides)
@@ -148,9 +154,14 @@ class TestRunnerConfiguration(unittest.TestCase):
         self.assertEqual(config.training.n_training_steps, 7)
         self.assertIs(config.sampling.use_safe_division, False)
         self.assertEqual(config.framework.prediction_space, "v")
+        self.assertEqual(config.framework.loss_space, "v")
+        self.assertEqual(config.framework.loss_weighting, "x_equivalent")
         self.assertEqual(config.network.channel_mult, (1, 2))
+        self.assertEqual(config.evaluation.f_mem_threshold, 0.3)
         with self.assertRaisesRegex(ValueError, "Unknown configuration field"):
             apply_overrides(config, {"training.unknown": 1})
+        with self.assertRaisesRegex(ValueError, "Unknown configuration field"):
+            apply_overrides(config, {"evaluation.ratio_threshold": 0.3})
 
     def test_evaluation_config_rejects_training_sections(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -190,6 +201,7 @@ class TestRunnerConfiguration(unittest.TestCase):
         config = get_base_config()
         for dataset in (
             "mnist",
+            "cifar10",
             "celeba32_grey",
             "flowers102",
             "afhq_v2",
@@ -323,6 +335,37 @@ class TestRunnerCommands(unittest.TestCase):
         self.assertEqual(train_code, 0)
         self.assertEqual(eval_code, 0)
 
+    def test_image_command_resolves_wandb_and_monitor_flags(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        run_dir = repo_root / "outputs" / "unused_image_test_run"
+        config_path = repo_root / "configs" / "runners" / "flowers102_smoke.py"
+
+        with patch(
+            "mem_param_src.runners.image_train.train_run",
+            return_value=run_dir,
+        ) as mocked_train:
+            code = image_train_main(
+                [
+                    "--config",
+                    str(config_path),
+                    "--run-dir",
+                    str(run_dir),
+                    "--wandb",
+                    "--generation-monitor",
+                    "--f-mem-monitor",
+                    "--f-mem-samples",
+                    "7",
+                ]
+            )
+
+        config = mocked_train.call_args.args[0]
+        self.assertEqual(code, 0)
+        self.assertIs(config.tracking.wandb.enabled, True)
+        self.assertEqual(config.tracking.wandb.mode, "online")
+        self.assertIs(config.generation_monitor.enabled, True)
+        self.assertIs(config.random_projected_f_mem.enabled, True)
+        self.assertEqual(config.random_projected_f_mem.n_samples, 7)
+
 
 class TestSyntheticRunnerIntegration(unittest.TestCase):
     def test_saved_run_supports_standalone_deterministic_replay(self):
@@ -446,6 +489,325 @@ class TestImageRunnerIntegration(unittest.TestCase):
             self.assertEqual(
                 manifest["partitions"]["train"]["tensor"]["sha256"],
                 tensor_sha256(bundle["train"]),
+            )
+
+
+class TestImageTrainingMonitoring(unittest.TestCase):
+    def test_wandb_identity_uses_comparison_fields(self):
+        config = _tiny_image_config()
+        config.study.dataset_key = "mnist"
+        config.data.n_train = 4
+        identity = resolve_wandb_identity(config)
+
+        self.assertEqual(identity["project"], "mnist-unet")
+        self.assertEqual(
+            identity["name"],
+            "mnist-unet-N4-B2-v_v-steps1-s0",
+        )
+        self.assertEqual(identity["group"], "mnist-unet-steps1")
+
+    def test_wandb_logs_loss_and_fixed_noise_checkpoint_grids(self):
+        config = _tiny_image_config()
+        config.study.dataset_key = "mnist"
+        config.training.n_training_steps = 2
+        config.training.ckpt_every = 1
+        config.tracking.wandb.enabled = True
+        config.tracking.wandb.mode = "offline"
+        config.generation_monitor.enabled = True
+        config.generation_monitor.n_samples = 2
+        config.monitoring.batch_size = 1
+
+        fake_run = MagicMock()
+        fake_run.id = "test-run-id"
+        fake_run.url = "https://wandb.invalid/test-run-id"
+        fake_wandb = MagicMock()
+        fake_wandb.init.return_value = fake_run
+        fake_wandb.Image.side_effect = lambda path: {"image_path": str(path)}
+        seen_noise = []
+
+        def generate_samples(model, z_init, resolved_config, device):
+            count = int(resolved_config.generation_monitor.n_samples)
+            seen_noise.append(z_init[:count].clone())
+            return torch.zeros(count, 1, 8, 8)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "image_wandb_run"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    return_value=fake_wandb,
+                ),
+                patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    side_effect=generate_samples,
+                ),
+            ):
+                train_run(config, run_dir, run_kind="image", device="cpu")
+
+            self.assertTrue(
+                (run_dir / "monitoring" / "samples_step_000000.png").is_file()
+            )
+            self.assertTrue(
+                (run_dir / "monitoring" / "samples_step_000001.png").is_file()
+            )
+            self.assertTrue(
+                (run_dir / "monitoring" / "samples_step_000002.png").is_file()
+            )
+            self.assertEqual(len(seen_noise), 3)
+            self.assertTrue(
+                all(torch.equal(seen_noise[0], item) for item in seen_noise)
+            )
+
+            payloads = [call.args[0] for call in fake_run.log.call_args_list]
+            train_payloads = [item for item in payloads if "train/loss" in item]
+            generation_payloads = [
+                item for item in payloads if "generation/samples" in item
+            ]
+            self.assertEqual([item["train/step"] for item in train_payloads], [1, 2])
+            self.assertEqual(
+                [item["generation/step"] for item in generation_payloads],
+                [0, 1, 2],
+            )
+            init_config = fake_wandb.init.call_args.kwargs["config"]
+            self.assertEqual(
+                init_config["training"]["resolved_ckpt_steps"],
+                [0, 1, 2],
+            )
+            run_record = read_json(run_dir / "run.json")
+            self.assertIs(run_record["wandb"]["active"], False)
+            self.assertIs(run_record["wandb"]["success"], True)
+            fake_run.finish.assert_called_once_with(exit_code=0)
+
+    def test_f_mem_monitor_reuses_samples_and_logs_training_matches(self):
+        config = _tiny_image_config()
+        config.training.n_training_steps = 2
+        config.generation_monitor.enabled = True
+        config.generation_monitor.n_samples = 2
+        config.random_projected_f_mem.enabled = True
+        config.random_projected_f_mem.n_samples = 4
+        config.random_projected_f_mem.resize_size = 8
+        config.random_projected_f_mem.projection_dim = 16
+        config.tracking.wandb.enabled = True
+        fake_run = MagicMock()
+        fake_wandb = MagicMock()
+        fake_run.id = "f_mem_test"
+        fake_run.url = "https://wandb.invalid/f_mem_test"
+        fake_wandb.init.return_value = fake_run
+        fake_wandb.Image.side_effect = str
+        bundle = _tiny_image_bundle()
+        seen_noise = []
+
+        def sample(model, z_init, resolved_config, device):
+            seen_noise.append(z_init.clone())
+            # Exact copies must count as memorized against training, not held-out data.
+            return bundle["train"][:4].clone()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "f_mem_run"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=bundle,
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    return_value=fake_wandb,
+                ),
+                patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    side_effect=sample,
+                ) as generate,
+                patch(
+                    "mem_param_src.runners.image_monitoring.save_fixed_range_grid",
+                    return_value=run_dir / "grid.png",
+                ) as grid,
+            ):
+                train_run(config, run_dir, run_kind="image", device="cpu")
+            self.assertEqual(generate.call_count, 3)
+            self.assertTrue(all(torch.equal(seen_noise[0], z) for z in seen_noise))
+            self.assertEqual(load_torch(run_dir / "z_init.pt").shape[0], 4)
+            self.assertTrue(all(c.args[0].shape[0] == 2 for c in grid.call_args_list))
+            saved_config = read_json(run_dir / "config.json")
+            self.assertEqual(
+                saved_config["random_projected_f_mem"]["projection_seed"],
+                config.training.seed + 3001,
+            )
+            self.assertTrue((run_dir / "monitoring/f_mem_projection.pt").is_file())
+            self.assertTrue((run_dir / "monitoring/f_mem_train_vectors.pt").is_file())
+            for step in (0, 1, 2):
+                record = read_json(run_dir / f"monitoring/f_mem_step_{step:06d}.json")
+                self.assertEqual(record["n_samples"], 4)
+                self.assertEqual(record["N"], len(bundle["train"]))
+                self.assertEqual(record["f_mem"], 1.0)
+                self.assertEqual(record["rho"], 0.3)
+                self.assertEqual(record["space"], "random_projected_pixels")
+            payloads = [c.args[0] for c in fake_run.log.call_args_list]
+            metrics = [
+                p for p in payloads if "generation/random_projected_pixels/f_mem" in p
+            ]
+            self.assertEqual([p["generation/step"] for p in metrics], [0, 1, 2])
+            self.assertTrue(
+                all(
+                    p["generation/random_projected_pixels/f_mem"] == 1.0
+                    for p in metrics
+                )
+            )
+
+    def test_f_mem_monitor_requires_generation_and_positive_count(self):
+        config = _tiny_image_config()
+        config.random_projected_f_mem.enabled = True
+        with self.assertRaisesRegex(ValueError, "requires image generation"):
+            train_run(config, "unused", run_kind="image", device="cpu")
+        config.generation_monitor.enabled = True
+        config.random_projected_f_mem.n_samples = 0
+        with self.assertRaisesRegex(ValueError, "n_samples must be"):
+            train_run(config, "unused", run_kind="image", device="cpu")
+
+    def test_shared_sampler_uses_larger_f_mem_count(self):
+        config = _tiny_image_config()
+        config.generation_monitor.n_samples = 2
+        config.random_projected_f_mem.enabled = True
+        config.random_projected_f_mem.n_samples = 5
+        config.monitoring.batch_size = 2
+        model = MagicMock()
+        model.training = True
+        model.sample.side_effect = lambda z, **kwargs: z.clone()
+        noise = torch.randn(5, 1, 8, 8)
+        samples = generate_monitor_samples(model, noise, config, "cpu")
+        self.assertTrue(torch.equal(samples, noise))
+        self.assertEqual(
+            [c.args[0].shape[0] for c in model.sample.call_args_list], [2, 2, 1]
+        )
+
+    def test_monitor_flag_off_does_not_sample(self):
+        config = _tiny_image_config()
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "image_without_monitor"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.training._record_image_monitor",
+                    side_effect=AssertionError("monitor should remain disabled"),
+                ),
+            ):
+                train_run(config, run_dir, run_kind="image", device="cpu")
+
+            self.assertFalse((run_dir / "monitoring").exists())
+
+    def test_monitor_restores_training_mode_and_rejects_nonfinite_samples(self):
+        config = _tiny_image_config()
+        config.generation_monitor.n_samples = 2
+        config.monitoring.batch_size = 1
+        z_init = torch.randn(2, 1, 8, 8)
+
+        model = MagicMock()
+        model.training = True
+        model.sample.side_effect = lambda z, **kwargs: torch.zeros_like(z)
+        model.eval.side_effect = lambda: setattr(model, "training", False)
+        model.train.side_effect = lambda mode=True: setattr(model, "training", mode)
+        samples = generate_monitor_samples(model, z_init, config, torch.device("cpu"))
+
+        self.assertEqual(tuple(samples.shape), (2, 1, 8, 8))
+        self.assertIs(model.training, True)
+        sampled_noise = [call.args[0].cpu() for call in model.sample.call_args_list]
+        self.assertTrue(torch.equal(torch.cat(sampled_noise), z_init))
+
+        model.sample.reset_mock()
+        model.sample.side_effect = lambda z, **kwargs: torch.full_like(z, float("nan"))
+        with self.assertRaisesRegex(FloatingPointError, "non-finite"):
+            generate_monitor_samples(model, z_init, config, torch.device("cpu"))
+        self.assertIs(model.training, True)
+
+    def test_wandb_failure_policy_and_synthetic_scope(self):
+        config = _tiny_image_config()
+        config.tracking.wandb.enabled = True
+        config.tracking.wandb.mode = "offline"
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "nonstrict_wandb_failure"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    side_effect=ModuleNotFoundError("wandb unavailable"),
+                ),
+            ):
+                train_run(config, run_dir, run_kind="image", device="cpu")
+            run_record = read_json(run_dir / "run.json")
+            self.assertEqual(run_record["state"], "trained")
+            self.assertIn("wandb unavailable", run_record["wandb"]["warning"])
+
+        image_failure = _tiny_image_config()
+        image_failure.tracking.wandb.enabled = True
+        image_failure.tracking.wandb.mode = "offline"
+        image_failure.generation_monitor.enabled = True
+        image_failure.generation_monitor.n_samples = 2
+        image_failure.monitoring.batch_size = 1
+        fake_run = MagicMock()
+        fake_run.id = "image-failure"
+        fake_run.url = None
+        fake_wandb = MagicMock()
+        fake_wandb.init.return_value = fake_run
+        fake_wandb.Image.side_effect = RuntimeError("image encode failed")
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "nonstrict_wandb_image_failure"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    return_value=fake_wandb,
+                ),
+                patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    return_value=torch.zeros(2, 1, 8, 8),
+                ),
+            ):
+                train_run(image_failure, run_dir, run_kind="image", device="cpu")
+            run_record = read_json(run_dir / "run.json")
+            self.assertEqual(run_record["state"], "trained")
+            self.assertIn("image encode failed", run_record["wandb"]["warning"])
+            self.assertEqual(len(read_json(run_dir / "train_history.json")), 1)
+
+        strict = _tiny_image_config()
+        strict.tracking.wandb.enabled = True
+        strict.tracking.wandb.mode = "offline"
+        strict.tracking.wandb.strict = True
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "strict_wandb_failure"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    side_effect=ModuleNotFoundError("wandb unavailable"),
+                ),
+                self.assertRaisesRegex(ModuleNotFoundError, "wandb unavailable"),
+            ):
+                train_run(strict, run_dir, run_kind="image", device="cpu")
+            self.assertEqual(read_json(run_dir / "run.json")["state"], "failed")
+
+        synthetic = _tiny_gmm_config()
+        synthetic.tracking.wandb.enabled = True
+        with self.assertRaisesRegex(ValueError, "image runs only"):
+            train_run(
+                synthetic,
+                Path(tempfile.gettempdir()) / "unused_synthetic_wandb_run",
+                run_kind="synthetic",
+                device="cpu",
             )
 
 
