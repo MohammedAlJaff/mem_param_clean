@@ -2280,3 +2280,13 @@ Validation and publication scope:
 - Publish the current codex/reproducible-runners branch to origin as requested.
   Raw data, training outputs, and checkpoints remain local and Git-ignored.
   Notebook figures remain included as executable research evidence.
+
+## 2026-09-08 - Add next-session note for one visible results folder
+
+- The user cannot easily find the run outputs and requested a next-session
+  reminder to collect results under one clearly named temporary folder.
+- Added this as the first action in TODO.txt. Suggested outputs/session_runs/,
+  with one subfolder per new run and a short index linking settings, W&B,
+  final grids, metrics, and existing MNIST runs. Report its absolute path.
+- This entry records the request only. No artifacts were moved and no output
+  folder was created. The final location remains a next-session choice.

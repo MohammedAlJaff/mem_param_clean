@@ -30,6 +30,14 @@ MIGRATION_JOURNAL.md and remove it from this file.
 
 NEXT SESSION: REVIEW MNIST EPS/EPS GENERATION
 
+First, make run results easy to find. The user wants one clearly named
+temporary output folder for these runs. Suggested location: outputs/session_runs/.
+Keep each run in its own named subfolder. Add a short index with the settings,
+W&B link, final sample grid, and metrics location. Include links to the existing
+MNIST runs so the user can find old and new results from one place. Show the
+absolute folder path when reporting a run. This is a next-session task;
+the folder and index have not been created yet.
+
 The larger 10k run completed: W&B en9xtd1x. Loss is low, but most final
 samples remain noisy or saturated. Start with its saved grids and metrics.
 Choose one matched comparison before launching more training; width and
