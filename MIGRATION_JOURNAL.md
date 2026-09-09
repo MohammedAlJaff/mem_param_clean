@@ -2290,3 +2290,175 @@ Validation and publication scope:
   final grids, metrics, and existing MNIST runs. Report its absolute path.
 - This entry records the request only. No artifacts were moved and no output
   folder was created. The final location remains a next-session choice.
+
+
+## 2026-09-08 - Add training comparison grids and local monitoring curves
+
+- User requested one image-runner command for training, generation grids, loss,
+  and f_mem curves. Clarified N=32 training images, 5,000 updates, v/v, and 500
+  generated samples per monitoring checkpoint, with eight images per grid row.
+- Added generation_monitor.n_train_samples and --training-grid-samples. Zero
+  keeps generated-only grids. Positive counts show a fixed prefix of the exact
+  saved training tensor above generated samples in monitoring/comparison_grids/.
+- Added runners/image_plotting.py. It draws comparison grids and reads saved
+  train_history.json / f_mem_step_*.json records for monitoring/plots/loss.png
+  and f_mem.png. Curves refresh at preview checkpoints; loss records now persist
+  at checkpoints. The existing projected metric and shared generation are reused.
+- Declared Matplotlib in the image dependency profile. Updated the config
+  reference, repository map, and README command and saved-record plotting example.
+- Added configs/runners/mnist_vv_monitor.py. Retained the current 9,393,985-
+  parameter UNet, widths 64/128/192, two encoder blocks per level, middle attention,
+  seed 7, Adam at 1e-3, exact division, and Heun-50 on [0.01,0.99]. Batch size is 32.
+  Preview every 250 updates; show 32 training and 64 generated images; measure
+  projected f_mem on all 500 generated samples at rho=0.3. W&B is disabled.
+- Created outputs/session_runs/INDEX.md with links to this run and all three
+  historical MNIST runs, their settings, grids, metrics, and historical W&B links.
+  No historical artifacts were moved.
+- Validation in local memcompgen: 22 targeted runner/config tests passed,
+  including real CPU training with mocked source data/generation, fixed training
+  prefix checks, shared metric samples, checkpoint artifacts, and live curves.
+  Ruff and whitespace checks passed. Real local MNIST loading returned train
+  [32,1,32,32] and held-out [500,1,32,32]; config/model construction passed.
+- Started the requested MPS run in outputs/session_runs/mnist_vv_n32_5k_20260908_01
+  through the image runner alone. Host access was needed because MPS is unavailable
+  in the sandbox. The step-zero 500-sample generation and projected metric passed.
+  Viewed its saved grid and verified eight columns, training above generation.
+  State at this entry: training, not complete. No post-hoc evaluation was requested.
+
+
+## 2026-09-08 - Stop the 32x32 run and prepare a user-launched MNIST16 command
+
+- User stopped the 32x32 5k run, selected 16x16 MNIST and 1,000 updates, then
+  requested the CLI command to launch it personally. No MNIST16 training started.
+- Sent Ctrl-C to the running process and verified exit. The last observed loss
+  log was step 1,200; the last saved checkpoint, grid, and metric are step 1,000.
+  Marked its run.json as aborted with the user-requested reason. Preserved outputs.
+- The step-1,000 projected f_mem was 0.008 (4 of 500 samples) at rho=0.3.
+  This is a partial run; it did not complete the planned 5,000 updates.
+- Updated configs/runners/mnist_vv_monitor.py and README for MNIST16, N=32,
+  1,000 updates, 500 generated samples, 32 training / 64 generated grid images,
+  and eight columns. Kept the UNet, seed, batch size, optimizer, and sampler.
+- Real local memcompgen preflight passed: train [32,1,16,16], held-out
+  [500,1,16,16], 9,393,985 parameters, checkpoints 0/250/500/750/1000.
+- Added terminal generation announcements and projected f_mem details (mean_r,
+  rho, n_samples, N), plus saved plot paths. Training already prints batch loss
+  at training.log_every. The command uses --no-capture-output for live stdout.
+- Saved 32x32 data/manifest hashes and fixed noise shape [500,1,32,32] were
+  verified. The README saved-record plotting API ran and produced both curves.
+- Final validation in memcompgen: python -m pytest -q tests/test_runners.py
+  tests/test_config_reference.py passed all 22 tests. Ruff on changed Python
+  files and git diff --check passed. The MNIST16 research run remains unstarted.
+
+
+## 2026-09-08 - Add minimal descriptions of image-runner stages
+
+- User requested short terminal messages that explain the current operation.
+- Added image setup/data/model summaries and training start/continue/finish
+  messages. Kept the existing loss interval and numerical metric details.
+- Generation states the checkpoint, sample count, and sampler. Metric computation
+  announces when samples are ready. One saved-folder line replaces repeated PNG
+  paths. The image CLI reports optional post-training evaluation and completion.
+- Used the existing console stage settings for setup/training descriptions.
+  No new flags, training changes, or research runs were added.
+- Updated the README to use conda activate followed directly by Python, as the
+  user requested for their interactive terminal.
+- Local memcompgen: one tiny CPU monitoring integration with fixture data and
+  mocked generation/W&B, plus two CLI tests, passed (3 tests in 2.13 seconds).
+  Inspected the emitted stage order. Ruff and whitespace checks passed.
+
+
+## 2026-09-08 - Retain full generated tensors at image checkpoints
+
+- User requested a flag to save checkpoint generation/evaluation samples.
+  Monitoring had saved PNG grids and metric records but discarded the full
+  generated batch. Separate evaluation had saved only its final batch.
+- Added --save-generated-samples / --no-save-generated-samples to image_train,
+  backed by evaluation.save_generated_samples. Base default is False; enabled
+  in configs/runners/mnist_vv_monitor.py for future user-launched runs.
+- Monitoring saves the existing full raw CPU batch before any display or metric
+  preprocessing to monitoring/generated_samples/step_<step>.pt. It does not
+  sample again. MNIST16 saves [500,1,16,16], while its grid displays a 64-sample
+  prefix. Tensor order matches the saved z_init prefix.
+- Optional post-training image evaluation saves each batch under
+  evaluations/<name>/generated_samples/ and retains its original final-sample
+  file. Older saved configs default the missing setting to False and accept
+  --set evaluation.save_generated_samples=true for a subsequent named replay.
+- Updated README, the config reference, and repository map with paths and a
+  torch.load example. README uses a fresh _02 run directory for the next launch.
+- Read the user's existing MNIST16 _01 run.json: state=trained, final_step=1000.
+  Its five grids and five projected f_mem records exist. This run predates sample
+  storage; no full batches were recovered, and no research run was launched.
+- Local memcompgen: python -m pytest -q tests/test_runners.py
+  tests/test_config_reference.py passed 22 tests in 2.64 seconds. Checks include
+  exact full-batch tensor round trips with mocked monitoring samples, storage
+  off by default, real CPU checkpoint replay, and legacy config compatibility.
+  Ruff on changed Python files and git diff --check passed.
+
+
+## 2026-09-08 - Prepare CelebA32 eps/eps and direct CLI controls
+
+- User requested a command for CelebA32, N=32 faces, eps/eps, and convenient
+  CLI controls for safe division and Heun steps. Prepared the command only;
+  no research training or checkpoint evaluation was launched.
+- Added configs/runners/celeba32_eps_eps_monitor.py. Selected grayscale32 to
+  match the historical representation, with the preserved aligned 140-pixel
+  crop, train/valid source splits, 32 training and 500 held-out images.
+  Retained the current 9,393,985-parameter UNet and seed 7; use unit-MSE eps/eps,
+  1,000 updates, Adam at 1e-3, batch size 32, and exact Heun-50 sampling.
+- Kept monitoring every 250 updates, including step zero: 500 generated
+  samples, 32 training / 64 generated grid images, projected f_mem, local curves,
+  and full raw sample tensors. W&B remains disabled.
+- Added image-training CLI flags for steps, lr, seed, batch size, checkpoint
+  interval, sampler, sampling steps, sampling safe division and its denominator
+  floor, sampling endpoints, and sampling output. Explicit flags override --set.
+  An explicit checkpoint interval replaces the configured named/explicit schedule.
+- Sampling flags leave training-time division and the objective unchanged.
+  The monitor announces the actual solver, steps, interval, and division policy.
+- README documents the command, grayscale/RGB choice, and a fixed-checkpoint
+  clamp replay using image_eval. Config reference maps flags to saved fields.
+  T016 remains open; this setup does not establish a cause or reproduce the old study.
+- Local memcompgen validation: real CelebA loader returned train [32,1,32,32]
+  and reference [500,1,32,32]. Model construction and a two-image loss/backward
+  check passed with finite gradients. This was a preflight, not a training run.
+- python -m pytest -q tests/test_runners.py tests/test_config_reference.py
+  tests/test_celeba_loader.py passed 25 tests and 8 subtests in 2.71 seconds.
+  CLI tests check sampler settings, precedence, schedule resolution, and unchanged
+  training division. Ruff and whitespace checks passed.
+
+
+## 2026-09-09 - Preserve the critical eps/eps audit for Berzelius
+
+- Completed the requested read-only audit of the current CelebA32 execution
+  path and selected April N=256 seed-0 eps/eps study. The current model already
+  has model.sample; external Euler/Heun reads model.prediction_space and calls
+  model.convert. No lost parameterization or incorrect Heun stage was found.
+- Current run outputs/session_runs/celeba32_eps_eps_n32_exact_01 completed
+  1,000 updates on MPS. Saved final samples span [-10.23212,11.74243]; 59.3% of
+  pixels exceed [-1,1]. Final batch loss is 0.01442527. Low loss and f_mem=0
+  do not establish useful generation. Some images are recognizable faces.
+- Saved step-zero samples agree with z_init/0.01 for the zero-output epsilon
+  network: RMSE 2.9974661e-5. This is an existing-artifact comparison, not a new
+  inference run. Training/reference tensors have the expected shapes and range.
+- Historical records show poor early FID and a best FID of 19.62167 at 25,000
+  updates. Old/current sampling policy, LR, architecture, and budget differ.
+  Exact deployed historical config/checkpoints are absent locally; settings
+  reconstructed from source are labelled accordingly. Clamp causality is open.
+- Saved the full findings, equations, source pointers, persistence limitations,
+  metric distinctions, artifact hashes, and unexecuted GPU replay command in
+  CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt, as requested. Linked it from
+  README and docs/repo_map.md. Updated TODO to prioritize Berzelius diagnosis.
+- Next session: obtain the current saved run on Berzelius, use mem_param_env,
+  verify numerical contracts, and compare exact versus floor=0.05 with the
+  same checkpoint/noise/device before controlled training. Recover the old
+  checkpoint/config for matched replay. The user currently launches compute.
+- Audit verification: static source/Git inspection, existing figures and CSV/
+  JSON records, CPU reads of saved tensors in local memcompgen. No training,
+  inference, checkpoint replay, or test suite ran during this audit. The audit
+  itself made no code changes. Earlier implementation checks remain above.
+- Closeout scope: publish the accumulated monitoring/CLI/sample-storage changes
+  and this documentation on codex/reproducible-runners. Generated data, noise,
+  checkpoints, and samples stay Git-ignored; no artifact transfer was performed.
+- Closeout validation: local memcompgen Python parsed all eight changed/new
+  Python files and the documented GPU replay example without executing them.
+  git diff --check passed; saved run artifacts remain ignored and untracked.
+  The earlier 25-test result above was not rerun during this closeout.

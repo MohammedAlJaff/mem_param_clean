@@ -1,0 +1,413 @@
+CRITICAL: EPS/EPS SAMPLING AUDIT AND BERZELIUS HANDOFF
+Recorded: 2026-09-09, Europe/Stockholm
+Status: OPEN. The causal explanation remains unresolved.
+
+STANDING COLLABORATION RULE
+Use plain English, short sentences, active verbs, and precise research terms.
+Help the researcher understand and own the work. Explain scientific assumptions,
+data flow, evidence, and uncertainty. Keep routine updates short. Give ordinary
+conda activate and Python commands. The user currently launches compute;
+do not launch training or evaluation unless explicitly authorized.
+The next session is on Berzelius. Do not run further compute on this Mac.
+
+SESSION SUMMARY
+
+The current sampler retains the model's parameterization. GDFM already provides
+model.sample(...), which delegates to external Euler/Heun functions. The audit
+found no lost parameterization, sign error, or incorrect Heun stage in the
+inspected CelebA path. Trained-model numerical parity remains untested.
+
+The current CelebA32 eps/eps run has a real magnitude problem. At step 1,000,
+59.3% of generated pixels lie outside the training range [-1, 1]. Some outputs
+are recognizable faces; others become white, black, or speckled after clipping.
+The final batch loss is 0.01442527025938034. Low epsilon loss and f_mem=0 do not
+establish useful generation or improved generalization.
+
+The selected historical CelebA run also had poor FID near 1,000 updates. Its
+best recorded FID occurred at 25,000 updates. Historical sampling used a 0.05
+denominator floor and returned the integrated state. Current sampling uses
+exact division and an endpoint estimate. Architecture and training settings
+also differ. Do not attribute the failure to external sampling or the clamp
+without a matched comparison.
+
+First replay the current saved checkpoint on a GPU with the same noise under
+exact and clamped sampling. Recompute the exact baseline on CUDA; comparing a
+CUDA clamp result only with saved MPS samples confounds the device.
+
+WHAT WAS DONE, AND WHAT WAS NOT DONE
+
+The audit inspected source, Git history, saved JSON/CSV records, PNG figures,
+and already-saved tensors. Tensor inspection used CPU in local memcompgen.
+It loaded artifacts and computed descriptive statistics only. No model
+inference, training, checkpoint replay, or test suite ran during the audit.
+No source or configuration files changed during the audit.
+
+This closeout adds the requested critical note and updates the journal, TODO,
+README, and repository map. It also publishes accumulated image-runner changes
+from this session. Earlier implementations have their own dated validation
+entries in MIGRATION_JOURNAL.md. Those are not fresh GPU validation of eps/eps.
+
+The audit inspected the working tree based on commit 440c267, including the
+then-uncommitted monitoring and CLI changes. The published closeout commit
+captures those changes. mem_param_clean is the working authority; ../mem_par
+is historical reference material, not a live dependency.
+
+CURRENT RUN AND OBSERVED EVIDENCE
+
+Mac repository:
+/Users/mohammadaljaff/Desktop/PhD/projects/mem_param/mem_param_clean
+
+Run relative to the clean repository:
+outputs/session_runs/celeba32_eps_eps_n32_exact_01
+
+run.json reports trained, final_step=1000, device=mps, seed=7.
+Model: 9,393,985 parameters. Checkpoints: 0/250/500/750/1000.
+Training shape: [32,1,32,32]. Reference shape: [500,1,32,32].
+Both saved data tensors are finite and have range [-1,1].
+Each monitoring checkpoint retains [500,1,32,32] raw generated samples.
+Grids display a fixed 64-sample prefix below the 32 training images.
+
+Step    Raw minimum     Raw maximum     Fraction outside [-1,1]
+0       -445.12445       468.86127       0.9920703
+250      -13.88260        16.76613       0.7112031
+500      -16.93593        14.56719       0.6942676
+750      -13.76935        12.31268       0.6897109
+1000     -10.23212        11.74243       0.5931348
+
+All saved generated tensors are finite. At step 1,000, 149/500 images have
+more than 90% of pixels outside [-1,1]; 42/500 have less than 5% outside.
+Final projected-pixel f_mem=0 at rho=0.3; mean_r=0.9500741958618164.
+Displayed f_mem is zero at all five saved checkpoints.
+
+Relevant existing files under the run:
+- config.json, run.json, train_history.json
+- data_bundle.pt, data_manifest.json, z_init.pt
+- checkpoints/step_001000.pt
+- monitoring/generated_samples/step_001000.pt
+- monitoring/comparison_grids/step_001000.png
+- monitoring/f_mem_step_001000.json
+- monitoring/plots/loss.png and f_mem.png
+
+SAMPLING CONTRACT AND EQUATIONS
+
+The convention is t=0 for noise and t=1 for data:
+  z_t = t*x + (1-t)*eps
+  v = x - eps
+
+Configuration -> GDFM attributes -> model.sample -> Euler/Heun -> predict
+-> model.convert(source=model.prediction_space, target="v") -> solver update
+-> final state -> optional conversion to x.
+
+Prediction space states what the network emits. Loss space states which
+target the objective compares against. eps/eps uses direct unit-MSE noise
+prediction. Since source==target, training conversion returns the prediction
+unchanged; training safe division does not modify this diagonal objective.
+
+Exact sampling velocities:
+  x prediction:   v_hat = (x_hat-z_t)/(1-t)
+  eps prediction: v_hat = (z_t-eps_hat)/t
+  v prediction:   v_hat = network output
+
+Heun evaluates velocity at the current state/time, forms an Euler trial state,
+evaluates velocity at that trial state and the next time, then averages both.
+Both stages convert from the model's prediction space.
+
+At fixed state, delta_v = -delta_eps/t. At t=0.01 the amplification is 100.
+For the same prediction expressed in velocity units, squared epsilon error is
+t^2 times squared velocity error. A small early-time epsilon error can hide a
+substantial velocity error. For example, eps_hat=z gives zero velocity, although
+its epsilon error can be small near the noise endpoint.
+
+The logged loss averages a training batch over random times. It does not
+measure early-time velocity accuracy or accuracy along generated trajectories.
+Pairwise training-target error also includes conditional target variance;
+do not automatically equate it with error against the optimal marginal field.
+
+The zero-initialized network gives eps_hat=0. Exact integration satisfies
+dz/dt=z/t. With start=0.01 and output=x_1, the expected result is z_init/0.01.
+Saved step-zero samples match it with RMSE 2.9974661e-5 and maximum absolute
+error 0.0003051758. This supports parameterization handling through the actual
+monitoring path, but does not establish trained-field accuracy.
+
+Safe division reconstructs x first, then forms velocity:
+  v_hat = (z-(1-t)*eps_hat)/max(t,c) - eps_hat
+
+This is not (z-eps_hat)/max(t,c). Below c it changes the field even for a perfect
+paired epsilon prediction: v_hat=(t/c)*x-eps. At t=0.01 and c=0.05, sensitivity
+to epsilon error is (1-t)/c+1 = 20.8 instead of 100.
+
+Changing the floor alone does nothing while use_safe_division=False.
+Enabling floor=0.01 has essentially no effect on eps sampling in [0.01,0.99].
+A 0.05 floor is meaningful, but success under it is a clamped-sampling result,
+not evidence that strict exact sampling works.
+
+output=x_t_max returns the integrated state at end_time. output=x_1 makes one
+additional prediction and converts that state to a clean-data estimate;
+it does not integrate the ODE all the way to t=1.
+
+Code ownership in the clean checkout:
+- mem_param_src/model.py: attributes, path, targets, loss, conversions, sample API
+- mem_param_src/sampling.py: explicit policy and Euler/Heun loops
+- mem_param_src/model_setup.py and networks/: backbone construction and layers
+- mem_param_src/runners/image_train.py: CLI overrides before construction
+- mem_param_src/runners/training.py: optimization, persistence, monitoring
+- mem_param_src/runners/image_monitoring.py: fixed noise, eval mode, mode restore
+- mem_param_src/runners/evaluation.py: reconstruction from saved artifacts
+- mem_param_src/runners/artifacts.py: checkpoint and manifest format
+- mem_param_src/runners/image_plotting.py: fixed-range figures and saved curves
+- mem_param_src/datasets/celeba32.py and image.py: transforms and selection
+- mem_param_src/metrics/image/projection.py and preprocessing.py: monitor space
+
+Unexecuted API example, with model/config/noise already loaded on the GPU:
+  samples = model.sample(z_init, **config.sampling.to_dict(), device="cuda")
+
+The requested single model.sample interface already exists. Moving solver
+loops inside the class changes organization, not these equations. Keep the
+current organization while diagnosing numerical behavior.
+
+CONFIGURATION AND CHECKPOINT PERSISTENCE
+
+The full resolved configuration is written to run/config.json. GDFM retains
+a config reference and reads key values into attributes during construction.
+Later manual config mutation does not automatically update those attributes.
+The inspected CLI applies overrides before model construction.
+
+Actual checkpoint keys: step and model. The inspected final state_dict has
+228 tensors. It does not embed string parameterization metadata. Evaluation
+reads config.json, constructs GDFM, and loads weights strictly. Its overrides
+allow sampling/evaluation settings, not framework/network/training changes.
+
+Strict weight loading cannot detect semantic mismatches with identical shapes.
+There is no checkpoint-to-config hash binding. No mismatch was observed in
+current previews: they use the model object being trained. Current checkpoints
+omit optimizer state, RNG state, Git revision, and dependency versions. They
+support generation replay with companion artifacts, not exact training
+continuation. The old writer also saved optimizer state and kept config in
+a separate artifact.
+
+HISTORICAL APRIL COMPARISON
+
+Selected study: mem_gen_boundary_20260427, eps_eps, N=256, seed=0.
+Run ID:
+mem_gen_boundary_20260427_celeba32_N256_B256_eps_eps_steps1000000_s0-bd48e9dab3
+Attempt: DONE_20260427_020458
+Best recorded checkpoint: step_025000.pt
+
+Evidence relative to ../mem_par:
+outputs/evals/mem_boundary_20260427_all_done_quality_20260501/all_checkpoint_metrics.csv
+outputs/evals/mem_boundary_20260427_all_done_quality_20260501/manifest.jsonl
+jobs/job_sets/mem_gen_boundary_20260427/submit.sh
+src/mp_runners/image_config.py and src/mp_config/base.py
+src/mp_runners/mem_boundary_eval.py: sample_in_batches
+src/mp_training/trainer.py: _sample_monitor_z_init
+src/gdfm/core.py: sample, _velocity, _sample_heun, conversions
+
+Step        Recorded FID
+750         257.793
+1250        230.806
+10000       172.636
+20000        24.2108243
+25000        19.6216702 (best)
+30000        19.9346287
+1000000      27.5507
+
+At the best checkpoint, f_mem=0.8086000 at rho=0.5 and 0.6781000 at rho=0.3.
+These are existing records with 10,000 generated samples. They do not imply
+that the current N=32 run will recover simply by training longer.
+
+Setting                 Historical reconstruction           Current saved run
+Representation          grayscale32, 140-pixel crop         same
+Train/reference splits  train/valid                         same
+Normalization           [-1,1], no augmentation              same
+N / batch               256 / 256                           32 / 32
+Seed                    0                                   7
+UNet widths             32/64/128                           64/128/192
+Time embedding          128 (derived from base width)        64
+Attention active        16px encoder + 8px middle            8px middle
+Dropout                 0.1                                 0
+Optimizer / LR          Adam / 1e-4                         Adam / 1e-3
+Training times          [0.001,0.999], uniform               [0.01,0.99], uniform
+Sampling                Heun50, [0.001,0.999]                Heun50, [0.01,0.99]
+Division                floor 0.05                          exact
+Output                  integrated state                    x_1 estimate
+Runtime                 CUDA, TF32 requested                MPS, FP32
+
+UNet computational layer code is unchanged between inspected old and clean
+implementations; settings differ. An empty attn_resolutions tuple does not
+disable middle attention in either implementation.
+
+The historical monitor and recorded evaluation call the in-class sampler.
+The old repository also has external utilities, but those are not the calls
+used by the inspected historical evaluation. Both implementations use the
+same Euler/Heun equations and parameterization conversion approach.
+
+Historical provenance limitation: the referenced checkpoint directory and
+saved per-run config are absent on this Mac. Relevant core/backbone source
+matches the April source around e1319daf4433b0bf6a1a3920d312519c100e2594 and
+the 8dd689d sweep revision. The exact deployed commit, local modifications,
+and environment cannot be certified from available records. Obtain the
+original checkpoint and config before claiming exact reproduction.
+
+STANDALONE DIAGNOSIS AND MEASUREMENT LIMITS
+
+1. An inaccurate learned velocity field amplified by exact division is a strong
+   candidate, consistent with escaped magnitudes. It remains a hypothesis.
+2. Training duration, LR, capacity, time conditioning, attention, and dropout
+   differ. Separate these after fixed-checkpoint sampling comparisons.
+3. Heun resolution is untested here. Compare 50 versus 200 with other settings
+   fixed. A prior Flowers checkpoint converged to the same failed result at
+   50/200/500 steps; that does not settle the current CelebA case.
+4. Final projection differs historically. Compare x_1 versus x_t_max alone.
+5. Pure Gaussian noise at positive start_time approximates the path marginal.
+   Endpoints changed; assess this as a separate protocol factor.
+6. Backend differences are untested. Recompute initial controls on one GPU
+   and precision before cross-device comparisons.
+
+No defect was found in the inspected signs, Heun stages, direct eps/eps loss,
+data range, or mode restoration. This is a source audit, not a proof that
+every runtime path is correct. No general claim that eps/eps fails follows.
+
+The monitor normalizes/clips pixels, resizes to 16x16, and applies a fixed
+Gaussian projection before computing f_mem at rho=0.3. It discards raw magnitude
+information in this measurement. Standalone image evaluation uses raw full-pixel
+distances. Historical canonical f_mem uses rho=0.5. Match space and threshold
+before comparing records.
+
+Current loss_eval_times fields do not cause the image runner to compute
+time-resolved evaluation losses. Its loss curve is training batch loss.
+Measure data-path prediction accuracy and generated-trajectory behavior.
+Record raw range, out-of-range fraction, and visual quality beside loss/f_mem.
+
+NEXT SESSION ON BERZELIUS
+
+1. Read AGENTS.md, this file, TODO.txt, and the latest journal. Check git status.
+   Use the clean repository on branch codex/reproducible-runners:
+   https://github.com/MohammedAlJaff/mem_param_clean.git
+   Fetch and fast-forward that branch without overwriting local work.
+2. On an allocated GPU, load Mambaforge and activate mem_param_env. Record actual
+   Python/PyTorch/Torchvision versions, CUDA device, precision, source revision,
+   and working-tree changes. Do not assume the Mac environment matches.
+3. Obtain the saved current run listed below. GitHub does not contain outputs
+   or checkpoints. Verify hashes before replay. Do not rebuild the datasets.
+4. Check known-answer x/eps/v conversions, Euler/Heun updates, wrapper/external
+   agreement, and save/load inference consistency. tests/test_model_sampling.py
+   covers some, not all, of these cases. None ran during the audit.
+5. Replay exact and floor=0.05 on the current final checkpoint and first 16 saved
+   noise samples. Save tensors, grids, settings, and range statistics. Use the
+   command below. Sixteen images are a diagnostic, not a quality claim.
+6. If needed, test n_steps=200 and output=x_t_max separately. Keep weights,
+   noise, batching, device, and all other settings fixed. Inspect when states
+   start to escape; do not just compare final loss.
+7. Recover historical step_025000.pt, config, and exact data/noise artifacts.
+   Use the original architecture for weight loading. Current N=32 architecture
+   weights are not interchangeable with the reconstructed old architecture.
+   Check old/clean sampling parity under a matched historical policy.
+8. Then select controlled training comparisons. Preserve direct unit-MSE
+   eps/eps as its own condition. Keep clamped, weighted, residual, and velocity
+   controls distinct. Repeat promising findings across seeds and larger sample
+   banks before drawing a research conclusion.
+
+A full reconstructed historical sampling policy changes clamp, endpoints, and
+output together. It also queries outside the current [0.01,0.99] training
+interval. It is not a one-factor control; label it accordingly.
+
+ARTIFACT TRANSFER REQUIREMENTS
+
+The full current run occupies approximately 196 MiB on the Mac. Prefer copying
+it intact to the same relative path in the clean Berzelius checkout.
+For the replay command, config.json, data_bundle.pt, z_init.pt, and the final
+checkpoint are required. Preserve run.json, data_manifest.json, history, and
+monitoring results too. No artifacts were transferred during this closeout.
+
+SHA256 values recorded during closeout (paths relative to the current run):
+7763fdbf3000b842ddcf964e0734d514831f989304366a765c2dc4344cc3cf31  config.json
+91e702fac28ccec55f4457eb9af8d1946449d921f99488fe73f4f048deb71657  data_bundle.pt
+a2b070ddd2d129df4e078833b53815236252a436dce6fb9eba5e40f072ccccae  data_manifest.json
+fb060844be66f8132d9b8d8202c4b8c94d500da4a145d65640ff0c0e532aa1f1  z_init.pt
+bc1835fda71bf4ad29b2fb14184f9328a0b0c759b0de7a58438afa8b9881a950  checkpoints/step_001000.pt
+0817e229b1d6b68d92a18d1b3f82effe552c7e132d25577650f484204dc7fecc  monitoring/generated_samples/step_001000.pt
+
+GPU REPLAY COMMAND -- UNEXECUTED
+
+From the clean repository root in an allocated Berzelius GPU session:
+
+module load Mambaforge
+conda activate mem_param_env
+PYTHONPATH=. python -u -B - <<'PY'
+import json
+from pathlib import Path
+
+import torch
+from ml_collections import ConfigDict
+
+from mem_param_src.model import GDFM
+from mem_param_src.runners import configure_runtime
+from mem_param_src.runners.image_plotting import save_training_comparison_grid
+
+assert torch.cuda.is_available(), "Run this on a CUDA GPU machine."
+device = torch.device("cuda")
+run = Path("outputs/session_runs/celeba32_eps_eps_n32_exact_01").resolve()
+out = run / "sampling_audit" / "exact_vs_floor005_16"
+
+cfg = ConfigDict(json.loads((run / "config.json").read_text()))
+configure_runtime(cfg, device)
+
+checkpoint_path = run / "checkpoints/step_001000.pt"
+checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+bundle = torch.load(run / "data_bundle.pt", map_location="cpu", weights_only=True)
+noise = torch.load(run / "z_init.pt", map_location="cpu", weights_only=True)[:16]
+
+model = GDFM(cfg).to(device).eval()
+model.load_state_dict(checkpoint["model"], strict=True)
+assert model.prediction_space == model.loss_space == "eps"
+
+base = cfg.sampling.to_dict()
+variants = {
+    "exact": dict(base),
+    "floor005": dict(base, use_safe_division=True, safe_div_denom_eps=0.05),
+}
+
+out.mkdir(parents=True, exist_ok=False)
+records = {}
+
+for name, settings in variants.items():
+    print(f"[sample] {name}: {settings}", flush=True)
+    samples = model.sample(noise.to(device), **settings, device=device).cpu()
+    assert torch.isfinite(samples).all(), f"Non-finite samples: {name}"
+
+    torch.save(samples, out / f"{name}.pt")
+    save_training_comparison_grid(
+        bundle["train"], samples, out / f"{name}.png", checkpoint["step"]
+    )
+
+    records[name] = {
+        "sampling": settings,
+        "min": samples.min().item(),
+        "max": samples.max().item(),
+        "outside_fraction": ((samples < -1) | (samples > 1)).float().mean().item(),
+    }
+    print(json.dumps(records[name], indent=2), flush=True)
+
+(out / "settings.json").write_text(json.dumps({
+    "checkpoint": str(checkpoint_path),
+    "step": checkpoint["step"],
+    "noise": str(run / "z_init.pt"),
+    "noise_prefix_count": len(noise),
+    "config": cfg.to_dict(),
+    "torch_version": str(torch.__version__),
+    "device": torch.cuda.get_device_name(device),
+    "results": records,
+}, indent=2))
+print(f"[saved] {out}", flush=True)
+PY
+
+Expected output: exact.pt/png, floor005.pt/png, and settings.json in the new
+sampling_audit/exact_vs_floor005_16 folder. The command prints sampling settings
+and raw ranges. It performs inference only, without training, FID, or f_mem.
+Existing artifacts are not overwritten. Use a fresh output folder for later
+comparisons. Add dict(base, n_steps=200) or dict(base, output="x_t_max") as
+separate variants when needed.
+
+A clamp improvement establishes a sampling-policy effect for this checkpoint.
+It does not by itself explain why historical training succeeded. Preserve
+that distinction in the next report.

@@ -39,6 +39,9 @@ def resolve_evaluation_config(run_dir, *, eval_config=None, override_items=()):
     """Overlay optional evaluation settings onto one saved run config."""
     run_dir = Path(run_dir).expanduser().resolve()
     config = ConfigDict(read_json(run_dir / "config.json"))
+    # Older runs predate optional storage of every generated checkpoint batch.
+    if "save_generated_samples" not in config.evaluation:
+        config.evaluation.save_generated_samples = False
     saved_settings = {
         section: config_to_dict(config[section])
         for section in EVALUATION_CONFIG_SECTIONS
@@ -258,6 +261,10 @@ def evaluate_run(
             raise FloatingPointError(
                 f"Generated samples became non-finite at checkpoint step {step}."
             )
+        if run_kind == "image" and bool(config.evaluation.save_generated_samples):
+            sample_path = eval_dir / "generated_samples" / f"step_{step:06d}.pt"
+            save_torch(sample_path, samples)
+            print(f"[saved] {len(samples)} generated samples: {sample_path}", flush=True)
 
         if run_kind == "image":
             record = _image_metric_record(step, samples, bundle, config)

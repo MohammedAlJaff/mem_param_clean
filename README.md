@@ -37,6 +37,7 @@ See:
 - `docs/repo_map.md`
 - `docs/preservation.md`
 - `TODO.txt`
+- [Critical eps/eps audit and Berzelius handoff](CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt)
 - `PAPER_NOTES.txt` — draft paper wording, interpretation, and research ideas.
 
 ## Environment
@@ -93,7 +94,132 @@ contains the exact training and reference values. The manifest records their
 source pools, stable sample identifiers, source indices, tensor hashes, and
 selection seed. Unused source examples are not copied into the run.
 
+## CelebA32 eps/eps controls
+
+From the repository root, activate the environment and run:
+
+```bash
+conda activate memcompgen
+python -m mem_param_src.runners.image_train \
+  --config configs/runners/celeba32_eps_eps_monitor.py \
+  --run-dir outputs/session_runs/celeba32_eps_eps_n32_exact_01 \
+  --device mps --steps 1000 --checkpoint-every 250 \
+  --sampler heun --sampling-steps 50 --no-sampling-safe-division
+```
+
+This uses 32 grayscale faces at 32x32, the historical 140-pixel aligned-face
+crop, a separate validation reference set, and direct unit-MSE eps/eps.
+The current UNet has widths 64/128/192 with middle attention. This is a diagnostic
+configuration; it is not an exact reconstruction of the old CelebA study.
+Local grids, loss/f_mem curves, and all 500 raw generated samples are enabled.
+W&B is off. The comparison grid shows 32 training and 64 generated images.
+
+Change these flags when needed:
+
+```text
+--sampling-safe-division --sampling-denom-eps 0.05
+--no-sampling-safe-division
+--sampling-steps 200
+--sampler euler
+--sampling-start-time 0.01 --sampling-end-time 0.99
+--sampling-output x_1
+--steps 5000 --lr 0.0001 --batch-size 32 --seed 7
+```
+
+The safe-division flags affect sampling only. Changing the denominator value
+alone does not enable clamping. A floor of 0.01 matches the smallest ideal
+coefficient on [0.01,0.99]; 0.05 engages the clamp over part of that interval.
+Keep exact and clamped results distinct. Use a new run directory for each
+training launch. For RGB faces, add `--set data.image_channels=3`.
+
+To isolate a sampling change after training, replay the same saved checkpoints
+and noise with a new evaluation name:
+
+```bash
+python -m mem_param_src.runners.image_eval \
+  --run-dir outputs/session_runs/celeba32_eps_eps_n32_exact_01 \
+  --eval-name clamp005_heun50 --device mps \
+  --set sampling.use_safe_division=true \
+  --set sampling.safe_div_denom_eps=0.05 \
+  --set sampling.n_steps=50
+```
+
+Replay reads saved data and checkpoints. Full generated batches go to
+`evaluations/clamp005_heun50/generated_samples/`; full-pixel evaluation records
+go to `checkpoint_metrics.json` in that evaluation directory. This evaluator
+does not create the training-monitor PNG panels or projected f_mem curve.
+The eps/eps discrepancy remains open; low training loss alone is not success.
+
 ## Online monitoring demonstration
+
+For the local MNIST16 v/v run with 32 training images and 1,000 updates, use only
+the image training runner:
+
+```bash
+conda activate memcompgen
+python -m mem_param_src.runners.image_train \
+  --config configs/runners/mnist_vv_monitor.py \
+  --run-dir outputs/session_runs/mnist16_vv_n32_1k_20260908_02 \
+  --device mps
+```
+
+Images are resized to 16 x 16. The config generates 500 fixed-noise samples at
+step zero and every 250 updates.
+Each grid shows 32 fixed training images above 64 generated images, eight per
+row. Find the grids in the run's `monitoring/comparison_grids/` and the live
+loss/f_mem figures in `monitoring/plots/`. W&B is off for this local run.
+The f_mem curve uses projected pixels at rho=0.3 against all 32 training images.
+Interpret it alongside sample quality. No separate evaluation command is needed.
+The terminal briefly announces data loading, model preparation, training,
+checkpoint generation, metric computation, and completion. It prints loss every
+25 updates and projected f_mem, mean_r, rho, and sample counts at checkpoints.
+One saved-folder line replaces repeated figure paths after each checkpoint.
+The 32x32 run was stopped at the user's request. The first MNIST16 run completed;
+use a new output folder for each launch.
+
+For another image config, enable these features with:
+
+```bash
+--generation-monitor --training-grid-samples 32 \
+--f-mem-monitor --f-mem-samples 500
+```
+
+Change `generation_monitor.n_samples` to choose how many generated images the
+grid displays. `--training-grid-samples 0` retains generated-only grids.
+
+Use `--save-generated-samples` to keep the entire generated batch at every
+monitoring checkpoint. This is enabled for future runs using the MNIST16 config.
+The first completed run predates this option. The files are
+`monitoring/generated_samples/step_<step>.pt`, with raw CPU tensors of shape
+`[500, 1, 16, 16]` for this run. The first 64 samples form the generated grid.
+Use `--no-save-generated-samples` to keep only grids and metric records.
+If post-training evaluation is enabled, the same option saves every evaluated
+batch under `evaluations/<name>/generated_samples/`.
+
+After a run with tensor storage enabled, read a saved batch directly:
+
+```python
+from pathlib import Path
+
+import torch
+
+run_dir = Path("outputs/session_runs/mnist16_vv_n32_1k_20260908_02")
+samples = torch.load(run_dir / "monitoring/generated_samples/step_000250.pt",
+                     map_location="cpu", weights_only=True)
+# samples.shape is [500, 1, 16, 16] for the MNIST16 config.
+```
+
+To redraw the curves from saved records without loading a model:
+
+```python
+from mem_param_src.runners.image_plotting import save_monitor_curves
+
+paths = save_monitor_curves("outputs/session_runs/mnist16_vv_n32_1k_20260908_01")
+# paths maps "loss" and "f_mem" to PNG files once both records exist.
+```
+
+The local results index is `outputs/session_runs/INDEX.md`. It links this run
+and the earlier MNIST runs without moving their saved artifacts.
 
 The runner script is `mem_param_src/runners/image_train.py`. The single-run
 settings are in `configs/runners/mnist_wandb_demo.py`.

@@ -30,6 +30,11 @@ checks, and completed work so the two files do not become competing backlogs.
 Use `docs/config_reference.md` for every active configuration field, its
 meaning, current default, implementation status, and legacy runner guidance.
 
+The user-requested `CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt` preserves
+the current sampling audit and Berzelius handoff, including artifact hashes
+and an unexecuted fixed-checkpoint GPU command. It records an open diagnosis;
+`TODO.txt` remains the backlog and `MIGRATION_JOURNAL.md` the completed-work log.
+
 Known file classes from the old repo:
 
 - model and sampler code
@@ -68,6 +73,12 @@ Boundary rules:
   at preview checkpoints. It samples once for grids and optional f_mem, using
   `metrics/image/projection.py` and shared `metrics/nearest_neighbors.py`.
   JSON records and the fixed projection stay in the run's `monitoring/` folder.
+  Optional full generated tensors go to `monitoring/generated_samples/`.
+  Post-training evaluation stores its optional checkpoint tensors in
+  `evaluations/<name>/generated_samples/`.
+  `runners/image_plotting.py` draws fixed training examples above generated
+  samples in `monitoring/comparison_grids/`. It reads saved loss and f_mem
+  records to refresh `monitoring/plots/` during training.
   `runners/tracking.py` sends scalar records and grids to W&B when enabled.
 
 - `mem_param_src/` is library code only.

@@ -30,12 +30,14 @@ from mem_param_src.runners.artifacts import (
     read_json,
     tensor_sha256,
     validate_data_manifest,
+    write_json,
 )
 from mem_param_src.runners.evaluation import (
     evaluate_image_run,
     evaluate_synthetic_run,
 )
 from mem_param_src.runners.image_monitoring import generate_monitor_samples
+from mem_param_src.runners.image_plotting import save_training_comparison_grid
 from mem_param_src.runners.image_train import main as image_train_main
 from mem_param_src.runners.synthetic_eval import main as synthetic_eval_main
 from mem_param_src.runners.synthetic_train import main as synthetic_train_main
@@ -355,6 +357,9 @@ class TestRunnerCommands(unittest.TestCase):
                     "--f-mem-monitor",
                     "--f-mem-samples",
                     "7",
+                    "--training-grid-samples",
+                    "3",
+                    "--save-generated-samples",
                 ]
             )
 
@@ -365,6 +370,47 @@ class TestRunnerCommands(unittest.TestCase):
         self.assertIs(config.generation_monitor.enabled, True)
         self.assertIs(config.random_projected_f_mem.enabled, True)
         self.assertEqual(config.random_projected_f_mem.n_samples, 7)
+        self.assertEqual(config.generation_monitor.n_train_samples, 3)
+        self.assertIs(config.evaluation.save_generated_samples, True)
+
+    def test_image_sampling_flags_keep_training_division_independent(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        config_path = repo_root / "configs/runners/celeba32_eps_eps_monitor.py"
+        base_args = ["--config", str(config_path), "--run-dir", "unused"]
+        with patch("mem_param_src.runners.image_train.train_run") as train:
+            image_train_main(base_args + [
+                "--set", "sampling.n_steps=10",
+                "--set", "training.ckpt_steps=[0, 1]",
+                "--steps", "1200", "--lr", "0.0002", "--seed", "9",
+                "--batch-size", "8", "--checkpoint-every", "300",
+                "--sampler", "heun", "--sampling-steps", "200",
+                "--sampling-safe-division", "--sampling-denom-eps", "0.05",
+                "--sampling-start-time", "0.02", "--sampling-end-time", "0.98",
+                "--sampling-output", "x_t_max",
+            ])
+        config = train.call_args.args[0]
+        self.assertEqual(config.training.n_training_steps, 1200)
+        self.assertEqual(config.training.lr, 0.0002)
+        self.assertEqual(config.training.seed, 9)
+        self.assertEqual(config.training.batch_cap, 8)
+        self.assertEqual(resolve_checkpoint_steps(config), (0, 300, 600, 900, 1200))
+        self.assertEqual(config.sampling.method, "heun")
+        self.assertEqual(config.sampling.n_steps, 200)
+        self.assertIs(config.sampling.use_safe_division, True)
+        self.assertEqual(config.sampling.safe_div_denom_eps, 0.05)
+        self.assertEqual(config.sampling.start_time, 0.02)
+        self.assertEqual(config.sampling.end_time, 0.98)
+        self.assertEqual(config.sampling.output, "x_t_max")
+        self.assertIs(config.training.use_safe_division, False)
+        self.assertEqual(config.training.safe_div_denom_eps, 0.01)
+        self.assertEqual(config.framework.loss_weighting, "unit")
+
+        with patch("mem_param_src.runners.image_train.train_run") as train:
+            image_train_main(base_args + [
+                "--set", "sampling.use_safe_division=true",
+                "--no-sampling-safe-division",
+            ])
+        self.assertIs(train.call_args.args[0].sampling.use_safe_division, False)
 
 
 class TestSyntheticRunnerIntegration(unittest.TestCase):
@@ -469,6 +515,7 @@ class TestImageRunnerIntegration(unittest.TestCase):
                 )
 
             eval_dir = evaluate_image_run(run_dir, device="cpu")
+            self.assertFalse((eval_dir / "generated_samples").exists())
             records = read_json(eval_dir / "checkpoint_metrics.json")
             samples = load_torch(eval_dir / "final_samples_x_1.pt")
             bundle = load_torch(run_dir / "data_bundle.pt")
@@ -490,6 +537,24 @@ class TestImageRunnerIntegration(unittest.TestCase):
                 manifest["partitions"]["train"]["tensor"]["sha256"],
                 tensor_sha256(bundle["train"]),
             )
+
+            # A legacy saved config must accept the new optional replay setting.
+            saved_config = read_json(run_dir / "config.json")
+            del saved_config["evaluation"]["save_generated_samples"]
+            write_json(run_dir / "config.json", saved_config)
+            saved_eval = evaluate_image_run(
+                run_dir,
+                eval_name="with_samples",
+                override_items=("evaluation.save_generated_samples=true",),
+                device="cpu",
+            )
+            for step in (0, 1):
+                saved_samples = load_torch(
+                    saved_eval / "generated_samples" / f"step_{step:06d}.pt"
+                )
+                self.assertEqual(tuple(saved_samples.shape), (2, 1, 8, 8))
+                self.assertTrue(torch.isfinite(saved_samples).all())
+            self.assertTrue(torch.equal(saved_samples, samples))
 
 
 class TestImageTrainingMonitoring(unittest.TestCase):
@@ -558,6 +623,7 @@ class TestImageTrainingMonitoring(unittest.TestCase):
                 (run_dir / "monitoring" / "samples_step_000002.png").is_file()
             )
             self.assertEqual(len(seen_noise), 3)
+            self.assertFalse((run_dir / "monitoring/generated_samples").exists())
             self.assertTrue(
                 all(torch.equal(seen_noise[0], item) for item in seen_noise)
             )
@@ -587,6 +653,8 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         config.training.n_training_steps = 2
         config.generation_monitor.enabled = True
         config.generation_monitor.n_samples = 2
+        config.generation_monitor.n_train_samples = 3
+        config.evaluation.save_generated_samples = True
         config.random_projected_f_mem.enabled = True
         config.random_projected_f_mem.n_samples = 4
         config.random_projected_f_mem.resize_size = 8
@@ -602,6 +670,11 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         seen_noise = []
 
         def sample(model, z_init, resolved_config, device):
+            if len(seen_noise) == 2:
+                # Earlier records and curves must be available before training ends.
+                self.assertEqual(read_json(run_dir / "train_history.json")[-1]["step"], 2)
+                self.assertTrue((run_dir / "monitoring/plots/loss.png").is_file())
+                self.assertTrue((run_dir / "monitoring/plots/f_mem.png").is_file())
             seen_noise.append(z_init.clone())
             # Exact copies must count as memorized against training, not held-out data.
             return bundle["train"][:4].clone()
@@ -622,15 +695,18 @@ class TestImageTrainingMonitoring(unittest.TestCase):
                     side_effect=sample,
                 ) as generate,
                 patch(
-                    "mem_param_src.runners.image_monitoring.save_fixed_range_grid",
-                    return_value=run_dir / "grid.png",
+                    "mem_param_src.runners.image_plotting.save_training_comparison_grid",
+                    wraps=save_training_comparison_grid,
                 ) as grid,
             ):
                 train_run(config, run_dir, run_kind="image", device="cpu")
             self.assertEqual(generate.call_count, 3)
             self.assertTrue(all(torch.equal(seen_noise[0], z) for z in seen_noise))
             self.assertEqual(load_torch(run_dir / "z_init.pt").shape[0], 4)
-            self.assertTrue(all(c.args[0].shape[0] == 2 for c in grid.call_args_list))
+            self.assertTrue(
+                all(torch.equal(c.args[0], bundle["train"][:3]) for c in grid.call_args_list)
+            )
+            self.assertTrue(all(c.args[1].shape[0] == 2 for c in grid.call_args_list))
             saved_config = read_json(run_dir / "config.json")
             self.assertEqual(
                 saved_config["random_projected_f_mem"]["projection_seed"],
@@ -639,6 +715,13 @@ class TestImageTrainingMonitoring(unittest.TestCase):
             self.assertTrue((run_dir / "monitoring/f_mem_projection.pt").is_file())
             self.assertTrue((run_dir / "monitoring/f_mem_train_vectors.pt").is_file())
             for step in (0, 1, 2):
+                saved_samples = load_torch(
+                    run_dir / "monitoring/generated_samples" / f"step_{step:06d}.pt"
+                )
+                self.assertTrue(torch.equal(saved_samples, bundle["train"][:4]))
+                self.assertTrue(
+                    (run_dir / f"monitoring/comparison_grids/step_{step:06d}.png").is_file()
+                )
                 record = read_json(run_dir / f"monitoring/f_mem_step_{step:06d}.json")
                 self.assertEqual(record["n_samples"], 4)
                 self.assertEqual(record["N"], len(bundle["train"]))
@@ -665,6 +748,15 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         config.generation_monitor.enabled = True
         config.random_projected_f_mem.n_samples = 0
         with self.assertRaisesRegex(ValueError, "n_samples must be"):
+            train_run(config, "unused", run_kind="image", device="cpu")
+
+    def test_training_grid_requires_monitoring_and_nonnegative_count(self):
+        config = _tiny_image_config()
+        config.generation_monitor.n_train_samples = 8
+        with self.assertRaisesRegex(ValueError, "require image generation"):
+            train_run(config, "unused", run_kind="image", device="cpu")
+        config.generation_monitor.n_train_samples = -1
+        with self.assertRaisesRegex(ValueError, "must be nonnegative"):
             train_run(config, "unused", run_kind="image", device="cpu")
 
     def test_shared_sampler_uses_larger_f_mem_count(self):

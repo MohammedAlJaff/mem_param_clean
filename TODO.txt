@@ -11,7 +11,7 @@ in meaningful choices without routine approval requests. Apply this rule to
 future notes and documentation. Full guidance: root AGENTS.md, Collaboration
 and Code Understanding.
 
-Updated: 2026-09-08
+Updated: 2026-09-09
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -28,15 +28,35 @@ close an item. When an item is complete, record the result in
 MIGRATION_JOURNAL.md and remove it from this file.
 
 
-NEXT SESSION: REVIEW MNIST EPS/EPS GENERATION
+NEXT SESSION: BERZELIUS EPS/EPS DIAGNOSIS
 
-First, make run results easy to find. The user wants one clearly named
-temporary output folder for these runs. Suggested location: outputs/session_runs/.
-Keep each run in its own named subfolder. Add a short index with the settings,
-W&B link, final sample grid, and metrics location. Include links to the existing
-MNIST runs so the user can find old and new results from one place. Show the
-absolute folder path when reporting a run. This is a next-session task;
-the folder and index have not been created yet.
+Read CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt first. It contains the
+current CelebA32 audit, historical comparison, artifact hashes, and an unrun
+GPU replay command. The next session is on Berzelius, with mem_param_env.
+Continue the standalone current-code diagnosis and the historical comparison.
+No sampler refactor or causal resolution has been established.
+
+First obtain outputs/session_runs/celeba32_eps_eps_n32_exact_01 on Berzelius;
+GitHub does not contain the saved data, checkpoint, or noise bank. Replay the
+step-1,000 checkpoint with exact and 0.05-clamped sampling on the same GPU and
+fixed noise before changing training. The current run completed, but 59.3% of
+final generated pixels exceed [-1,1]. Low loss and f_mem=0 are not success.
+The selected old N=256 seed-0 run reached its best FID at 25,000 updates and
+also had poor FID near 1,000. Preserve protocol differences in the comparison.
+The user currently launches compute commands; provide commands unless launch
+is explicitly authorized. No additional compute should run on this Mac.
+
+Earlier MNIST context:
+
+Run results now have a visible index: outputs/session_runs/INDEX.md. It links
+the earlier MNIST runs and the MNIST16 v/v command with N=32 and 1,000 updates.
+The user completed the first MNIST16 run. It saved grids and metrics, but predates
+optional full generated-tensor storage. Future MNIST16 runs enable that option.
+The user stopped the 32x32 5k run; its last saved checkpoint is step 1,000.
+New runs use their own subfolder under outputs/session_runs/. Comparison grids
+live in monitoring/comparison_grids/; live loss and projected f_mem plots live
+in monitoring/plots/. Report the absolute run path. The new run's run.json
+records its current state; do not infer completion from its folder name.
 
 The larger 10k run completed: W&B en9xtd1x. Loss is low, but most final
 samples remain noisy or saturated. Start with its saved grids and metrics.
@@ -49,17 +69,19 @@ See the 2026-09-08 closeout in MIGRATION_JOURNAL.md for the full handoff.
 T016 remains open. Its historical clamp replay and dimension comparisons
 have not been completed; the MNIST runs do not resolve that contradiction.
 
-[ ] T016 - Explain why eps/eps succeeds on CelebA32 but fails in the Flowers102 sanity run.
+[ ] T016 - Explain eps/eps generation failure in the clean pipeline versus historical CelebA32.
     Problem: The old CelebA32 study contains 21 completed eps/eps runs with
     useful FID values. The clean Flowers102 run converges in loss but generates
     noise. These protocols differ in sampling division, endpoints, data,
     architecture, learning rate, training budget, output, and runtime.
-    Evidence: See
+    Evidence: CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt adds the current
+    CelebA32 N=32 run and source audit. The earlier Flowers evidence remains in
     protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md.
-    Next action: Replay the fixed Flowers102 checkpoints with the historical
-    0.05 clamp. Then compare the same Flowers images as RGB64, RGB32, and
-    grayscale32 under one matched protocol. Recover one old CelebA32 checkpoint
-    for matched old-versus-clean replay before a full reproduction run.
+    Next action: On Berzelius, replay the fixed current CelebA32 checkpoint
+    with exact and 0.05-clamped sampling on the same GPU and saved noise. Check
+    numerical contracts and recover the original old checkpoint/config before
+    matched historical replay. Retain Flowers clamp and dimension controls as
+    follow-ups; do not start a broad retraining sweep before these comparisons.
     Done when: A matched multi-seed comparison identifies the causal protocol
     change or interaction and reproduces useful CelebA32 eps/eps samples.
 

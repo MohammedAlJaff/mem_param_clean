@@ -298,6 +298,7 @@ budgets and schedules are historical starting points, not clean defaults.
 | Setting | Default | Meaning and guidance | Use |
 | --- | --- | --- | --- |
 | `evaluation.n_samples` | `64` | Number of generated samples evaluated from the saved noise bank. Must not exceed the available bank. | Runner-owned; notebook active |
+| `evaluation.save_generated_samples` | `False` | Save the full raw generated tensor at each image monitoring and post-training evaluation checkpoint. Does not enable generation by itself. | Runner-owned |
 | `evaluation.sample_bank_size` | `1024` | Number of fixed initial-noise samples saved for replay across checkpoints. Legacy runners used `1024`. | Runner-owned |
 | `evaluation.batch_size` | `64` | No-grad evaluation batch size. Reduce for memory, not scientific meaning. | Runner-owned |
 | `evaluation.f_mem_threshold` | `0.3` | Canonical threshold `rho` in `f_mem = mean(d1/d2 < rho)`. Clean image records also save the auxiliary `0.3`, `0.5`, and `0.7` sweep. | Active |
@@ -350,6 +351,7 @@ dataset, model, endpoint range, and parameterization sweep.
 | `monitoring.batch_size` | `64` | No-grad batch size for train-time monitors. Old image runner defaulted it to `batch_cap`. | Runner-owned |
 | `generation_monitor.enabled` | `False` | Save fixed-noise image grids at step zero and every image-training checkpoint. | Runner-owned |
 | `generation_monitor.n_samples` | `64` | Number of saved `z_init` samples used in every checkpoint grid. Must not exceed `evaluation.sample_bank_size`. | Runner-owned |
+| `generation_monitor.n_train_samples` | `0` | Fixed training examples above generated samples; zero keeps generated-only grids. Uses the first available examples in saved tensor order. Requires generation monitoring. | Runner-owned |
 | `generation_monitor.show` | `True` | Reserved display preference. The command runner saves PNG files without opening interactive windows. | Reserved |
 | `random_projected_f_mem.enabled` | `False` | Enable rough projected-pixel f_mem at image preview checkpoints. Requires generation monitoring. | Runner-owned |
 | `random_projected_f_mem.n_samples` | `512` | Generated samples used by f_mem, separate from grid size. The runner expands and saves the noise bank as needed when enabled. | Runner-owned |
@@ -417,12 +419,62 @@ prefix at step zero and every checkpoint. Omit `--generation-monitor` to keep
 W&B loss tracking without the sampling cost. These grids are qualitative
 monitors, not checkpoint evaluation metrics.
 
+The image training CLI also accepts these controls. Omitted flags preserve the
+config. Explicit flags take precedence over corresponding `--set` overrides.
+Every resolved value is saved in the run's `config.json`.
+
+| CLI flag | Saved field | Meaning |
+| --- | --- | --- |
+| `--steps` | `training.n_training_steps` | Number of optimizer updates. |
+| `--lr` | `training.lr` | Optimizer learning rate. |
+| `--seed` | `training.seed` | Data/model seed and base for the fixed-noise seed. |
+| `--batch-size` | `training.batch_cap` | Maximum training batch size, capped at N. |
+| `--checkpoint-every` | `training.ckpt_every` | Select interval checkpoints and clear the explicit schedule. |
+| `--sampler` | `sampling.method` | `heun` or `euler`. |
+| `--sampling-steps` | `sampling.n_steps` | Number of solver intervals. |
+| `--sampling-safe-division` / `--no-sampling-safe-division` | `sampling.use_safe_division` | Enable or disable sampling denominator clamping. |
+| `--sampling-denom-eps` | `sampling.safe_div_denom_eps` | Denominator floor; active only when sampling safe division is enabled. |
+| `--sampling-start-time` | `sampling.start_time` | Start of integration. |
+| `--sampling-end-time` | `sampling.end_time` | End of integration. |
+| `--sampling-output` | `sampling.output` | Clean endpoint estimate `x_1` or integrated state `x_t_max`. |
+
+These sampling flags leave the training objective and training-time interval
+unchanged. Unit-MSE eps/eps training compares noise directly. Sampling still
+converts predicted noise into velocity, where division by small coefficients
+can amplify error. Compare sampler settings using the same checkpoints and
+saved noise to isolate their effect. The cause of the eps/eps discrepancy
+remains unresolved.
+
+Add `--training-grid-samples 16` to place fixed training examples above generated
+samples. The combined panels are saved to `monitoring/comparison_grids/step_<step>.png`.
+The top panel uses the first 16 entries of `data_bundle.pt["train"]`, or all
+entries if fewer exist. Both panels use the fixed display range [-1,1].
+Set the count to zero for the original generated-only grids.
+
+Generation monitoring also updates `monitoring/plots/loss.png` from
+`train_history.json` at each checkpoint with recorded loss. The values are
+logged batch losses, without smoothing. With f_mem monitoring enabled,
+`monitoring/plots/f_mem.png` shows the saved projected-pixel records, including
+step zero. These figures need only the image training runner. The loss history
+is saved at checkpoints so completed records remain available during training.
+
 Add `--f-mem-monitor --f-mem-samples 512` with `--generation-monitor` for a
 rough memorization check. `--no-f-mem-monitor` disables it. The sample-count
 flag alone does not enable the calculation. It works with or without W&B.
 The grid and metric share one generated batch from saved `z_init` prefixes.
 The grid retains `generation_monitor.n_samples` images. Generation uses the
 larger of the two counts, batched with `monitoring.batch_size`.
+
+Use `--save-generated-samples` to save this entire batch to
+`monitoring/generated_samples/step_<step>.pt`. It preserves raw CPU tensors
+before clamping, resizing, or projection, including samples omitted from the grid.
+Their order matches the saved `z_init` prefix. Sampling is not repeated.
+`--no-save-generated-samples` disables tensor storage without disabling grids
+or metrics. The base default is off; the MNIST16 monitoring config enables it.
+Post-training image evaluation uses the same setting and saves each batch under
+`evaluations/<name>/generated_samples/`. Its existing final-sample file remains.
+For an older run, use the image evaluator with
+`--set evaluation.save_generated_samples=true` to retain each replayed batch.
 
 This monitor reuses the old runner's fixed random-projected pixel metric:
 normalize/clamp to [0,1], resize to 16 x 16, then project to 256 dimensions.

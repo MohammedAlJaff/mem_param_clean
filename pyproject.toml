@@ -20,6 +20,7 @@ mem-param-synthetic-eval = "mem_param_src.runners.synthetic_eval:main"
 
 [project.optional-dependencies]
 image = [
+  "matplotlib>=3.7",
   "Pillow>=9.0",
   "scipy>=1.8",
   "torchvision>=0.15",

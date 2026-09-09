@@ -205,6 +205,7 @@ def _record_image_monitor(
     wandb_run,
     step,
     f_mem_state=None,
+    train_preview=None,
 ):
     """Save and optionally log one fixed-noise checkpoint panel."""
     from mem_param_src.runners.image_monitoring import (
@@ -212,28 +213,60 @@ def _record_image_monitor(
         compute_monitor_f_mem,
         save_fixed_range_grid,
     )
+    from mem_param_src.runners.image_plotting import (
+        save_monitor_curves,
+        save_training_comparison_grid,
+    )
 
     monitor_dir = Path(run_dir) / "monitoring"
     # Generate once; the grid and optional metric use prefixes of this batch.
-    samples = generate_monitor_samples(model, z_init, config, device)
-    sample_grid_path = save_fixed_range_grid(
-        samples[: int(config.generation_monitor.n_samples)],
-        monitor_dir / f"samples_step_{int(step):06d}.png",
+    count = int(config.generation_monitor.n_samples)
+    if f_mem_state is not None:
+        count = max(count, int(config.random_projected_f_mem.n_samples))
+    division = "exact division"
+    if config.sampling.use_safe_division:
+        division = f"denominator floor {config.sampling.safe_div_denom_eps:g}"
+    print(
+        f"[monitor] Step {step}/{config.training.n_training_steps}: "
+        f"generating {count} samples ({config.sampling.method}, "
+        f"{config.sampling.n_steps} steps, "
+        f"t=[{config.sampling.start_time:g},{config.sampling.end_time:g}], {division})...",
+        flush=True,
     )
-    print(f"saved generation monitor: {sample_grid_path}", flush=True)
-
+    samples = generate_monitor_samples(model, z_init, config, device)
+    if bool(config.evaluation.save_generated_samples):
+        # Retain the full raw batch before display or metric preprocessing.
+        sample_path = monitor_dir / "generated_samples" / f"step_{int(step):06d}.pt"
+        save_torch(sample_path, samples)
+        print(f"[saved] {len(samples)} generated samples: {sample_path}", flush=True)
+    grid_samples = samples[: int(config.generation_monitor.n_samples)]
+    if train_preview is not None:
+        sample_grid_path = save_training_comparison_grid(
+            train_preview,
+            grid_samples,
+            monitor_dir / "comparison_grids" / f"step_{int(step):06d}.png",
+            step,
+        )
+    else:
+        sample_grid_path = save_fixed_range_grid(
+            grid_samples,
+            monitor_dir / f"samples_step_{int(step):06d}.png",
+        )
     values = {
         "generation/step": int(step),
         "generation/samples": sample_grid_path,
     }
     if f_mem_state is not None:
+        print("[monitor] Samples ready; computing projected f_mem...", flush=True)
         record = {
             "step": int(step),
             **compute_monitor_f_mem(samples, config, f_mem_state),
         }
         write_json(monitor_dir / f"f_mem_step_{int(step):06d}.json", record)
         print(
-            f"projected f_mem step={step} n={record['n_samples']} f_mem={record['f_mem']:.6f}",
+            f"projected f_mem step={step} n={record['n_samples']} N={record['N']} "
+            f"f_mem={record['f_mem']:.6f} mean_r={record['mean_r']:.6f} "
+            f"rho={record['rho']:g}",
             flush=True,
         )
         values.update(
@@ -242,6 +275,8 @@ def _record_image_monitor(
                 for key in ("f_mem", "mean_r", "rho", "n_samples", "N")
             }
         )
+    save_monitor_curves(run_dir)
+    print(f"[saved] Grid and available curves: {monitor_dir}", flush=True)
     return log_wandb(wandb_run, values)
 
 
@@ -252,6 +287,11 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         raise ValueError("W&B training logs currently support image runs only.")
     if run_kind != "image" and bool(config.generation_monitor.enabled):
         raise ValueError("Generation monitoring currently supports image runs only.")
+    n_train_preview = int(config.generation_monitor.n_train_samples)
+    if n_train_preview < 0:
+        raise ValueError("generation_monitor.n_train_samples must be nonnegative.")
+    if n_train_preview and (run_kind != "image" or not config.generation_monitor.enabled):
+        raise ValueError("Training comparison grids require image generation monitoring.")
     f_mem_settings = config.random_projected_f_mem
     if bool(f_mem_settings.enabled):
         if run_kind != "image" or not bool(config.generation_monitor.enabled):
@@ -274,13 +314,31 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         seed=int(config.training.seed),
         device=device,
     )
+    show_stages = (
+        run_kind == "image"
+        and bool(config.tracking.console.enabled)
+        and bool(config.tracking.console.stage_banners)
+    )
 
     wandb_run = None
     success = False
     try:
+        if show_stages:
+            print(
+                f"[data] Loading {config.data.dataset} (training device: {device})...",
+                flush=True,
+            )
         bundle = build_data_bundle(config)
         _validate_bundle(bundle, run_kind, config)
         train_tensor = bundle["train"].detach().cpu().contiguous()
+        if show_stages:
+            print(
+                f"[data] Ready: {len(train_tensor)} training, "
+                f"{len(bundle['reference'])} held-out; shape {tuple(train_tensor.shape[1:])}.",
+                flush=True,
+            )
+        # Fix the displayed subset in saved tensor order; do not draw fresh examples.
+        train_preview = train_tensor[:n_train_preview] if n_train_preview else None
         if bool(f_mem_settings.enabled) and train_tensor.shape[0] < 2:
             raise ValueError("f_mem monitoring requires at least two training images.")
 
@@ -297,6 +355,8 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         if log_every < 1:
             raise ValueError("training.log_every must be at least 1.")
 
+        if show_stages:
+            print("[setup] Saving data and preparing the model...", flush=True)
         write_json(run_dir / "config.json", config_to_dict(config))
         save_torch(run_dir / "data_bundle.pt", bundle)
         manifest_path, manifest = save_data_manifest(
@@ -312,6 +372,8 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         )
         z_init = _make_z_init(config, train_tensor)
         save_torch(run_dir / "z_init.pt", z_init)
+        history = []
+        write_json(run_dir / "train_history.json", history)
         f_mem_state = None
         if bool(f_mem_settings.enabled):
             from mem_param_src.runners.image_monitoring import prepare_f_mem_monitor
@@ -324,6 +386,13 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         torch.manual_seed(int(config.training.seed))
         model = GDFM(config).to(device)
         optimizer = _build_optimizer(model, config)
+        if show_stages:
+            print(
+                f"[model] {config.network.arch}, {model.n_params():,} parameters; "
+                f"{config.framework.prediction_space}/{config.framework.loss_space}, "
+                f"batch size {config.training.batch_size}.",
+                flush=True,
+            )
         save_checkpoint(run_dir, 0, model)
         update_run_record(
             run_dir,
@@ -344,6 +413,7 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
                     wandb_run,
                     0,
                     f_mem_state,
+                    train_preview,
                 )
 
         loader_generator = torch.Generator().manual_seed(int(config.training.seed))
@@ -357,11 +427,12 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
         )
         loader_iterator = iter(loader)
         non_blocking = bool(config.runtime.non_blocking_h2d) and device.type == "cuda"
-        history = []
         checkpoint_set = set(checkpoint_steps)
         n_steps = int(config.training.n_training_steps)
         training_start = time.perf_counter()
 
+        if show_stages:
+            print(f"[train] Starting {n_steps:,} updates...", flush=True)
         model.train()
         for step in range(1, n_steps + 1):
             try:
@@ -404,6 +475,7 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
                     )
             if step in checkpoint_set:
                 save_checkpoint(run_dir, step, model)
+                write_json(run_dir / "train_history.json", history)
                 if run_kind == "image" and bool(config.generation_monitor.enabled):
                     wandb_run = _record_image_monitor(
                         model,
@@ -414,10 +486,18 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
                         wandb_run,
                         step,
                         f_mem_state,
+                        train_preview,
                     )
+                    if show_stages and step < n_steps:
+                        print(
+                            f"[train] Continuing from step {step}/{n_steps}...",
+                            flush=True,
+                        )
 
         write_json(run_dir / "train_history.json", history)
         update_run_record(run_dir, state="trained", final_step=n_steps)
+        if show_stages:
+            print(f"[train] Finished {n_steps:,} updates.", flush=True)
         success = True
         return Path(run_dir)
     except Exception as exc:

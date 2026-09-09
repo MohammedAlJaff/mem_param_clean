@@ -86,6 +86,7 @@ def get_base_config():
 
     evaluation = config.evaluation = ConfigDict()
     evaluation.n_samples = 64
+    evaluation.save_generated_samples = False
     evaluation.sample_bank_size = 1024
     evaluation.batch_size = 64
     evaluation.f_mem_threshold = 0.3
@@ -113,6 +114,7 @@ def get_base_config():
     generation_monitor = config.generation_monitor = ConfigDict()
     generation_monitor.enabled = False
     generation_monitor.n_samples = 64
+    generation_monitor.n_train_samples = 0
     generation_monitor.show = True
 
     random_projected_f_mem = config.random_projected_f_mem = ConfigDict()
