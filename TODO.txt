@@ -32,7 +32,11 @@ NEXT SESSION: BERZELIUS EPS/EPS DIAGNOSIS
 
 Read CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt first. It contains the
 current CelebA32 audit, historical comparison, artifact hashes, and an unrun
-GPU replay command. The next session is on Berzelius, with mem_param_env.
+GPU replay command. The next session is on Berzelius.
+The user supplied /proj/rep-learning-robotics/users/x_moalj/project_mem_par
+as the parent directory. The requested siblings are old_mem_par and
+mem_param_clean. Verify the actual checkout and environment before setup;
+mem_param_env is an earlier convention, not confirmed remote state.
 Continue the standalone current-code diagnosis and the historical comparison.
 No sampler refactor or causal resolution has been established.
 

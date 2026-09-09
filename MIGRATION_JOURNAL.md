@@ -2462,3 +2462,20 @@ Validation and publication scope:
   Python files and the documented GPU replay example without executing them.
   git diff --check passed; saved run artifacts remain ignored and untracked.
   The earlier 25-test result above was not rerun during this closeout.
+
+## 2026-09-09 - Final Berzelius access handoff
+
+- The user supplied the existing cluster parent directory:
+  /proj/rep-learning-robotics/users/x_moalj/project_mem_par. The requested
+  layout preserves the historical checkout as old_mem_par and places the
+  new mem_param_clean checkout beside it on codex/reproducible-runners.
+- Provided rename/clone and HTTPS authentication instructions. The user
+  reports access is sorted. No remote commands were executed by the agent;
+  clone, rename, environment readiness, and artifact transfer remain unverified.
+- Recorded the path and the user's instruction to assume less in the critical
+  handoff and TODO. Check remote state before installing or launching compute.
+  The earlier mem_param_env name remains a convention to verify.
+- Before this documentation update, the local tree was clean at 7606bed and
+  matched the fetched origin branch. That commit was previously verified on
+  GitHub. No additional training, inference, or tests ran in this closeout.
+- Documentation validation: git diff --check passed.

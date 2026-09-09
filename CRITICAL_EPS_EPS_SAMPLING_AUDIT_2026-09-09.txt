@@ -9,6 +9,31 @@ data flow, evidence, and uncertainty. Keep routine updates short. Give ordinary
 conda activate and Python commands. The user currently launches compute;
 do not launch training or evaluation unless explicitly authorized.
 The next session is on Berzelius. Do not run further compute on this Mac.
+Assume less: verify remote paths, environments, and completed setup steps
+from terminal evidence before prescribing dependent commands.
+
+FINAL BERZELIUS ACCESS HANDOFF
+
+The user supplied this existing parent directory on berzelius1:
+/proj/rep-learning-robotics/users/x_moalj/project_mem_par
+
+The requested layout is:
+- old_mem_par/: renamed historical checkout, retained as reference.
+- mem_param_clean/: new checkout on codex/reproducible-runners.
+
+Use this intended clean checkout path for the next session:
+/proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_clean
+
+The user handled GitHub authentication interactively and reports that access
+is sorted. HTTPS guidance used a personal access token restricted to this
+repository, with Contents read/write for future pushes. No credential is
+recorded here. Successful clone, directory rename, environment installation,
+and saved-run transfer have not been independently verified on Berzelius.
+
+Verify the checkout and existing Conda/PyTorch environment first. The earlier
+mem_param_env name is a project convention, not evidence that this environment
+exists or is ready. Do not assume ~/projects is the repository location.
+Keep compute launches user-controlled unless explicitly authorized.
 
 SESSION SUMMARY
 
