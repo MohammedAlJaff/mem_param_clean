@@ -1,0 +1,92 @@
+"""Shared one-million-update CelebA32 comparison settings for Berzelius."""
+
+from mem_param_src.config import get_base_config
+
+
+def get_config():
+    """Use the historical training recipe as the long-run comparison anchor."""
+    config = get_base_config()
+    config.study.name = "celeba32_eps_recovery_1m"
+    config.study.dataset_key = "celeba32"
+    config.outputs.run_name = "celeba32_eps_recovery_1m"
+    config.framework.prediction_space = "eps"
+    config.framework.loss_space = "eps"
+    config.framework.loss_weighting = "unit"
+
+    # The worker supplies an absolute path to the existing cluster cache.
+    config.data.dataset = "celeba32_grey"
+    config.data.root = "../old_mem_par/data"
+    config.data.download = False
+    config.data.train_split = "train"
+    config.data.reference_split = "valid"
+    config.data.n_train = 256
+    config.data.n_test = 1024
+    config.data.image_size = 32
+    config.data.resize_size = 32
+    config.data.image_channels = 1
+    config.data.flatten = False
+
+    # Match the recovered old network settings; do not vary architecture here.
+    config.network.arch = "unet"
+    config.network.base_channels = 32
+    config.network.channel_mult = (1, 2, 4)
+    config.network.time_emb_dim = 128
+    config.network.attn_resolutions = (16, 8)
+    config.network.num_res_blocks = 2
+    config.network.dropout = 0.1
+
+    config.training.seed = 0
+    config.training.optimizer = "adam"
+    config.training.lr = 1.0e-4
+    config.training.weight_decay = 0.0
+    config.training.batch_cap = 256
+    config.training.n_training_steps = 1_000_000
+    config.training.ckpt_schedule = "bonnaire-1m"
+    config.training.ckpt_steps = ()
+    config.training.log_every = 25
+    config.training.start_time = 0.001
+    config.training.end_time = 0.999
+    # Native eps/eps and v/v losses do not require conversion division.
+    config.training.use_safe_div = False
+    config.training.safe_div_denominator_floor = 0.05
+
+    config.sampling.method = "heun"
+    config.sampling.n_steps = 50
+    config.sampling.start_time = 0.001
+    config.sampling.end_time = 0.999
+    config.sampling.use_safe_div = True
+    config.sampling.safe_div_denominator_floor = 0.05
+    config.sampling.eps_to_v = "via_x"
+    config.sampling.heun_final_euler = False
+    config.sampling.output = "x_t_max"
+
+    # Save unclipped samples as well as the fixed W&B image panel.
+    config.evaluation.sample_bank_size = 128
+    config.evaluation.n_samples = 128
+    config.evaluation.batch_size = 64
+    config.evaluation.save_generated_samples = True
+    config.generation_monitor.enabled = True
+    config.generation_monitor.show = False
+    config.generation_monitor.n_samples = 64
+    config.generation_monitor.n_train_samples = 32
+    config.random_projected_f_mem.enabled = True
+    config.random_projected_f_mem.n_samples = 128
+    config.random_projected_f_mem.resize_size = 16
+    config.random_projected_f_mem.projection_dim = 256
+    config.random_projected_f_mem.projection_seed = 3001
+    config.monitoring.batch_size = 64
+
+    # The runner names FP32 separately from its CUDA TF32 switch.
+    config.runtime.precision = "fp32"
+    config.runtime.tf32_enabled = True
+    config.runtime.autocast_dtype = "none"
+    config.runtime.non_blocking_h2d = True
+
+    config.tracking.wandb.enabled = True
+    config.tracking.wandb.mode = "online"
+    config.tracking.wandb.strict = True
+    config.tracking.wandb.tags = ["eps-recovery", "one-million", "celeba32"]
+    config.tracking.wandb.notes = (
+        "One-million-update epsilon recovery sweep with Bonnaire checkpoints."
+    )
+    return config

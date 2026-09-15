@@ -11,7 +11,7 @@ in meaningful choices without routine approval requests. Apply this rule to
 future notes and documentation. Full guidance: root AGENTS.md, Collaboration
 and Code Understanding.
 
-Updated: 2026-09-09
+Updated: 2026-09-15
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -30,6 +30,12 @@ MIGRATION_JOURNAL.md and remove it from this file.
 
 NEXT SESSION: BERZELIUS EPS/EPS DIAGNOSIS
 
+Prepared but NOT submitted: jobs/berzelius/eps_recovery_smoke/README.md describes
+six user-launched 2,000-update CelebA32/W&B comparisons. The submission script
+supports --dry-run and task selection. Use saved raw samples and input hashes
+when comparing results. This is an early-behavior smoke study, not evidence that
+historical convergence has been restored. The researcher executes all jobs.
+
 Read CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt first. It contains the
 current CelebA32 audit, historical comparison, artifact hashes, and an unrun
 GPU replay command. The next session is on Berzelius.
@@ -38,7 +44,9 @@ as the parent directory. The requested siblings are old_mem_par and
 mem_param_clean. Verify the actual checkout and environment before setup;
 mem_param_env is an earlier convention, not confirmed remote state.
 Continue the standalone current-code diagnosis and the historical comparison.
-No sampler refactor or causal resolution has been established.
+The direct epsilon sampling conversion and optional final Euler step are
+implemented with comparison controls. Causal resolution still requires matched
+checkpoint replay; analytical tests do not establish generation recovery.
 
 First obtain outputs/session_runs/celeba32_eps_eps_n32_exact_01 on Berzelius;
 GitHub does not contain the saved data, checkpoint, or noise bank. Replay the
@@ -112,7 +120,7 @@ NOW: SETTLE SAFE-DIVISION AND ENDPOINT POLICY
 
 [ ] T014 - Choose safe-division settings for the actual experiment ranges.
     Problem: The current paired default uses start/end = 0.01/0.99 and
-    safe_div_denom_eps = 0.01, so the clamp threshold matches the smallest
+    safe_div_denominator_floor = 0.01, so the clamp threshold matches the smallest
     ideal FM coefficient in the configured interval. This still needs empirical
     validation before paper runs.
     Next action: Compare exact division and several epsilon values over the
@@ -146,6 +154,19 @@ NEXT: FINISH IMAGE VALIDATION
     rho values against the same saved training and held-out tensors.
     Done when: Correlations, disagreements, and parameterization ordering are
     summarized in a small reviewed result table.
+
+[ ] T018 - Add and validate feature-space f_mem.
+    Motivation: The workshop paper reviewers suggested measuring memorization
+    in a learned feature space, not only in pixels.
+    Scope: Reuse saved generated, training, and held-out tensors. Encode all
+    three with one fixed, versioned image encoder. Compute nearest-neighbor
+    ratios and held-out baselines in that shared feature space.
+    Important: Select and report the encoder layer. Calibrate rho against the
+    held-out feature distribution. Do not silently reuse a pixel-space rho.
+    Next action: Compare feature-space and pixel-space f_mem on selected saved
+    checkpoints before adding feature metrics to the full trajectory evaluator.
+    Done when: A reviewed table reports both spaces, rho calibration, their
+    agreement or disagreement, and any change in parameterization ordering.
 
 
 LATER: PORT ONLY AFTER LIVE ENTRYPOINTS EXIST

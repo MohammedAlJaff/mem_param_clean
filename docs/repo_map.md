@@ -20,13 +20,16 @@ notebooks/         reviewed notebooks, probes, and paper analysis
 jobs/berzelius/    Slurm launchers for Berzelius, if retained
 docs/              migration notes and project intent
 TODO.txt           single operational backlog of unfinished work
+RUN_JOURNAL.md    submitted compute runs and chronological status checks
 ```
 
 This tree is intentionally small. Add a new folder only when a reviewed file
 class needs it.
 
 Use `TODO.txt` for unfinished work. Use `MIGRATION_JOURNAL.md` for decisions,
-checks, and completed work so the two files do not become competing backlogs.
+checks, and completed work. Use `RUN_JOURNAL.md` for every clean-repository
+compute submission and its append-only status history. These files must not
+become competing backlogs.
 Use `docs/config_reference.md` for every active configuration field, its
 meaning, current default, implementation status, and legacy runner guidance.
 
@@ -62,11 +65,39 @@ Probable destinations:
 - Dataset-specific synthetic metrics live under
   `mem_param_src/metrics/synthetic/`.
 - Berzelius launch files go under `jobs/berzelius/`.
+- `RUN_JOURNAL.md` records every submitted job and each later status check.
 - Reviewed notebooks go under `notebooks/`.
 - Baselines and third-party code go under `external/` only if retained.
 - Generated outputs do not enter the clean repo by default.
 
 Boundary rules:
+
+- Berzelius smoke jobs: `jobs/berzelius/eps_recovery_smoke/submit.sh` submits
+  rows from `variants.tsv` through `run_array.sbatch`. The shared experiment
+  config is `configs/runners/celeba32_eps_recovery_smoke.py`. Scripts call the
+  existing image runner; they do not own model, loss, or sampler logic.
+  `inspect_results.py` reads saved raw tensors and hashes without model calls.
+
+- One-million-step checkpoint evaluation:
+  `jobs/berzelius/eps_recovery_1m/eval/submit.sh` launches six epsilon-only
+  tasks at the shared 100k, 390k, and 695k checkpoints. Each source uses its
+  as-launched sampler. `prepare_fid_reference.py` first persists one canonical
+  10,000-image CelebA validation tensor and verifies its saved 1,024-image
+  training-artifact prefix. `evaluate_checkpoints.py` writes append-only metric
+  rows under `outputs/evals/`; `combine_results.py` makes one comparison CSV
+  and plot. The evaluator reads source checkpoints and the shared frozen FID
+  reference without modifying source runs. `submit_references.sh` adds the saved
+  `v/v` and `x/x` references to the same three-point 10k/10k comparison.
+  See `jobs/berzelius/eps_recovery_1m/eval/README.md` for the data flow.
+
+- Sampling: `mem_param_src/sampling.py` owns direct epsilon-to-velocity
+  conversion and Heun's optional final Euler step. `mem_param_src/model.py`
+  retains training losses/conversions and forwards `model.sample` arguments.
+  `sampling.eps_to_v` and `sampling.heun_final_euler` select the two behaviors.
+  Monitoring and saved-checkpoint evaluation pass these controls explicitly.
+  Older saved evaluations retain historical settings unless overridden.
+  See the runnable API shape and comparison controls in the README's
+  "Direct epsilon conversion and final Euler" section.
 
 - Image monitoring: `runners/image_train.py` reads `--f-mem-monitor` and
   `--f-mem-samples`. `runners/training.py` calls `runners/image_monitoring.py`

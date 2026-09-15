@@ -22,7 +22,7 @@ that every leaf field in the base config is mentioned here.
 
 The clean repository has separate image and synthetic training and evaluation
 commands. A repeatable `--set` flag changes one existing dotted configuration
-field, such as `sampling.use_safe_division`. Old command-line flags remain in a
+field, such as `sampling.use_safe_div`. Old command-line flags remain in a
 separate legacy section near the end.
 
 ## How to read this reference
@@ -49,27 +49,35 @@ cfg.framework.loss_space = "x"             # "x", "eps", or "v"
 
 cfg.training.start_time = 0.01
 cfg.training.end_time = 0.99
-cfg.training.use_safe_division = True
-cfg.training.safe_div_denom_eps = 0.01
+cfg.training.use_safe_div = True
+cfg.training.safe_div_denominator_floor = 0.01
 
 cfg.sampling.start_time = 0.01
 cfg.sampling.end_time = 0.99
-cfg.sampling.use_safe_division = True
-cfg.sampling.safe_div_denom_eps = 0.01
+cfg.sampling.use_safe_div = True
+cfg.sampling.safe_div_denominator_floor = 0.01
 cfg.sampling.method = "heun"
+cfg.sampling.heun_final_euler = True
+cfg.sampling.eps_to_v = "direct"
 cfg.sampling.n_steps = 50
 cfg.sampling.output = "x_1"
 ```
 
-Safe division is enabled with `use_safe_division = True`. Exact division is
+Safe division is enabled with `use_safe_div = True`. Exact division is
 selected with `False`.
 
 Training and inference use independent controls. The training loss reads
-`training.use_safe_division`. Sampling reads `sampling.use_safe_division`.
+`training.use_safe_div`. Sampling reads `sampling.use_safe_div`.
 Resolved run records must save both values.
 
+Epsilon sampling now uses the direct formula `(z_t - eps_hat) / t`.
+With sampling clamping enabled, it uses `max(t, safe_div_denominator_floor)` instead.
+`sampling.eps_to_v = "via_x"` selects the previous image-reconstruction route
+for comparison. This selector affects sampling velocity only. Training losses
+and the final `x_1` image conversion keep their existing implementation.
+
 The safe-division setting is not free: it changes the conversion equation when
-the denominator magnitude is below `safe_div_denom_eps`. For the linear FM
+the denominator magnitude is below `safe_div_denominator_floor`. For the linear FM
 path:
 
 - an `x` prediction converted to `eps` or `v` divides by `1 - t`;
@@ -78,7 +86,7 @@ path:
   the same endpoint singularity.
 
 With the paired defaults `start_time = 0.01`, `end_time = 0.99`, and
-`safe_div_denom_eps = 0.01`, the clamp threshold matches the smallest ideal
+`safe_div_denominator_floor = 0.01`, the clamp threshold matches the smallest ideal
 FM path coefficient inside the configured interval. Safe division should
 therefore act mainly as a boundary guard instead of changing a broad part of
 the interval. Floating-point rounding can still activate it at an endpoint.
@@ -130,6 +138,7 @@ factors preserve equality with the diagonal objectives.
 | `network.base_channels` | `64` | Base UNet channel width. Ignored by the MLP. | Active for UNet |
 | `network.channel_mult` | `(1, 2, 4, 4)` | UNet channel multiplier at each resolution level. | Active for UNet |
 | `network.attn_resolutions` | `(8,)` | Image resolutions at which the UNet uses attention. | Active for UNet |
+| `network.middle_attention` | `True` | Enable attention in the UNet middle block. | Active for UNet |
 | `network.num_res_blocks` | `2` | UNet residual blocks per resolution level. | Active for UNet |
 | `network.dropout` | `0.0` | UNet dropout probability. Use a value in `[0, 1)`. | Active for UNet |
 
@@ -285,8 +294,8 @@ original dataset.
 | `training.show_progress` | `True` | Show interactive progress output when supported. Disable for quiet batch logs. | Runner-owned |
 | `training.start_time` | `0.01` | Smallest uniformly sampled training time. Must satisfy `0 < start < end < 1`. | Active |
 | `training.end_time` | `0.99` | Largest uniformly sampled training time. Must satisfy `0 < start < end < 1`. | Active |
-| `training.use_safe_division` | `True` | `True`: clamp small conversion denominators. `False`: use the exact mathematical division. | Active |
-| `training.safe_div_denom_eps` | `0.01` | Minimum denominator magnitude when training safe division is enabled. It matches the default distance from either path endpoint. | Active |
+| `training.use_safe_div` | `True` | `True`: clamp small conversion denominators. `False`: use the exact mathematical division. | Active |
+| `training.safe_div_denominator_floor` | `0.01` | Minimum denominator magnitude when training safe division is enabled. It matches the default distance from either path endpoint. | Active |
 
 Legacy runner budgets were `10,000` steps for the synthetic MLP and `30,000`
 for the image UNet. Both used a `bonnaire-1m` checkpoint schedule by default,
@@ -317,11 +326,14 @@ records retain a rho sweep for threshold-sensitivity analysis.
 | Setting | Default | Meaning and guidance | Use |
 | --- | --- | --- | --- |
 | `sampling.method` | `"heun"` | ODE solver. Supported values are `"euler"` and `"heun"`; Heun is the normal quality setting. | Active |
+| `sampling.heun_final_euler` | `True` | Use Euler on the final Heun interval. `False` retains Heun on every interval. Ignored by the Euler solver. | Active |
+| `sampling.eps_to_v` | `"direct"` | Epsilon sampling conversion: direct `(z_t-eps_hat)/t`, or historical `"via_x"` reconstruction. The sampling floor applies to the selected formula. Does not alter training or other prediction spaces. | Active |
 | `sampling.n_steps` | `50` | Number of equal solver intervals between sampling start and end. Verify convergence before fixing a paper value. | Active |
 | `sampling.start_time` | `0.01` | First ODE time. Independent from the training start time. Must satisfy `0 < start < end < 1`. | Active |
 | `sampling.end_time` | `0.99` | Final ODE time. Independent from the training end time. | Active |
-| `sampling.use_safe_division` | `True` | Safe or exact division used when converting model outputs to sampling velocity. | Active |
-| `sampling.safe_div_denom_eps` | `0.01` | Minimum denominator magnitude for sampling conversions. It matches the default distance from either path endpoint. | Active |
+| `sampling.use_safe_div` | `True` | Safe or exact division used when converting model outputs to sampling velocity. | Active |
+| `sampling.safe_div_denominator_floor` | `0.01` | Minimum denominator magnitude for sampling conversions. It matches the default distance from either path endpoint. | Active |
+| `sampling.final_pixel_clamp` | `False` | Clamp the final returned image to `[-1, 1]`. Keep disabled when raw overshoot diagnostics are required. | Active |
 | `sampling.output` | `"x_1"` | `"x_1"` returns the conventional data-endpoint sample. `"x_t_max"` returns the integrated state at the configured maximum time. | Active |
 
 The model equations call the interpolated state `z_t`. The public output name
@@ -331,6 +343,19 @@ integrated state at `sampling.end_time` without an additional model call.
 The `x_1` output is the conventional data-endpoint sample. The sampler evaluates
 the model at `(x_t_max, t_max)` and applies the path conversion to data space.
 This conversion does not add another ODE interval from `t_max` to one.
+It still makes an endpoint model call when `sampling.heun_final_euler = True`.
+For epsilon prediction with an inactive endpoint clamp, this image readout is
+algebraically an Euler extension from `t_max` to one.
+
+For 50 intervals, final Euler uses 49 Heun intervals and one Euler interval.
+It makes 99 velocity evaluations instead of 100. The `x_1` readout adds one
+model evaluation in either case. Time bounds and denominator floors are unchanged.
+
+New base configurations and direct Python sampling calls default to `"direct"`
+and final Euler. Standalone evaluation preserves older saved configurations:
+missing fields become `eps_to_v="via_x"` and `heun_final_euler=False`.
+To test the new behavior on an older checkpoint, explicitly override both fields.
+The resolved choices are stored in the named evaluation's `settings.json`.
 
 Legacy sampling-step defaults differed by task:
 
@@ -383,6 +408,7 @@ dataset, model, endpoint range, and parameterization sweep.
 | `tracking.wandb.project` | `""` | Project name. Empty derives `{dataset}-{model}`. | Runner-owned/Derived |
 | `tracking.wandb.name` | `""` | Run name. Empty derives dataset, model, `N`, batch cap, prediction/loss spaces, training steps, and seed. | Runner-owned/Derived |
 | `tracking.wandb.group` | `""` | Comparison group. Empty derives dataset, model, and training steps. | Runner-owned/Derived |
+| `tracking.wandb.subexperiment` | `""` | Optional comparison label saved in the W&B config and added as a `subexperiment:<name>` tag. | Runner-owned |
 | `tracking.wandb.entity` | `WANDB_ENTITY` or `"maj90"` | W&B entity/account, read from the environment when available. | Runner-owned |
 | `tracking.wandb.dir` | `"logs/wandb"` | Local W&B storage directory relative to the selected run directory. | Runner-owned |
 | `tracking.wandb.tags` | `[]` | List of run tags. Keep scientific factors machine-readable. | Runner-owned |
@@ -413,7 +439,9 @@ mem-param-synthetic-train \
 ```
 
 The image runner logs loss, learning rate, elapsed time, and progress at
-`training.log_every`. Run `wandb login` before online tracking. Checkpoint
+`training.log_every`. Training and generation metrics use `optimizer_step` as
+their shared W&B x-axis. Step zero is the initial sample panel; later values are
+completed gradient updates. Run `wandb login` before online tracking. Checkpoint
 monitoring saves `monitoring/samples_step_<step>.png` from the same `z_init`
 prefix at step zero and every checkpoint. Omit `--generation-monitor` to keep
 W&B loss tracking without the sampling cost. These grids are qualitative
@@ -432,8 +460,9 @@ Every resolved value is saved in the run's `config.json`.
 | `--checkpoint-every` | `training.ckpt_every` | Select interval checkpoints and clear the explicit schedule. |
 | `--sampler` | `sampling.method` | `heun` or `euler`. |
 | `--sampling-steps` | `sampling.n_steps` | Number of solver intervals. |
-| `--sampling-safe-division` / `--no-sampling-safe-division` | `sampling.use_safe_division` | Enable or disable sampling denominator clamping. |
-| `--sampling-denom-eps` | `sampling.safe_div_denom_eps` | Denominator floor; active only when sampling safe division is enabled. |
+| `--heun-final-euler` / `--no-heun-final-euler` | `sampling.heun_final_euler` | Finish Heun with Euler, or retain full Heun. |
+| `--sampling-safe-div` / `--no-sampling-safe-div` | `sampling.use_safe_div` | Enable or disable sampling denominator clamping. |
+| `--sampling-safe-div-denominator-floor` | `sampling.safe_div_denominator_floor` | Denominator floor; active only when sampling safe division is enabled. |
 | `--sampling-start-time` | `sampling.start_time` | Start of integration. |
 | `--sampling-end-time` | `sampling.end_time` | End of integration. |
 | `--sampling-output` | `sampling.output` | Clean endpoint estimate `x_1` or integrated state `x_t_max`. |
@@ -487,7 +516,7 @@ Projection and cached training vectors are saved under `monitoring/` as
 `f_mem_projection.pt` and `f_mem_train_vectors.pt`. Each checkpoint writes
 `f_mem_step_<step>.json`, including sample count, rho, metric space, and distances.
 W&B logs `generation/random_projected_pixels/f_mem`, `mean_r`, `rho`, `n_samples`,
-and `N` against `generation/step`. Projection settings live in the saved config
+and `N` against `optimizer_step`. Projection settings live in the saved config
 and metric records. The disabled option adds no metric sampling or artifacts.
 
 Evaluation commands require only the saved run directory. They load the saved
@@ -539,8 +568,8 @@ migration inventory, not commands that currently work here.
 | --- | --- | --- |
 | `schedule.t_min` | Split into `training.start_time` and `sampling.start_time` | Training and inference ranges must be independent. |
 | `schedule.t_max` | Split into `training.end_time` and `sampling.end_time` | Same reason. |
-| `schedule.denom_eps` | Split into the two `safe_div_denom_eps` fields | Training and sampling division policies must be independent. |
-| implicit safe division | Two `use_safe_division` flags | Exact versus clamped division is now explicit. |
+| `schedule.denom_eps` | Split into the two `safe_div_denominator_floor` fields | Training and sampling division policies must be independent. |
+| implicit safe division | Two `use_safe_div` flags | Exact versus clamped division is now explicit. |
 | `schedule.time_sampling` | Removed | Clean training uses uniform times only. |
 | `schedule.logit_mu` | Removed | Logit-normal time sampling was removed. |
 | `schedule.logit_sigma` | Removed | Logit-normal time sampling was removed. |

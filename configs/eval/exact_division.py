@@ -7,5 +7,5 @@ def get_config():
     """Return the sampling field changed by this evaluation."""
     config = ConfigDict()
     config.sampling = ConfigDict()
-    config.sampling.use_safe_division = False
+    config.sampling.use_safe_div = False
     return config

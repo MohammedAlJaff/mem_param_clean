@@ -197,7 +197,7 @@ The CelebA transform is still present in the clean loader.
 ### Important safe-division difference
 
 The old code always applied denominator protection during conversion.
-It used `safe_div_denom_eps = 0.05` and started sampling at `t = 0.001`.
+It used `safe_div_denominator_floor = 0.05` and started sampling at `t = 0.001`.
 
 For early `eps` conversion, the old implementation used:
 

@@ -39,7 +39,7 @@ def get_config():
     config.training.n_training_steps = 1000
     config.training.ckpt_every = 250
     config.training.log_every = 25
-    config.training.use_safe_division = False
+    config.training.use_safe_div = False
 
     # Save all 500 samples; show 64 below the same 32 training images.
     config.evaluation.sample_bank_size = 500
@@ -53,6 +53,6 @@ def get_config():
     config.monitoring.batch_size = 32
     config.sampling.method = "heun"
     config.sampling.n_steps = 50
-    config.sampling.use_safe_division = False
+    config.sampling.use_safe_div = False
     config.tracking.wandb.enabled = False
     return config

@@ -540,12 +540,12 @@ Use plain, separate settings for training and sampling:
 ```text
 training.start_time
 training.end_time
-training.use_safe_division
+training.use_safe_div
 training.denominator_epsilon
 
 sampling.start_time
 sampling.end_time
-sampling.use_safe_division
+sampling.use_safe_div
 sampling.denominator_epsilon
 sampling.n_steps
 sampling.method
@@ -562,8 +562,8 @@ The step count creates equal intervals from sampling start to sampling end.
 ### Safe Division
 Both training conversions and sampling conversions can use either:
 
-- exact division, when `use_safe_division = False`; or
-- sign-preserving denominator clamping, when `use_safe_division = True`.
+- exact division, when `use_safe_div = False`; or
+- sign-preserving denominator clamping, when `use_safe_div = True`.
 
 The clamp changes the conversion equation whenever a denominator magnitude is
 below `denominator_epsilon`. Choosing experiment ranges and clamp sizes remains
@@ -615,8 +615,8 @@ Do not retain aliases for the old names in the clean repository.
 The safe-division flags remain:
 
 ```text
-training.use_safe_division
-sampling.use_safe_division
+training.use_safe_div
+sampling.use_safe_div
 ```
 
 ### Checks
@@ -682,7 +682,7 @@ Change both training and sampling defaults to:
 ```text
 start_time = 0.01
 end_time = 0.99
-use_safe_division = true
+use_safe_div = true
 denominator_epsilon = 0.01
 ```
 
@@ -728,7 +728,7 @@ single end-of-day state summary.
   sampling start/end times.
 - Training times are sampled uniformly over the configured training interval.
   Logit-normal training-time sampling was removed.
-- Training and sampling each have an explicit `use_safe_division` flag and
+- Training and sampling each have an explicit `use_safe_div` flag and
   `denominator_epsilon` value.
 - Exact division remains available. Safe division uses sign-preserving
   denominator clamping.
@@ -1077,7 +1077,7 @@ TODO.txt: not changed by this task
 ## 2026-08-18T20:20:00Z - Rename the safe-division denominator field
 
 ### Decision
-Rename the active `denominator_epsilon` field to `safe_div_denom_eps`. Apply a
+Rename the active `denominator_epsilon` field to `safe_div_denominator_floor`. Apply a
 strict rename with no compatibility alias. Update the model API, sampling API,
 configuration, tests, documentation, TODO wording, and the GMM sanity notebook.
 
@@ -1172,7 +1172,7 @@ exact-safe pair. Use 128 training images, 64 reference images, batch size 8,
 two-level UNet with 32 base channels and 669,251 parameters.
 
 Sample 16 fixed initial tensors with Heun, 20 steps, and the time interval
-`[0.01, 0.99]`. Set `safe_div_denom_eps = 0.01`. Compare exact division with
+`[0.01, 0.99]`. Set `safe_div_denominator_floor = 0.01`. Compare exact division with
 safe epsilon values from `1e-6` through `5e-2` in the numerical sweep.
 
 The safe-division flag did not change diagonal training. Each exact-safe pair
@@ -1224,7 +1224,7 @@ prediction to clean-data space with `model_to_x`. It does not integrate from
 `t_max` to one.
 
 Keep the two safe-division controls independent. Training reads
-`training.use_safe_division`. Inference reads `sampling.use_safe_division`. Do
+`training.use_safe_div`. Inference reads `sampling.use_safe_div`. Do
 not add a duplicate inference configuration section.
 
 Expand `notebooks/experiments/safe_division_diagonal_sanity.ipynb` to cross
@@ -1451,7 +1451,7 @@ using a new default. Keep the earlier `rho = 0.5` Flowers run unchanged as
 historical evidence.
 
 Training and sampling still enable safe division by default with
-`safe_div_denom_eps = 0.01`. The Flowers sanity run uses `v` prediction and `v`
+`safe_div_denominator_floor = 0.01`. The Flowers sanity run uses `v` prediction and `v`
 loss. Its training conversion and sampling velocity conversion do not divide.
 The final linear-path conversion from `v` to `x_1` has denominator one. Safe
 division is therefore enabled but does not clamp any conversion in this run.
@@ -1507,7 +1507,7 @@ training safe-division flag is therefore inactive. Sampling converts `eps` to
 velocity as `v_hat = (z_t - eps_hat) / t`. Exact sampling uses `t` directly.
 
 Replay the same trained checkpoints in a named `safe_sampling` evaluation.
-This changes only `sampling.use_safe_division` to `True`. Use the saved data
+This changes only `sampling.use_safe_div` to `True`. Use the saved data
 and fixed noise bank for both evaluations.
 
 ### Result
@@ -1789,7 +1789,7 @@ pixel distances are not directly comparable across these tensor shapes.
 ```text
 first next task: T016
 problem status: open and unresolved
-first test: fixed Flowers102 replay with safe_div_denom_eps = 0.05
+first test: fixed Flowers102 replay with safe_div_denominator_floor = 0.05
 second test: matched Flowers RGB64, RGB32, and grayscale32 dimensionality screen
 new experiment started during closeout: no
 repository commit created: no
@@ -2100,7 +2100,7 @@ Mark the latent-autoencoder setting as proposed, not an established result.
 
 ## 2026-09-07 - Disable safe division in the MNIST demo config
 
-- Set training.use_safe_division and sampling.use_safe_division to False in
+- Set training.use_safe_div and sampling.use_safe_div to False in
   configs/runners/mnist_wandb_demo.py. Time limits remain [0.01,0.99].
 - Local memcompgen config-load assertions passed for both flags.
 - Completed run artifacts retain their original settings. No new run launched.
@@ -2479,3 +2479,350 @@ Validation and publication scope:
   matched the fetched origin branch. That commit was previously verified on
   GitHub. No additional training, inference, or tests ran in this closeout.
 - Documentation validation: git diff --check passed.
+
+## 2026-09-09T13:19:36+00:00 - Compare epsilon-generation failure against recovered cluster artifacts
+
+- User requested a code comparison and prioritized checks for restoring eps/eps
+  generation. Read the critical audit and open problem, then inspected old/clean
+  model, conversion, samplers, UNet, optimizer loop, monitor, data, and runtime.
+- Recovered the actual old N=256 seed-0 April run under old_mem_par/outputs.
+  Its step_025000 checkpoint, config, training/reference tensors, noise bank,
+  optimizer state, figures, and historical quality CSV are available here.
+  The Mac-era notes about missing old artifacts do not apply to this cluster.
+- All 228 state tensors loaded strictly into a clean model configured from the
+  saved historical network/data sections; parameter count is 3,917,409. No
+  trained-network forward or generation ran. Existing 750/25k grids show the
+  historical transition from mostly noisy/saturated outputs to clear faces.
+- Saved config confirms LR=1e-4, N/batch=256, widths 32/64/128, time embedding
+  derived as 128, dropout=0.1, attention=(16,8), uniform [0.001,0.999], Heun50,
+  floor=0.05, and integrated-state output. The recent clean settings differ.
+- CPU mem_param_env: Python 3.10.20, PyTorch 2.5.1.post303. The pytest entrypoint
+  failed because pytest is absent; python -B tests/test_model_sampling.py ran
+  the same module via unittest and passed all 13 tests in 0.147 seconds.
+- Ad hoc analytical CPU checks compared old/clean Euler and Heun for three
+  endpoint/floor settings: all six matched exactly. Identical direct epsilon
+  loss also matched exactly. Zero-output exact epsilon sampling matched the
+  expected z_init/0.01 scaling within FP32 tolerance (max abs 1.90735e-5).
+- Added docs/eps_eps_recovery_audit_2026-09-09.md with the ranked causes, actual
+  protocol differences, artifact locations, verification limits, and a
+  syntax-checked but unexecuted five-case GPU replay example. The next decisive
+  comparison is old/clean sampling of the same successful historical weights,
+  followed by isolated floor changes. Current clean outputs/ is absent here;
+  transfer the Mac N=32 run before replaying that separate failed checkpoint.
+- No research training, checkpoint inference, dataset rebuilding, or Slurm jobs
+  were launched. No implementation/config changes were made. Preserved the old
+  checkout's pre-existing changes. Diagnosis remains open pending GPU replay.
+
+
+## 2026-09-10T11:02:36+00:00 - Record independent division controls and stability options
+
+- User asked to record the separation of training/sampling clamps and reason
+  about numerical alternatives. Verified external sample/Euler/Heun expose
+  use_safe_div and safe_div_denominator_floor; GDFM.sample forwards them. Training
+  uses separate stored settings. No alternate clamp-policy selector exists.
+- Added docs/division_stability_options_2026-09-10.md. Direct eps/eps training
+  has no conversion division. The note distinguishes conditioning, cancellation,
+  and solver error, and explains why matching cross-loss floors can bias the
+  target relationship. Separate training/sampling floors should be preserved.
+- Derived exact logit-time fields with no explicit endpoint division. Proposed
+  them as a sampling-only experiment with existing weights. Explained that the
+  same inaccurate continuous flow remains inaccurate after a time change.
+- Documented the existing v/v plus eps_equivalent control as equivalent to a
+  structured residual epsilon head. Also analyzed bounded loss weights, time
+  importance sampling, precision, adaptive steps, projection, and variance-based
+  preconditioning. None was implemented or claimed to repair generation.
+- Read primary EDM and DPM-Solver sources for general preconditioning/integration
+  principles; specialized FM equations are labelled as our derivations.
+- Exact rational and scalar numerical checks passed for logit fields, residual
+  loss, cross-loss clamp bias, and bounded preconditioning coefficients. The
+  zero-epsilon logit-Heun solution converged toward the same 100x endpoint
+  amplification, confirming the method's limitation. No model was evaluated.
+- No research compute or implementation/config changes. Prior audit notes and
+  pre-existing worktree changes remain intact. Recovery still awaits matched
+  historical trained-checkpoint replay.
+
+
+## 2026-09-10T11:16:19+00:00 - Consolidate the full answers into the critical epsilon audit
+
+- User requested all numerical options and the preceding code-comparison answer
+  in the existing critical text file, with a simple executive summary at its top.
+- Added a plain-language summary covering what worked before, recovered cluster
+  artifacts, changed settings, separate training/sampling clamps, proposed
+  numerical approaches, and the next diagnostic checks. Kept the issue open.
+- Preserved the original Mac audit verbatim under a dated historical label.
+  Clarified that its old-artifact availability statements describe the Mac;
+  historical artifacts exist on Berzelius while recent clean run outputs do not.
+- Included the complete code-comparison and numerical-options documents as
+  dated follow-up answers. Preserved equations, API examples, verification
+  limits, source references, and the unexecuted GPU command. Adjusted relative
+  document links for the root-level text file.
+- Verification: checked exact preservation of the original audit and inclusion
+  of both full follow-up documents; parsed the copied GPU Python example without
+  executing it. Documentation only; no model/config changes or research compute.
+
+
+## 2026-09-10T12:50:16+00:00 - Add direct epsilon sampling and optional final Euler
+
+- User requested the simpler epsilon sampling conversion and an explicit check
+  of Heun's final step. Implemented in mem_param_clean only.
+- sampling.model_to_velocity uses (z_t-eps_hat)/t with the existing optional
+  sampling denominator floor. sampling.eps_to_v="via_x" retains the previous
+  reconstruction route for comparisons. Training conversions, targets, losses,
+  and the final x_1 readout are unchanged.
+- New configs and direct Python calls default to eps_to_v="direct" and
+  heun_final_euler=True. Fifty intervals use 49 Heun intervals plus one Euler
+  interval. False keeps full Heun. GDFM.sample, monitoring, and checkpoint replay
+  forward both settings. Image CLI adds --heun-final-euler and its negative;
+  --set supports both fields. Monitoring prints the chosen sampling behavior.
+- New config.json and evaluation settings.json record both settings. Evaluation
+  fills missing historical fields with via_x and False before overrides, so
+  older saved runs preserve their behavior unless changed explicitly.
+- Both inspected old samplers used full Heun; the successful historical config
+  selected Heun50 over [.001,.999]. Missing final Euler is not an established
+  old-to-clean regression. Epsilon divides by t near the start, while the
+  paper's x prediction divides by 1-t near the end.
+- x_1 still makes a separate model call at end_time. For epsilon with inactive
+  endpoint clamping, this equals an Euler extension to t=1. Final Euler skips
+  the final Heun correction, not that separate readout. x_t_max returns state.
+- Updated README with real Python usage, comparison flags, and expected shape;
+  config reference, repo map, TODO, and critical audit describe these changes.
+  Made historical parity example and its critical-text copy explicitly request
+  via_x/full-Heun. Original Mac audit remains unchanged with a current notice.
+- Validation: Berzelius mem_param_env, Python 3.10.20, CPU.
+  PYTHONPATH=. python -B tests/test_model_sampling.py: 20 tests passed.
+  PYTHONPATH=. python -B -m unittest discover -s tests -p test_runners.py:
+  24 tests passed in 3.106 seconds. Initial failure was a new test comparing
+  JSON-loaded lists with original tuples; corrected the test comparison.
+  The corresponding test_config_reference.py discovery passed 1 test.
+  Total: 45 passing tests. Checks cover direct/clamped algebra, tensor shapes,
+  unchanged training losses and gradients, all sampler entrypoints, final-step
+  model calls, endpoint readout, CLI precedence, runner forwarding, legacy
+  replay defaults, and small temporary CPU integrations with mocked tracking.
+- Changed Python, README API example, and historical replay examples parsed
+  with the project interpreter. System Python 3.6 cannot parse the existing
+  Python 3.10 tests; the successful syntax check used mem_param_env.
+  git diff --check passed before this append and is checked at closeout.
+- No research training, saved research checkpoint inference, GPU generation,
+  Slurm submission, commit, or push. Generation recovery remains unverified.
+
+
+## 2026-09-10T13:08:24+00:00 - Prepare Berzelius epsilon recovery smoke jobs; do not execute
+
+- User requested a comparison plan and scripts for 2,000-update W&B smoke jobs,
+  explicitly reserving all execution/submission to the researcher.
+- Selected CelebA32 grayscale to anchor comparisons to the recovered successful
+  historical study. Added configs/runners/celeba32_eps_recovery_smoke.py with
+  N=batch=256, seed0, UNet32/64/128, time128, dropout0.1, attention16/8,
+  Adam1e-4, times [.001,.999], 50 sampling intervals, integrated-state output,
+  FP32 plus CUDA TF32, checkpoints every250, and 128 saved raw samples.
+- Added six rows: old via_x/full-Heun/floor.05; direct/full-Heun/floor.05;
+  direct/final-Euler/floor.05; direct/full-Heun/exact; direct/final-Euler
+  with LR1e-3; and native v/v reference. Training/sample settings otherwise
+  match. Sampler-only jobs repeat training to obtain separate W&B histories
+  through the existing runner; later checkpoint replay is the cheaper control.
+- Added jobs/berzelius/eps_recovery_smoke/submit.sh and run_array.sbatch.
+  Default array0-5%2, oneGPU/fourCPUs/32GB per task, two-hour limit, historical
+  account berzelius-2026-78 with account/time overrides. No partition forced.
+  submit.sh --dry-run prints only; task selection allows one job. Each actual
+  submission will create a unique batch, copy config/matrix, and record source
+  commit/diff and commands. Workers import the live source tree.
+- Workers load Mambaforge and mem_param_env, set clean PYTHONPATH, read existing
+  old_mem_par/data cache, and disable downloads. W&B uses existing login and
+  WANDB_ENTITY/current default maj90, project celeba32-unet, common batch group,
+  distinct variant names, and strict tracking failure behavior. No credentials
+  were inspected; current allocation validity and runtime were not verified.
+- Added read-only inspect_results.py for future user execution: stdout CSV
+  reports raw finite/min/max/RMS/outside-range values, recorded losses and
+  projected f_mem, run state, recorded data hashes, and computed noise hash.
+  It saves no files. W&B itself currently shows loss, panels, and rough f_mem;
+  raw range diagnostics are obtained from the helper after user-run jobs.
+- Wrote the job README with exact commands, controlled contrasts, output paths,
+  W&B setup, duplicate-training cost, checks, and next-stage decisions. Linked
+  from root README/repo_map; recorded prepared-but-unrun status in TODO and
+  critical audit. Two thousand updates are early-behavior checks, not restored
+  historical convergence; the historical best result was around25,000 updates.
+- Validation only: bash -n on both shell files; ast.parse on the new config
+  and inspector without imports; static config-field and six-row matrix checks;
+  confirmed each advertised pair changes only its intended settings. Independent
+  read-only review found no blocking script/path/forwarding/hash issue.
+  git diff --check passed. No project runtime tests or script dry-run executed.
+- No training, inference, dataset loading, W&B connection, scheduler command,
+  job submission, commit, or push. Existing source edits from the previous
+  sampler task were preserved; this task changes scripts/config/docs only.
+
+
+## 2026-09-14T13:33:20+02:00 - Launch one-million-step CelebA32 epsilon recovery array
+
+- User requested a broad epsilon sweep at one million optimizer updates with the
+  Bonnaire checkpoint schedule, plus native velocity and clean-data references.
+- Added `configs/runners/celeba32_eps_recovery_1m.py` and
+  `jobs/berzelius/eps_recovery_1m/`. The eight-task matrix contains six eps/eps
+  runs covering via-x/direct sampling conversion, sampling floor on/off, final
+  Euler on/off, and Adam learning rates 1e-4/1e-3, followed by v/v and x/x
+  references. All tasks use seed 0, CelebA32 N=batch=256, the recovered
+  3,917,409-parameter UNet recipe, and 72 `bonnaire-1m` checkpoints.
+- Requested one GPU, four CPUs, 32 GB, and 48 hours per task. Submitted array
+  `17513629`, tasks `0-7%4`, under account `berzelius-2026-78`. Batch snapshot:
+  `outputs/job_sets/eps_recovery_1m/20260914T113123Z_2308577`.
+- Validation before submission: both shell scripts passed `bash -n`; Python
+  config and inspector parsed; the matrix resolved eight rows with six epsilon
+  tasks and x/v references; checkpoint resolution returned 72 steps from 0 to
+  1,000,000; dry-run and `git diff --check` passed. CelebA cache exists.
+- Startup check: tasks 0-3 entered RUNNING. All loaded 256 training and 1,024
+  held-out grayscale images and constructed the expected UNet. W&B initialized
+  for all four. Tasks 0-2 completed step-0 sampling and entered training; their
+  losses agreed through the first 225 updates. Tasks 4-7 remained pending under
+  the four-task array cap. No commit or push ran.
+
+
+## 2026-09-14T13:36:36+02:00 - Establish the Berzelius run journal
+
+- User requested one durable record of every clean-repository compute launch and
+  each later status check.
+- Added root `RUN_JOURNAL.md` with a current active-runs table, a closed-runs
+  section, append-only chronological checks, fixed status vocabulary, required
+  Slurm/application evidence, failure-reason recording, and links to configs,
+  matrices, batch directories, and W&B.
+- Started the journal with job `17513629`, including its launch configuration,
+  first Slurm/application check, task progress, and W&B links. Historical jobs
+  remain in `old_mem_par/CODING_JOURNAL.md`; the new journal starts on 2026-09-14.
+- Updated `AGENTS.md` so future launch and monitoring work must read and update
+  the journal. Updated `docs/repo_map.md` to define its role beside TODO and the
+  migration journal. Link existence and `git diff --check` passed. No additional
+  job was submitted, cancelled, or changed during this documentation task.
+
+
+## 2026-09-14T16:35:04+02:00 - Make small arrays fully parallel
+
+- User set the standing launch rule: submit all tasks concurrently for arrays
+  of about 80 tasks or fewer. For larger arrays, agree on and record a throttle.
+- Raised live job `17513629` from a four-task throttle to eight. Slurm confirmed
+  all eight tasks running; tasks 4-7 started at 16:33:53 CEST without cancelling
+  or resubmitting tasks 0-3.
+- Changed the epsilon-recovery launcher default from `0-7%4` to unthrottled
+  `0-7`. Recorded the standing rule in `AGENTS.md` and `RUN_JOURNAL.md`.
+- Validation: launcher syntax passed; its dry run selected `0-7` and emitted
+  `--array=0-7`; `git diff --check` passed.
+
+
+## 2026-09-14T17:16:25+02:00 - Align W&B metrics to optimizer updates
+
+- Confirmed that W&B internal `_step` counted `run.log` calls, not gradient
+  updates. Sparse training logs and separate checkpoint-generation logs made
+  that default axis diverge from training progress.
+- Added `optimizer_step` to every training and generation payload. Defined both
+  `train/*` and `generation/*` against that shared W&B step metric. Step zero
+  represents the initial generation panel; later values are completed updates.
+- Retained `train/step` and `generation/step` as descriptive payload fields.
+  Documented the shared axis in `docs/config_reference.md`.
+- Added assertions for train, generation, and projected-f_mem payloads and for
+  the W&B metric definitions. All 24 runner tests passed. The full suite remained
+  at 66/67: the existing config-reference coverage test still lacks unrelated
+  entries for `network.middle_attention`, `sampling.final_pixel_clamp`, and
+  `tracking.wandb.subexperiment`.
+- Job `17513629` was not restarted. Its eight active processes loaded the old
+  logger before this edit, so their histories must still use `train/step` or
+  `generation/step`; new runs will receive `optimizer_step`.
+
+
+## 2026-09-15T12:38:57+02:00 - Add three-point eps/eps configuration evaluation
+
+- Added a small read-only decision evaluation for the six completed `eps/eps`
+  runs from job `17513629`. It checks only steps 100,000, 390,000, and 695,000;
+  step zero, the full checkpoint trajectory, and the `v/v` and `x/x` references
+  are excluded.
+- Each source run uses its as-launched sampler: old via-x/full Heun, direct
+  safe/full Heun, direct safe/final Euler, exact/full Heun, or exact/final
+  Euler. The sixth run repeats direct safe/final Euler with training LR 1e-3.
+- The evaluator reads saved checkpoints, `data_bundle.pt`, and `z_init.pt`
+  without modifying source runs. It records FID from 10,000 generated samples,
+  pixel-space f_mem at rho 0.3/0.5/0.7, held-out losses, and raw range/finite
+  diagnostics. Exact replay noise is persisted and its first 128 samples are
+  verified against the saved training noise.
+- FID uses vendored torch-fidelity 0.4.0-beta with explicit -1_1 normalization.
+  The saved held-out artifact limits its reference to 1,024 images, so absolute
+  values are for comparison within this decision run, not old 10K-reference
+  tables.
+- `submit.sh` launches array `0-5` without a throttle and requests two hours per
+  task. Results are append-safe. The dependent combiner writes one comparison
+  CSV, one FID/f_mem/loss plot, and a summary.
+- Added T018 to `TODO.txt` for the workshop-reviewer-motivated feature-space
+  f_mem follow-up, including a fixed versioned encoder/layer and separate rho
+  calibration rather than silently reusing pixel-space thresholds.
+- Validation: the manifest resolves six tasks and three common nonzero
+  checkpoints; launcher and Slurm shell syntax pass; eight focused evaluator
+  tests pass. The full suite is 74/75 with only the pre-existing config-reference
+  documentation failure for three unrelated fields.
+- No evaluation job was submitted. No commit or push ran.
+
+
+## 2026-09-15T13:17:47+02:00 - Correct FID-10k reference protocol
+
+- Corrected a scientific protocol error identified after job `17522748`: its
+  10,000 generated samples were compared with only 1,024 reference images.
+  Those FID values are not FID-10k and must not drive the epsilon-configuration
+  decision. Its held-out losses, pixel-space f_mem, and raw diagnostics remain
+  valid. Added `FID_INVALID.md` to that output directory.
+- Added a dedicated Berzelius reference-preparation job. It deterministically
+  materializes 10,000 images from the CelebA `valid` split with the exact
+  training preprocessing, saves the tensor and provenance manifest, and
+  verifies that its first 1,024 tensors, labels, source indices, and sample IDs
+  exactly match the training artifact.
+- The evaluator now separates the frozen 10,000-image FID reference from the
+  saved 1,024-image held-out set used for loss and pixel-space f_mem. Every row
+  records the reference artifact path and SHA-256. FID feature caches are keyed
+  by that artifact hash.
+- `fid_10k` is now populated only when both the generated count and reference
+  count are 10,000. The combiner rejects a 10k-generated run with fewer than
+  10k references, and the launcher enforces the same condition before submit.
+- The launch sequence is reference preparation, fully parallel array `0-5`,
+  then combine, all connected by `afterok` dependencies.
+- Validation: all Python and shell files pass syntax checks, the dry run reports
+  `10000/10000/1024`, and all nine focused evaluator tests pass.
+- Submitted replacement chain: reference job `17523389`, evaluation array
+  `17523390`, and combine job `17523391`. Output is
+  `outputs/evals/eps_recovery_1m/20260915T111553Z_3025872_three_point`.
+
+- Completion: reference job `17523389`, all six tasks in array `17523390`, and
+  combine job `17523391` completed with exit `0:0`. The combined summary has
+  18/18 valid rows, `sample_counts=[10000]`, and
+  `fid_reference_counts=[10000]`.
+- Corrected FID-10k confirms direct safe/full-Heun as the next-run choice:
+  20.57/24.43/27.13 at 100k/390k/695k versus old via-x/full-Heun at
+  21.90/25.15/26.65. The old path is slightly better only at 695k and remains
+  the close late-training reference.
+
+
+## 2026-09-15T13:40:55+02:00 - Add v/v and x/x to corrected three-point eval
+
+- Added a two-task manifest and Berzelius launcher for saved sources 6 (`v/v`)
+  and 7 (`x/x`). Both reuse the exact corrected 10,000-image FID reference,
+  deterministic evaluation noise, and FID feature cache, and use their saved
+  sampling configurations at 100k, 390k, and 695k.
+- Added a dependent reference combiner that checks for exactly six 10k/10k
+  rows, writes separate reference artifacts, and also creates one 24-row
+  all-parameterization CSV and plot. Cross-parameterization plots show only FID
+  and pixel f_mem because eps/v/x loss magnitudes are not directly comparable.
+- Validation: Python and shell syntax pass, the preview resolves exactly two
+  tasks at three checkpoints, and all nine focused evaluator tests pass.
+- Array `17523970` and combine job `17523971` completed with exit `0:0`.
+  FID-10k is 25.86/28.72/30.19 for `v/v` and 25.69/27.70/24.97 for `x/x` at
+  100k/390k/695k. All six reference rows are finite and use 10k/10k.
+
+
+## 2026-09-15T13:52:00+02:00 - Prepare epsilon recovery work for publication
+
+- Updated the root and job READMEs to point to the completed one-million-step
+  training and corrected three-point evaluation. The docs now include the
+  10k/10k FID protocol, the v/v and x/x references, and the unthrottled rule
+  for small arrays.
+- Added the three previously missing active settings to
+  `docs/config_reference.md`: `network.middle_attention`,
+  `sampling.final_pixel_clamp`, and `tracking.wandb.subexperiment`.
+- Publication validation in `mem_param_env`: `git diff --check` passed; all
+  relevant Slurm shell files passed `bash -n`; all changed notebooks passed
+  JSON parsing; and the complete test suite passed, 76/76.
+- The publication scope includes the safe-division and direct-sampling API,
+  optimizer-step logging, recovery launchers, three-point evaluator, tests,
+  audit notes, and run journals. It excludes generated outputs, the empty
+  `tea_debug.log`, and unrelated untracked N=16 launcher experiments.

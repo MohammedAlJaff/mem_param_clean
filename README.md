@@ -94,6 +94,30 @@ contains the exact training and reference values. The manifest records their
 source pools, stable sample identifiers, source indices, tensor hashes, and
 selection seed. Unused source examples are not copied into the run.
 
+## Berzelius: prepared 2,000-step epsilon comparison jobs
+
+The [smoke-job plan](jobs/berzelius/eps_recovery_smoke/README.md) prepares six
+CelebA32 comparisons with W&B image histories and saved raw samples. It uses
+historical training settings and varies conversion, final Euler, clamp, LR,
+and a native velocity reference. Two thousand steps test early behavior;
+they do not establish recovered face convergence. No jobs were submitted.
+
+```bash
+bash jobs/berzelius/eps_recovery_smoke/submit.sh --dry-run
+bash jobs/berzelius/eps_recovery_smoke/submit.sh
+```
+
+The first command prints only. The second submits all six one-GPU tasks
+concurrently. Use `submit.sh 0` for just the historical sampling anchor.
+The job README explains W&B, data paths, saved outputs, and raw-range inspection.
+
+The [one-million-step recovery workflow](jobs/berzelius/eps_recovery_1m/README.md)
+contains the eight completed seed-0 training configurations and their three-point
+evaluation. FID uses 10,000 generated images against one frozen 10,000-image
+CelebA validation reference. `RUN_JOURNAL.md` records job IDs, status checks,
+and the corrected eps, v/v, and x/x results. Generated artifacts remain outside
+Git.
+
 ## CelebA32 eps/eps controls
 
 From the repository root, activate the environment and run:
@@ -104,7 +128,7 @@ python -m mem_param_src.runners.image_train \
   --config configs/runners/celeba32_eps_eps_monitor.py \
   --run-dir outputs/session_runs/celeba32_eps_eps_n32_exact_01 \
   --device mps --steps 1000 --checkpoint-every 250 \
-  --sampler heun --sampling-steps 50 --no-sampling-safe-division
+  --sampler heun --sampling-steps 50 --no-sampling-safe-div
 ```
 
 This uses 32 grayscale faces at 32x32, the historical 140-pixel aligned-face
@@ -117,10 +141,14 @@ W&B is off. The comparison grid shows 32 training and 64 generated images.
 Change these flags when needed:
 
 ```text
---sampling-safe-division --sampling-denom-eps 0.05
---no-sampling-safe-division
+--sampling-safe-div --sampling-safe-div-denominator-floor 0.05
+--no-sampling-safe-div
 --sampling-steps 200
 --sampler euler
+--heun-final-euler
+--no-heun-final-euler
+--set sampling.eps_to_v=direct
+--set sampling.eps_to_v=via_x
 --sampling-start-time 0.01 --sampling-end-time 0.99
 --sampling-output x_1
 --steps 5000 --lr 0.0001 --batch-size 32 --seed 7
@@ -139,8 +167,8 @@ and noise with a new evaluation name:
 python -m mem_param_src.runners.image_eval \
   --run-dir outputs/session_runs/celeba32_eps_eps_n32_exact_01 \
   --eval-name clamp005_heun50 --device mps \
-  --set sampling.use_safe_division=true \
-  --set sampling.safe_div_denom_eps=0.05 \
+  --set sampling.use_safe_div=true \
+  --set sampling.safe_div_denominator_floor=0.05 \
   --set sampling.n_steps=50
 ```
 
@@ -149,6 +177,45 @@ Replay reads saved data and checkpoints. Full generated batches go to
 go to `checkpoint_metrics.json` in that evaluation directory. This evaluator
 does not create the training-monitor PNG panels or projected f_mem curve.
 The eps/eps discrepancy remains open; low training loss alone is not success.
+
+### Direct epsilon conversion and final Euler
+
+New configurations use `sampling.eps_to_v="direct"` and
+`sampling.heun_final_euler=True`. Epsilon sampling computes
+`(z_t - eps_hat) / t`, with the existing optional denominator floor.
+Training losses keep their current behavior. Heun uses its usual two-stage
+step until the final interval, where it takes only the Euler step.
+
+Older saved runs retain `via_x` and full Heun during standalone evaluation.
+To test the new conversion on an older saved run, add these overrides to a
+named evaluation command:
+
+```text
+--set sampling.eps_to_v=direct
+--set sampling.heun_final_euler=false
+```
+
+Then repeat with `sampling.heun_final_euler=true` and a different evaluation
+name to isolate the final-step change. Keep the checkpoint, noise, floor,
+step count, and output choice fixed. To reproduce the previous conversion,
+use `sampling.eps_to_v=via_x`. These choices appear in `settings.json`.
+With exact division, direct and historical conversions agree mathematically.
+A floor of 0.05 on [.01,.99] exposes their different behavior near the start.
+
+Example Python call using an already loaded model and saved noise:
+
+```python
+samples = model.sample(
+    z_init, n_steps=50, method="heun", start_time=0.01, end_time=0.99,
+    use_safe_div=True, safe_div_denominator_floor=0.05,
+    eps_to_v="direct", heun_final_euler=True, output="x_t_max",
+)
+```
+
+The result has the same shape as `z_init`. This API was tested with analytical
+CPU models; trained-checkpoint generation remains to be compared.
+`x_t_max` returns the integrated state. `x_1` still makes an additional model
+call at the final time, even when the last solver interval uses Euler.
 
 ## Online monitoring demonstration
 

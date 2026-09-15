@@ -195,6 +195,12 @@ def _normalize_network_config(cfg):
                 default=(),
             )
         )
+        spec["middle_attention"] = _search_value(
+            network_sources,
+            ("middle_attention",),
+            "network.middle_attention",
+            default=True,
+        )
         spec["num_res_blocks"] = _search_value(
             network_sources,
             ("num_res_blocks",),
@@ -256,6 +262,7 @@ def build_network(cfg):
             channel_mult=spec["channel_mult"],
             num_res_blocks=spec["num_res_blocks"],
             attn_resolutions=spec["attn_resolutions"],
+            middle_attention=spec["middle_attention"],
             dropout=spec["dropout"],
             time_emb_dim=spec["time_emb_dim"],
         )

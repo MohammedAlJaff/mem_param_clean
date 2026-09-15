@@ -46,16 +46,28 @@ def _validate_time_settings(n_steps, start_time, end_time):
         )
 
 
-def _validate_division_settings(use_safe_division, safe_div_denom_eps):
+def _validate_division_settings(use_safe_div, safe_div_denominator_floor):
     """Check the sampling-time division controls."""
-    if not isinstance(use_safe_division, bool):
-        raise ValueError("sampling.use_safe_division must be true or false")
+    if not isinstance(use_safe_div, bool):
+        raise ValueError("sampling.use_safe_div must be true or false")
 
-    epsilon = float(safe_div_denom_eps)
+    epsilon = float(safe_div_denominator_floor)
     if not math.isfinite(epsilon) or not 0.0 < epsilon < 1.0:
         raise ValueError(
-            "sampling.safe_div_denom_eps must be a finite number between 0 and 1"
+            "sampling.safe_div_denominator_floor must be a finite number between 0 and 1"
         )
+
+
+def _validate_eps_to_v(eps_to_v):
+    """Keep the current and historical epsilon sampling formulas explicit."""
+    if eps_to_v not in ("direct", "via_x"):
+        raise ValueError("sampling.eps_to_v must be 'direct' or 'via_x'")
+
+
+def _validate_final_pixel_clamp(final_pixel_clamp):
+    """Keep final image clipping explicit and opt-in."""
+    if not isinstance(final_pixel_clamp, bool):
+        raise ValueError("sampling.final_pixel_clamp must be true or false")
 
 
 def time_grid(model, *, n_steps, start_time, end_time, device=None):
@@ -79,8 +91,8 @@ def convert_prediction(
     t,
     target,
     *,
-    use_safe_division,
-    safe_div_denom_eps,
+    use_safe_div,
+    safe_div_denominator_floor,
 ):
     """Convert a model prediction into the requested target space."""
     t = _batch_time(t, state)
@@ -90,13 +102,13 @@ def convert_prediction(
         t,
         source=model.prediction_space,
         target=target,
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
+        use_safe_div=use_safe_div,
+        safe_div_denominator_floor=safe_div_denominator_floor,
     )
 
 
 def model_to_x(
-    model, state, t, *, use_safe_division, safe_div_denom_eps
+    model, state, t, *, use_safe_div, safe_div_denominator_floor
 ):
     """Convert the model prediction at ``(state, t)`` into clean-data space."""
     prediction = predict_in_prediction_space(model, state, t)
@@ -106,13 +118,13 @@ def model_to_x(
         state,
         t,
         target="x",
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
+        use_safe_div=use_safe_div,
+        safe_div_denominator_floor=safe_div_denominator_floor,
     )
 
 
 def model_to_eps(
-    model, state, t, *, use_safe_division, safe_div_denom_eps
+    model, state, t, *, use_safe_div, safe_div_denominator_floor
 ):
     """Convert the model prediction at ``(state, t)`` into noise space."""
     prediction = predict_in_prediction_space(model, state, t)
@@ -122,24 +134,38 @@ def model_to_eps(
         state,
         t,
         target="eps",
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
+        use_safe_div=use_safe_div,
+        safe_div_denominator_floor=safe_div_denominator_floor,
     )
 
 
 def model_to_velocity(
-    model, state, t, *, use_safe_division, safe_div_denom_eps
+    model, state, t, *, use_safe_div, safe_div_denominator_floor, eps_to_v="direct"
 ):
-    """Convert the model prediction at ``(state, t)`` into velocity space."""
+    """Convert a sampling prediction to velocity on the linear FM path.
+
+    Direct epsilon sampling uses ``v = (z_t - eps_hat) / t``. Floor this
+    denominator only when requested. Training conversions stay in model.py.
+    ``via_x`` retains the historical clamped reconstruction for comparison.
+    """
+    _validate_eps_to_v(eps_to_v)
     prediction = predict_in_prediction_space(model, state, t)
+    if model.prediction_space == "eps" and eps_to_v == "direct":
+        _validate_division_settings(use_safe_div, safe_div_denominator_floor)
+        times = _batch_time(t, state)
+        denominator = times.reshape((-1,) + (1,) * (state.ndim - 1))
+        if use_safe_div:
+            denominator = denominator.clamp_min(float(safe_div_denominator_floor))
+        return (state - prediction) / denominator
+
     return convert_prediction(
         model,
         prediction,
         state,
         t,
         target="v",
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
+        use_safe_div=use_safe_div,
+        safe_div_denominator_floor=safe_div_denominator_floor,
     )
 
 
@@ -151,12 +177,14 @@ def sample_euler(
     n_steps,
     start_time,
     end_time,
-    use_safe_division,
-    safe_div_denom_eps,
+    use_safe_div,
+    safe_div_denominator_floor,
+    eps_to_v="direct",
     device=None,
 ):
     """Integrate from ``start_time`` to ``end_time`` with forward Euler."""
-    _validate_division_settings(use_safe_division, safe_div_denom_eps)
+    _validate_division_settings(use_safe_div, safe_div_denominator_floor)
+    _validate_eps_to_v(eps_to_v)
     device = _infer_device(model, z, device)
     state = z.to(device)
     times = time_grid(
@@ -174,8 +202,9 @@ def sample_euler(
             model,
             state,
             time_now,
-            use_safe_division=use_safe_division,
-            safe_div_denom_eps=safe_div_denom_eps,
+            use_safe_div=use_safe_div,
+            safe_div_denominator_floor=safe_div_denominator_floor,
+            eps_to_v=eps_to_v,
         )
         state = state + (time_next - time_now) * velocity
 
@@ -190,12 +219,17 @@ def sample_heun(
     n_steps,
     start_time,
     end_time,
-    use_safe_division,
-    safe_div_denom_eps,
+    use_safe_div,
+    safe_div_denominator_floor,
+    eps_to_v="direct",
+    heun_final_euler=True,
     device=None,
 ):
-    """Integrate from ``start_time`` to ``end_time`` with Heun's method."""
-    _validate_division_settings(use_safe_division, safe_div_denom_eps)
+    """Use Heun, optionally taking only the Euler predictor on the last interval."""
+    _validate_division_settings(use_safe_div, safe_div_denominator_floor)
+    _validate_eps_to_v(eps_to_v)
+    if not isinstance(heun_final_euler, bool):
+        raise ValueError("sampling.heun_final_euler must be true or false")
     device = _infer_device(model, z, device)
     state = z.to(device)
     times = time_grid(
@@ -214,16 +248,22 @@ def sample_heun(
             model,
             state,
             time_now,
-            use_safe_division=use_safe_division,
-            safe_div_denom_eps=safe_div_denom_eps,
+            use_safe_div=use_safe_div,
+            safe_div_denominator_floor=safe_div_denominator_floor,
+            eps_to_v=eps_to_v,
         )
         trial_state = state + step_size * velocity_now
+        if heun_final_euler and step == n_steps - 1:
+            # Finish without a velocity evaluation at end_time.
+            state = trial_state
+            break
         velocity_next = model_to_velocity(
             model,
             trial_state,
             time_next,
-            use_safe_division=use_safe_division,
-            safe_div_denom_eps=safe_div_denom_eps,
+            use_safe_div=use_safe_div,
+            safe_div_denominator_floor=safe_div_denominator_floor,
+            eps_to_v=eps_to_v,
         )
         state = state + 0.5 * step_size * (velocity_now + velocity_next)
 
@@ -239,12 +279,16 @@ def sample(
     method,
     start_time,
     end_time,
-    use_safe_division,
-    safe_div_denom_eps,
+    use_safe_div,
+    safe_div_denominator_floor,
     output,
+    eps_to_v="direct",
+    heun_final_euler=True,
+    final_pixel_clamp=False,
+    return_raw=False,
     device=None,
 ):
-    """Return the state at ``t_max`` or the conventional endpoint sample ``x_1``."""
+    """Return a final sample, optionally clipping only its completed image range."""
     if output not in ("x_t_max", "x_1"):
         raise ValueError(
             "sampling.output must be 'x_t_max' or 'x_1', "
@@ -255,26 +299,40 @@ def sample(
     if sampler is None:
         raise ValueError(f"Unknown sampling method: {method}")
 
+    if not isinstance(heun_final_euler, bool):
+        raise ValueError("sampling.heun_final_euler must be true or false")
+    _validate_final_pixel_clamp(final_pixel_clamp)
+    if not isinstance(return_raw, bool):
+        raise ValueError("return_raw must be true or false")
+    solver_options = {}
+    if method == "heun":
+        solver_options["heun_final_euler"] = heun_final_euler
     state_t_max = sampler(
         model,
         z,
         n_steps=n_steps,
         start_time=start_time,
         end_time=end_time,
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
+        use_safe_div=use_safe_div,
+        safe_div_denominator_floor=safe_div_denominator_floor,
+        eps_to_v=eps_to_v,
         device=device,
+        **solver_options,
     )
     if output == "x_t_max":
-        return state_t_max
-
-    return model_to_x(
-        model,
-        state_t_max,
-        float(end_time),
-        use_safe_division=use_safe_division,
-        safe_div_denom_eps=safe_div_denom_eps,
-    )
+        raw_sample = state_t_max
+    else:
+        raw_sample = model_to_x(
+            model,
+            state_t_max,
+            float(end_time),
+            use_safe_div=use_safe_div,
+            safe_div_denominator_floor=safe_div_denominator_floor,
+        )
+    final_sample = raw_sample.clamp(-1.0, 1.0) if final_pixel_clamp else raw_sample
+    if return_raw:
+        return final_sample, raw_sample
+    return final_sample
 
 
 __all__ = [

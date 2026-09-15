@@ -224,21 +224,40 @@ def _record_image_monitor(
     if f_mem_state is not None:
         count = max(count, int(config.random_projected_f_mem.n_samples))
     division = "exact division"
-    if config.sampling.use_safe_division:
-        division = f"denominator floor {config.sampling.safe_div_denom_eps:g}"
+    if config.sampling.use_safe_div:
+        division = f"denominator floor {config.sampling.safe_div_denominator_floor:g}"
+    solver = str(config.sampling.method)
+    if solver == "heun" and config.sampling.get("heun_final_euler", False):
+        solver = "heun with final Euler"
+    conversion = ""
+    if config.framework.prediction_space == "eps":
+        conversion = f", eps to v: {config.sampling.get('eps_to_v', 'via_x')}"
     print(
         f"[monitor] Step {step}/{config.training.n_training_steps}: "
-        f"generating {count} samples ({config.sampling.method}, "
+        f"generating {count} samples ({solver}, "
         f"{config.sampling.n_steps} steps, "
-        f"t=[{config.sampling.start_time:g},{config.sampling.end_time:g}], {division})...",
+        f"t=[{config.sampling.start_time:g},{config.sampling.end_time:g}], "
+        f"{division}{conversion})...",
         flush=True,
     )
-    samples = generate_monitor_samples(model, z_init, config, device)
+    final_pixel_clamp = bool(config.sampling.get("final_pixel_clamp", False))
+    if final_pixel_clamp:
+        samples, raw_samples = generate_monitor_samples(
+            model, z_init, config, device, return_raw=True
+        )
+    else:
+        samples = generate_monitor_samples(model, z_init, config, device)
+        raw_samples = None
     if bool(config.evaluation.save_generated_samples):
         # Retain the full raw batch before display or metric preprocessing.
         sample_path = monitor_dir / "generated_samples" / f"step_{int(step):06d}.pt"
         save_torch(sample_path, samples)
         print(f"[saved] {len(samples)} generated samples: {sample_path}", flush=True)
+        if raw_samples is not None:
+            raw_path = monitor_dir / "generated_samples_raw" / f"step_{int(step):06d}.pt"
+            save_torch(raw_path, raw_samples)
+            print(f"[saved] {len(raw_samples)} raw generated samples: {raw_path}", flush=True)
+
     grid_samples = samples[: int(config.generation_monitor.n_samples)]
     if train_preview is not None:
         sample_grid_path = save_training_comparison_grid(
@@ -253,9 +272,29 @@ def _record_image_monitor(
             monitor_dir / f"samples_step_{int(step):06d}.png",
         )
     values = {
+        "optimizer_step": int(step),
         "generation/step": int(step),
         "generation/samples": sample_grid_path,
     }
+    if raw_samples is not None:
+        clipped = (raw_samples < -1.0) | (raw_samples > 1.0)
+        pixel_clamp = {
+            "step": int(step),
+            "raw_min": float(raw_samples.min().item()),
+            "raw_max": float(raw_samples.max().item()),
+            "clipped_pixels": int(clipped.sum().item()),
+            "total_pixels": int(raw_samples.numel()),
+            "clipped_fraction": float(clipped.float().mean().item()),
+        }
+        write_json(monitor_dir / f"pixel_clamp_step_{int(step):06d}.json", pixel_clamp)
+        values.update(
+            {
+                "generation/pixel_clamp_raw_min": pixel_clamp["raw_min"],
+                "generation/pixel_clamp_raw_max": pixel_clamp["raw_max"],
+                "generation/pixel_clamp_fraction": pixel_clamp["clipped_fraction"],
+            }
+        )
+
     if f_mem_state is not None:
         print("[monitor] Samples ready; computing projected f_mem...", flush=True)
         record = {
@@ -462,6 +501,7 @@ def train_run(config, run_dir, *, run_kind, device="auto"):
                     wandb_run = log_wandb(
                         wandb_run,
                         {
+                            "optimizer_step": int(step),
                             "train/step": int(step),
                             "train/loss": loss_value,
                             "train/learning_rate": float(

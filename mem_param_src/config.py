@@ -34,6 +34,9 @@ def get_base_config():
     network.base_channels = 64
     network.channel_mult = (1, 2, 4, 4)
     network.attn_resolutions = (8,)
+    # Disable this together with an empty attn_resolutions tuple to remove
+    # every self-attention module from a UNet.
+    network.middle_attention = True
     network.num_res_blocks = 2
     network.dropout = 0.0
 
@@ -81,8 +84,8 @@ def get_base_config():
     training.show_progress = True
     training.start_time = 0.01
     training.end_time = 0.99
-    training.use_safe_division = True
-    training.safe_div_denom_eps = 0.01
+    training.use_safe_div = True
+    training.safe_div_denominator_floor = 0.01
 
     evaluation = config.evaluation = ConfigDict()
     evaluation.n_samples = 64
@@ -98,11 +101,16 @@ def get_base_config():
 
     sampling = config.sampling = ConfigDict()
     sampling.method = "heun"
+    sampling.heun_final_euler = True
+    sampling.eps_to_v = "direct"
     sampling.n_steps = 50
     sampling.start_time = 0.01
     sampling.end_time = 0.99
-    sampling.use_safe_division = True
-    sampling.safe_div_denom_eps = 0.01
+    sampling.use_safe_div = True
+    sampling.safe_div_denominator_floor = 0.01
+    # Image studies may opt in to clipping only the completed sample to the
+    # normalized data range. The ODE trajectory always remains unclamped.
+    sampling.final_pixel_clamp = False
     sampling.output = "x_1"
 
     outputs = config.outputs = ConfigDict()
@@ -145,6 +153,9 @@ def get_base_config():
     tracking.wandb.project = ""
     tracking.wandb.name = ""
     tracking.wandb.group = ""
+    # One shared name for every run in a submitted experiment set. It is sent
+    # in the W&B config and as a subexperiment:<name> tag for filtering.
+    tracking.wandb.subexperiment = ""
     tracking.wandb.entity = _default_wandb_entity("maj90")
     tracking.wandb.dir = "logs/wandb"
     tracking.wandb.tags = []

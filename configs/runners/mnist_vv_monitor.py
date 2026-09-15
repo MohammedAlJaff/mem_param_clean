@@ -36,7 +36,7 @@ def get_config():
     config.training.n_training_steps = 1000
     config.training.ckpt_every = 250
     config.training.log_every = 25
-    config.training.use_safe_division = False
+    config.training.use_safe_div = False
 
     # Generate 500 fixed-noise samples; display 64 below the same 32 training images.
     config.evaluation.sample_bank_size = 500
@@ -49,7 +49,7 @@ def get_config():
     config.random_projected_f_mem.n_samples = 500
     config.monitoring.batch_size = 32
     config.sampling.n_steps = 50
-    config.sampling.use_safe_division = False
+    config.sampling.use_safe_div = False
 
     # Local figures and records do not require an online tracking service.
     config.tracking.wandb.enabled = False

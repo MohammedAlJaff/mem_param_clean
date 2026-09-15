@@ -42,6 +42,12 @@ def resolve_evaluation_config(run_dir, *, eval_config=None, override_items=()):
     # Older runs predate optional storage of every generated checkpoint batch.
     if "save_generated_samples" not in config.evaluation:
         config.evaluation.save_generated_samples = False
+    # Old saved runs used chained epsilon conversion and Heun on every interval.
+    # Materialize those choices so replay overrides and settings.json are explicit.
+    if "eps_to_v" not in config.sampling:
+        config.sampling.eps_to_v = "via_x"
+    if "heun_final_euler" not in config.sampling:
+        config.sampling.heun_final_euler = False
     saved_settings = {
         section: config_to_dict(config[section])
         for section in EVALUATION_CONFIG_SECTIONS
@@ -122,9 +128,12 @@ def _sample_checkpoint(model, z_init, config, device):
             method=str(config.sampling.method),
             start_time=float(config.sampling.start_time),
             end_time=float(config.sampling.end_time),
-            use_safe_division=bool(config.sampling.use_safe_division),
-            safe_div_denom_eps=float(config.sampling.safe_div_denom_eps),
+            use_safe_div=bool(config.sampling.use_safe_div),
+            safe_div_denominator_floor=float(config.sampling.safe_div_denominator_floor),
             output=str(config.sampling.output),
+            eps_to_v=config.sampling.eps_to_v,
+            heun_final_euler=config.sampling.heun_final_euler,
+            final_pixel_clamp=bool(config.sampling.get("final_pixel_clamp", False)),
             device=device,
         )
         samples.append(sample_batch.detach().cpu())

@@ -42,7 +42,7 @@ def _validate_saved_run(run_dir):
         raise ValueError("This diagnostic requires a saved eps/eps run.")
     if sampling["method"] != "heun":
         raise ValueError("This diagnostic requires the saved Heun method.")
-    if sampling["use_safe_division"]:
+    if sampling["use_safe_div"]:
         raise ValueError("This diagnostic requires exact sampling division.")
     if sampling["output"] != "x_1":
         raise ValueError("This diagnostic requires sampling.output='x_1'.")

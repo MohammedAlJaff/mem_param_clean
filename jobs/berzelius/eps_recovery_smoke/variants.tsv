@@ -1,0 +1,7 @@
+id	label	prediction	loss	lr	use_safe_div	eps_to_v	final_euler
+0	eps_old_sampling	eps	eps	0.0001	true	via_x	false
+1	eps_direct_full_heun	eps	eps	0.0001	true	direct	false
+2	eps_direct_final_euler	eps	eps	0.0001	true	direct	true
+3	eps_exact_full_heun	eps	eps	0.0001	false	direct	false
+4	eps_higher_lr	eps	eps	0.001	true	direct	true
+5	vv_reference	v	v	0.0001	true	direct	true

@@ -57,7 +57,7 @@ def compute_monitor_f_mem(samples, config, state):
     )
 
 
-def generate_monitor_samples(model, z_init, config, device):
+def generate_monitor_samples(model, z_init, config, device, *, return_raw=False):
     """Generate one fixed-noise sample panel without changing training state."""
     count = int(config.generation_monitor.n_samples)
     if count < 1:
@@ -75,27 +75,35 @@ def generate_monitor_samples(model, z_init, config, device):
     was_training = model.training
     # Evaluation mode keeps stochastic training layers fixed across checkpoints.
     model.eval()
+    final_pixel_clamp = bool(config.sampling.get("final_pixel_clamp", False))
     samples = []
+    raw_samples = []
     try:
         # Sampling is an observation of training and must not create gradients.
         with torch.no_grad():
             for start in range(0, count, batch_size):
                 z_batch = fixed_noise[start : start + batch_size].to(device)
-                samples.append(
-                    model.sample(
-                        z_batch,
-                        n_steps=int(config.sampling.n_steps),
-                        method=str(config.sampling.method),
-                        start_time=float(config.sampling.start_time),
-                        end_time=float(config.sampling.end_time),
-                        use_safe_division=bool(config.sampling.use_safe_division),
-                        safe_div_denom_eps=float(config.sampling.safe_div_denom_eps),
-                        output=str(config.sampling.output),
-                        device=device,
-                    )
-                    .detach()
-                    .cpu()
+                generated = model.sample(
+                    z_batch,
+                    n_steps=int(config.sampling.n_steps),
+                    method=str(config.sampling.method),
+                    start_time=float(config.sampling.start_time),
+                    end_time=float(config.sampling.end_time),
+                    use_safe_div=bool(config.sampling.use_safe_div),
+                    safe_div_denominator_floor=float(config.sampling.safe_div_denominator_floor),
+                    output=str(config.sampling.output),
+                    eps_to_v=config.sampling.get("eps_to_v", "via_x"),
+                    heun_final_euler=config.sampling.get("heun_final_euler", False),
+                    final_pixel_clamp=final_pixel_clamp,
+                    return_raw=return_raw,
+                    device=device,
                 )
+                if return_raw:
+                    sample_batch, raw_batch = generated
+                    raw_samples.append(raw_batch.detach().cpu())
+                else:
+                    sample_batch = generated
+                samples.append(sample_batch.detach().cpu())
     finally:
         # Restore the mode that controlled dropout and normalization during training.
         model.train(was_training)
@@ -103,7 +111,13 @@ def generate_monitor_samples(model, z_init, config, device):
     samples = torch.cat(samples, dim=0)
     if not torch.isfinite(samples).all():
         raise FloatingPointError("Generation-monitor samples became non-finite.")
+    if return_raw:
+        raw_samples = torch.cat(raw_samples, dim=0)
+        if not torch.isfinite(raw_samples).all():
+            raise FloatingPointError("Raw generation-monitor samples became non-finite.")
+        return samples, raw_samples
     return samples
+
 
 
 def save_fixed_range_grid(images, path):

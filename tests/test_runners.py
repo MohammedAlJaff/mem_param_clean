@@ -35,6 +35,8 @@ from mem_param_src.runners.artifacts import (
 from mem_param_src.runners.evaluation import (
     evaluate_image_run,
     evaluate_synthetic_run,
+    resolve_evaluation_config,
+    _sample_checkpoint,
 )
 from mem_param_src.runners.image_monitoring import generate_monitor_samples
 from mem_param_src.runners.image_plotting import save_training_comparison_grid
@@ -138,12 +140,48 @@ def _tiny_image_bundle():
 
 
 class TestRunnerConfiguration(unittest.TestCase):
+    def test_old_replay_keeps_old_sampler_until_explicitly_overridden(self):
+        config = get_base_config()
+        del config.sampling["eps_to_v"]
+        del config.sampling["heun_final_euler"]
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            write_json(run_dir / "config.json", config.to_dict())
+            historical, changed = resolve_evaluation_config(run_dir)
+            self.assertEqual(historical.sampling.eps_to_v, "via_x")
+            self.assertIs(historical.sampling.heun_final_euler, False)
+            self.assertFalse(changed)
+
+            current, changed = resolve_evaluation_config(run_dir, override_items=(
+                "sampling.eps_to_v=direct", "sampling.heun_final_euler=true",
+            ))
+            self.assertEqual(current.sampling.eps_to_v, "direct")
+            self.assertIs(current.sampling.heun_final_euler, True)
+            self.assertTrue(changed)
+            self.assertEqual(current.training.to_dict(), historical.training.to_dict())
+            self.assertNotIn("eps_to_v", read_json(run_dir / "config.json")["sampling"])
+
+    def test_checkpoint_sampler_receives_both_comparison_settings(self):
+        config = _tiny_gmm_config()
+        noise = torch.randn(3, 4)
+        for mode, final_euler in (("direct", True), ("via_x", False)):
+            with self.subTest(mode=mode, final_euler=final_euler):
+                config.sampling.eps_to_v = mode
+                config.sampling.heun_final_euler = final_euler
+                model = MagicMock()
+                model.sample.side_effect = lambda z, **kwargs: z.clone()
+                result = _sample_checkpoint(model, noise, config, torch.device("cpu"))
+                self.assertTrue(torch.equal(result, noise))
+                for call in model.sample.call_args_list:
+                    self.assertEqual(call.kwargs["eps_to_v"], mode)
+                    self.assertIs(call.kwargs["heun_final_euler"], final_euler)
+
     def test_cli_overrides_are_typed_and_strict(self):
         config = get_base_config()
         overrides = parse_cli_overrides(
             [
                 "training.n_training_steps=7",
-                "sampling.use_safe_division=false",
+                "sampling.use_safe_div=false",
                 "framework.prediction_space=v",
                 "framework.loss_space=v",
                 "framework.loss_weighting=x_equivalent",
@@ -154,7 +192,7 @@ class TestRunnerConfiguration(unittest.TestCase):
         apply_overrides(config, overrides)
 
         self.assertEqual(config.training.n_training_steps, 7)
-        self.assertIs(config.sampling.use_safe_division, False)
+        self.assertIs(config.sampling.use_safe_div, False)
         self.assertEqual(config.framework.prediction_space, "v")
         self.assertEqual(config.framework.loss_space, "v")
         self.assertEqual(config.framework.loss_weighting, "x_equivalent")
@@ -384,7 +422,9 @@ class TestRunnerCommands(unittest.TestCase):
                 "--steps", "1200", "--lr", "0.0002", "--seed", "9",
                 "--batch-size", "8", "--checkpoint-every", "300",
                 "--sampler", "heun", "--sampling-steps", "200",
-                "--sampling-safe-division", "--sampling-denom-eps", "0.05",
+                "--set", "sampling.heun_final_euler=false", "--heun-final-euler",
+                "--set", "sampling.eps_to_v=via_x",
+                "--sampling-safe-div", "--sampling-safe-div-denominator-floor", "0.05",
                 "--sampling-start-time", "0.02", "--sampling-end-time", "0.98",
                 "--sampling-output", "x_t_max",
             ])
@@ -396,21 +436,24 @@ class TestRunnerCommands(unittest.TestCase):
         self.assertEqual(resolve_checkpoint_steps(config), (0, 300, 600, 900, 1200))
         self.assertEqual(config.sampling.method, "heun")
         self.assertEqual(config.sampling.n_steps, 200)
-        self.assertIs(config.sampling.use_safe_division, True)
-        self.assertEqual(config.sampling.safe_div_denom_eps, 0.05)
+        self.assertIs(config.sampling.heun_final_euler, True)
+        self.assertEqual(config.sampling.eps_to_v, "via_x")
+        self.assertIs(config.sampling.use_safe_div, True)
+        self.assertEqual(config.sampling.safe_div_denominator_floor, 0.05)
         self.assertEqual(config.sampling.start_time, 0.02)
         self.assertEqual(config.sampling.end_time, 0.98)
         self.assertEqual(config.sampling.output, "x_t_max")
-        self.assertIs(config.training.use_safe_division, False)
-        self.assertEqual(config.training.safe_div_denom_eps, 0.01)
+        self.assertIs(config.training.use_safe_div, False)
+        self.assertEqual(config.training.safe_div_denominator_floor, 0.01)
         self.assertEqual(config.framework.loss_weighting, "unit")
 
         with patch("mem_param_src.runners.image_train.train_run") as train:
             image_train_main(base_args + [
-                "--set", "sampling.use_safe_division=true",
-                "--no-sampling-safe-division",
+                "--set", "sampling.use_safe_div=true",
+                "--no-sampling-safe-div", "--no-heun-final-euler",
             ])
-        self.assertIs(train.call_args.args[0].sampling.use_safe_division, False)
+        self.assertIs(train.call_args.args[0].sampling.use_safe_div, False)
+        self.assertIs(train.call_args.args[0].sampling.heun_final_euler, False)
 
 
 class TestSyntheticRunnerIntegration(unittest.TestCase):
@@ -466,7 +509,7 @@ class TestSyntheticRunnerIntegration(unittest.TestCase):
                 "def get_config():\n"
                 "    config = ConfigDict()\n"
                 "    config.sampling = ConfigDict()\n"
-                "    config.sampling.use_safe_division = False\n"
+                "    config.sampling.use_safe_div = False\n"
                 "    return config\n",
                 encoding="utf-8",
             )
@@ -475,13 +518,13 @@ class TestSyntheticRunnerIntegration(unittest.TestCase):
                 eval_name="x_t_max",
                 eval_config=eval_config,
                 override_items=(
-                    "sampling.use_safe_division=true",
+                    "sampling.use_safe_div=true",
                     "sampling.output=x_t_max",
                 ),
                 device="cpu",
             )
             settings = read_json(named_dir / "settings.json")
-            self.assertIs(settings["sampling"]["use_safe_division"], True)
+            self.assertIs(settings["sampling"]["use_safe_div"], True)
             self.assertEqual(settings["sampling"]["output"], "x_t_max")
             self.assertTrue((named_dir / "final_samples_x_t_max.pt").is_file())
 
@@ -578,6 +621,7 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         config.training.ckpt_every = 1
         config.tracking.wandb.enabled = True
         config.tracking.wandb.mode = "offline"
+        config.tracking.wandb.subexperiment = "eps_t001_099_floor001"
         config.generation_monitor.enabled = True
         config.generation_monitor.n_samples = 2
         config.monitoring.batch_size = 1
@@ -635,13 +679,36 @@ class TestImageTrainingMonitoring(unittest.TestCase):
             ]
             self.assertEqual([item["train/step"] for item in train_payloads], [1, 2])
             self.assertEqual(
+                [item["optimizer_step"] for item in train_payloads],
+                [1, 2],
+            )
+            self.assertEqual(
                 [item["generation/step"] for item in generation_payloads],
                 [0, 1, 2],
+            )
+            self.assertEqual(
+                [item["optimizer_step"] for item in generation_payloads],
+                [0, 1, 2],
+            )
+            fake_wandb.define_metric.assert_any_call("optimizer_step")
+            fake_wandb.define_metric.assert_any_call(
+                "train/*", step_metric="optimizer_step"
+            )
+            fake_wandb.define_metric.assert_any_call(
+                "generation/*", step_metric="optimizer_step"
             )
             init_config = fake_wandb.init.call_args.kwargs["config"]
             self.assertEqual(
                 init_config["training"]["resolved_ckpt_steps"],
                 [0, 1, 2],
+            )
+            self.assertEqual(
+                init_config["tracking"]["wandb"]["subexperiment"],
+                "eps_t001_099_floor001",
+            )
+            self.assertIn(
+                "subexperiment:eps_t001_099_floor001",
+                fake_wandb.init.call_args.kwargs["tags"],
             )
             run_record = read_json(run_dir / "run.json")
             self.assertIs(run_record["wandb"]["active"], False)
@@ -733,6 +800,7 @@ class TestImageTrainingMonitoring(unittest.TestCase):
                 p for p in payloads if "generation/random_projected_pixels/f_mem" in p
             ]
             self.assertEqual([p["generation/step"] for p in metrics], [0, 1, 2])
+            self.assertEqual([p["optimizer_step"] for p in metrics], [0, 1, 2])
             self.assertTrue(
                 all(
                     p["generation/random_projected_pixels/f_mem"] == 1.0
@@ -769,11 +837,16 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         model.training = True
         model.sample.side_effect = lambda z, **kwargs: z.clone()
         noise = torch.randn(5, 1, 8, 8)
+        config.sampling.eps_to_v = "via_x"
+        config.sampling.heun_final_euler = False
         samples = generate_monitor_samples(model, noise, config, "cpu")
         self.assertTrue(torch.equal(samples, noise))
         self.assertEqual(
             [c.args[0].shape[0] for c in model.sample.call_args_list], [2, 2, 1]
         )
+        for call in model.sample.call_args_list:
+            self.assertEqual(call.kwargs["eps_to_v"], "via_x")
+            self.assertIs(call.kwargs["heun_final_euler"], False)
 
     def test_monitor_flag_off_does_not_sample(self):
         config = _tiny_image_config()

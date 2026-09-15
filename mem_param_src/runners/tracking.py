@@ -41,6 +41,19 @@ def resolve_wandb_identity(config):
     return {field: str(getattr(wandb_config, field)) for field in defaults}
 
 
+def _wandb_tags(config):
+    """Return configured W&B tags plus one normalized subexperiment tag."""
+    tags = [str(tag) for tag in config.tracking.wandb.tags]
+    subexperiment = str(
+        getattr(config.tracking.wandb, "subexperiment", "") or ""
+    ).strip()
+    if subexperiment:
+        tag = "subexperiment:" + _slug(subexperiment, "unnamed")
+        if tag not in tags:
+            tags.append(tag)
+    return subexperiment, tags
+
+
 def _wandb_failure(state, exc, context):
     """Disable failed tracking without changing the model update sequence."""
     message = f"W&B {context} failed: {type(exc).__name__}: {exc}"
@@ -82,6 +95,7 @@ def start_wandb(config, run_dir):
     wandb_dir = Path(run_dir) / relative_dir
     wandb_dir.mkdir(parents=True, exist_ok=True)
 
+    subexperiment, tags = _wandb_tags(config)
     metadata = {
         "enabled": True,
         "active": False,
@@ -89,6 +103,8 @@ def start_wandb(config, run_dir):
         "project": identity["project"],
         "name": identity["name"],
         "group": identity["group"],
+        "subexperiment": subexperiment,
+        "tags": tags,
         "run_id": None,
         "url": None,
         "dir": str(wandb_dir.resolve()),
@@ -114,17 +130,16 @@ def start_wandb(config, run_dir):
             group=identity["group"],
             job_type="image_train",
             notes=notes,
-            tags=list(config.tracking.wandb.tags),
+            tags=tags,
             config=config_to_dict(config),
             reinit="finish_previous",
         )
         state["run"] = run
         state["module"] = wandb
         if hasattr(wandb, "define_metric"):
-            wandb.define_metric("train/step")
-            wandb.define_metric("train/*", step_metric="train/step")
-            wandb.define_metric("generation/step")
-            wandb.define_metric("generation/*", step_metric="generation/step")
+            wandb.define_metric("optimizer_step")
+            wandb.define_metric("train/*", step_metric="optimizer_step")
+            wandb.define_metric("generation/*", step_metric="optimizer_step")
 
         metadata.update(
             {

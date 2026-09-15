@@ -20,6 +20,10 @@ Canonical instructions for agents and contributors working in this repo.
 - Check `git status` before editing so existing user changes are preserved.
 - Read `TODO.txt` and the latest relevant `MIGRATION_JOURNAL.md` entry for
   context. Do not begin a TODO item unless the current user request selects it.
+- Read `RUN_JOURNAL.md` before launching or checking Berzelius compute. Update
+  it immediately after every submission and append evidence-based status checks.
+- Submit arrays of about 80 tasks or fewer without a concurrency throttle. For
+  larger arrays, agree on and record an explicit throttle before submission.
 - Treat the current user request as the scope for the session. Historical
   journal entries describe past decisions; they do not authorize new work.
 - Within repository documentation, use `mem_param_src/config.py` for executable

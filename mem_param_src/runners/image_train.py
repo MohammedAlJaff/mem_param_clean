@@ -85,13 +85,19 @@ def build_parser():
     sampling.add_argument("--sampler", choices=("heun", "euler"), help="ODE solver.")
     sampling.add_argument("--sampling-steps", type=int, help="ODE solver intervals.")
     sampling.add_argument(
-        "--sampling-safe-division",
+        "--heun-final-euler",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Finish Heun with one Euler step; --no-heun-final-euler keeps full Heun.",
+    )
+    sampling.add_argument(
+        "--sampling-safe-div",
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Clamp sampling conversion denominators; does not change the training loss.",
     )
     sampling.add_argument(
-        "--sampling-denom-eps",
+        "--sampling-safe-div-denominator-floor",
         type=float,
         help="Denominator floor when sampling safe division is enabled.",
     )
@@ -101,6 +107,12 @@ def build_parser():
         "--sampling-output",
         choices=("x_1", "x_t_max"),
         help="Return the clean endpoint estimate or the final integrated state.",
+    )
+    sampling.add_argument(
+        "--final-pixel-clamp",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Clamp only completed image samples to [-1, 1].",
     )
     return parser
 
@@ -119,11 +131,13 @@ def main(argv=None):
         ("checkpoint_every", "training.ckpt_every"),
         ("sampler", "sampling.method"),
         ("sampling_steps", "sampling.n_steps"),
-        ("sampling_safe_division", "sampling.use_safe_division"),
-        ("sampling_denom_eps", "sampling.safe_div_denom_eps"),
+        ("heun_final_euler", "sampling.heun_final_euler"),
+        ("sampling_safe_div", "sampling.use_safe_div"),
+        ("sampling_safe_div_denominator_floor", "sampling.safe_div_denominator_floor"),
         ("sampling_start_time", "sampling.start_time"),
         ("sampling_end_time", "sampling.end_time"),
         ("sampling_output", "sampling.output"),
+        ("final_pixel_clamp", "sampling.final_pixel_clamp"),
     ):
         value = getattr(args, argument)
         if value is not None:
