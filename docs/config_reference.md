@@ -131,16 +131,40 @@ factors preserve equality with the diagonal objectives.
 
 | Setting | Default | Meaning and guidance | Use |
 | --- | --- | --- | --- |
-| `network.arch` | `"mlp"` | Backbone family. Supported values are `"mlp"` and `"unet"`. | Active |
+| `network.arch` | `"mlp"` | Backbone family. Supported values are `"mlp"`, `"unet"`, and `"dit"`. | Active |
 | `network.hidden_dim` | `128` | Hidden width of the MLP. Ignored by the UNet. | Active for MLP |
 | `network.n_layers` | `3` | Number of MLP hidden layers. Ignored by the UNet. | Active for MLP |
-| `network.time_emb_dim` | `64` | Time-embedding width. Used by both backbones; `None` lets the UNet choose its internal default. | Active |
+| `network.time_emb_dim` | `64` | Time-embedding width for the MLP and UNet. `None` lets the UNet choose its internal default. | Active for MLP and UNet |
 | `network.base_channels` | `64` | Base UNet channel width. Ignored by the MLP. | Active for UNet |
 | `network.channel_mult` | `(1, 2, 4, 4)` | UNet channel multiplier at each resolution level. | Active for UNet |
 | `network.attn_resolutions` | `(8,)` | Image resolutions at which the UNet uses attention. | Active for UNet |
 | `network.middle_attention` | `True` | Enable attention in the UNet middle block. | Active for UNet |
 | `network.num_res_blocks` | `2` | UNet residual blocks per resolution level. | Active for UNet |
 | `network.dropout` | `0.0` | UNet dropout probability. Use a value in `[0, 1)`. | Active for UNet |
+| `network.depth` | `12` | Transformer block count for Small DiT. | Active for DiT |
+| `network.hidden_size` | `384` | Token width for Small DiT. It must be divisible by four and by `num_heads`. | Active for DiT |
+| `network.num_heads` | `6` | Attention head count for Small DiT. | Active for DiT |
+| `network.mlp_ratio` | `4.0` | DiT block MLP expansion ratio. | Active for DiT |
+| `network.patch_size` | `2` | Square DiT patch width. `data.image_size` must be divisible by it. | Active for DiT |
+| `network.learn_sigma` | `False` | Must remain false. The backbone returns only raw data-space channels. | Active for DiT |
+
+Select the canonical Small DiT through the same config used by `GDFM`:
+
+```python
+cfg.network.arch = "dit"
+cfg.network.depth = 12
+cfg.network.hidden_size = 384
+cfg.network.num_heads = 6
+cfg.network.mlp_ratio = 4.0
+cfg.network.patch_size = 2
+cfg.data.image_size = 32
+cfg.data.image_channels = 1
+model = GDFM(cfg)
+```
+
+The implementation adapts official `willisma/SiT` commit
+`cbde832a40b153ccc79603412409da9c9b0c568c`. Its retained MIT license sits
+beside the backbone in `mem_param_src/networks/LICENSE_SiT.txt`.
 
 Legacy runner guidance for the synthetic MLP was:
 
@@ -282,6 +306,8 @@ original dataset.
 | `training.n_training_steps` | `200` | Number of optimizer updates. `200` is a smoke-test budget, not a paper recommendation. | Runner-owned; notebook active |
 | `training.batch_cap` | `64` | Maximum minibatch size; old runners used `min(n_train, batch_cap)`. | Runner-owned |
 | `training.batch_size` | `64` | Resolved minibatch size. Normally derived from `batch_cap` and `n_train`. | Derived; notebook active |
+| `training.effective_batch_size` | `0` | Samples per optimizer update. Zero uses one physical batch. A larger value must be a multiple of the resolved physical batch size. | Runner-owned |
+| `training.accumulation_steps` | `1` | Resolved number of equal physical microbatches per optimizer update. Do not set by hand. | Derived |
 | `training.lr` | `1.0e-3` | Optimizer learning rate. Legacy guidance: `1e-3` for synthetic MLP and `1e-4` for image UNet. | Runner-owned; notebook active |
 | `training.weight_decay` | `0.0` | Optimizer weight decay. Legacy runners used zero. | Runner-owned; notebook active |
 | `training.optimizer` | `"adam"` | Optimizer name. Old image runner allowed `adam` or `sgd`; synthetic used Adam. | Runner-owned |
@@ -290,6 +316,7 @@ original dataset.
 | `training.ckpt_schedule` | `"interval"` | Named checkpoint policy. Old choices were `interval` and `bonnaire-1m`. | Runner-owned |
 | `training.ckpt_steps` | `()` | Explicit checkpoint steps. Takes priority over the named schedule; step zero and the final step should always be included. | Runner-owned |
 | `training.resolved_ckpt_steps` | `()` | Final sorted checkpoint steps after applying explicit/named/interval policy. Do not set by hand. | Derived |
+| `training.recovery_every` | `0` | Interval for rotating exact recovery states. Zero saves recovery state only at normal checkpoint steps. | Runner-owned |
 | `training.log_every` | `10` | Print/log loss every this many optimizer steps. | Runner-owned |
 | `training.show_progress` | `True` | Show interactive progress output when supported. Disable for quiet batch logs. | Runner-owned |
 | `training.start_time` | `0.01` | Smallest uniformly sampled training time. Must satisfy `0 < start < end < 1`. | Active |
@@ -377,6 +404,7 @@ dataset, model, endpoint range, and parameterization sweep.
 | `generation_monitor.enabled` | `False` | Save fixed-noise image grids at step zero and every image-training checkpoint. | Runner-owned |
 | `generation_monitor.n_samples` | `64` | Number of saved `z_init` samples used in every checkpoint grid. Must not exceed `evaluation.sample_bank_size`. | Runner-owned |
 | `generation_monitor.n_train_samples` | `0` | Fixed training examples above generated samples; zero keeps generated-only grids. Uses the first available examples in saved tensor order. Requires generation monitoring. | Runner-owned |
+| `generation_monitor.sampling_profiles` | `()` | Optional named monitor-only overrides for `eps_to_v`, `use_safe_div`, and `safe_div_denominator_floor`. The first profile must be direct plus safe and is required; later nonfinite profiles are retained as failed diagnostics. Empty keeps the single `sampling` configuration and legacy artifact paths. | Runner-owned |
 | `generation_monitor.show` | `True` | Reserved display preference. The command runner saves PNG files without opening interactive windows. | Reserved |
 | `random_projected_f_mem.enabled` | `False` | Enable rough projected-pixel f_mem at image preview checkpoints. Requires generation monitoring. | Runner-owned |
 | `random_projected_f_mem.n_samples` | `512` | Generated samples used by f_mem, separate from grid size. The runner expands and saves the noise bank as needed when enabled. | Runner-owned |
@@ -390,6 +418,7 @@ dataset, model, endpoint range, and parameterization sweep.
 | --- | --- | --- | --- |
 | `runtime.precision` | `"fp32"` | Requested numerical mode. Legacy choices were `fp32`, CUDA `tf32`, and CUDA `bf16`. Use `fp32` as the correctness baseline. | Runner-owned |
 | `runtime.tf32_enabled` | `False` | Resolved CUDA backend state. Should be derived from device and precision. | Derived |
+| `runtime.deterministic` | `False` | Require deterministic CUDA algorithms, disable cuDNN benchmarking, and configure the cuBLAS deterministic workspace. Enable this for jobs that must resume onto the same trajectory across processes. | Runner-owned |
 | `runtime.autocast_dtype` | `"none"` | Resolved autocast type; old runtime used `"bfloat16"` for BF16 and `"none"` otherwise. | Derived |
 | `runtime.pin_memory` | `True` | Request pinned host memory. Effective only for CUDA transfers. | Runner-owned/Derived |
 | `runtime.non_blocking_h2d` | `False` | Use non-blocking host-to-device copies when pinned memory is active. | Derived |
@@ -438,10 +467,11 @@ mem-param-synthetic-train \
   --run-dir outputs/gmm_run
 ```
 
-The image runner logs loss, learning rate, elapsed time, and progress at
-`training.log_every`. Training and generation metrics use `optimizer_step` as
-their shared W&B x-axis. Step zero is the initial sample panel; later values are
-completed gradient updates. Run `wandb login` before online tracking. Checkpoint
+The image runner records local loss history at `training.log_every`. It sends
+W&B training values only after a recoverable optimizer boundary. Training and
+generation metrics use `optimizer_step` as their shared W&B x-axis. Step zero
+is the initial sample panel; later values are completed gradient updates. Run
+`wandb login` before online tracking. Checkpoint
 monitoring saves `monitoring/samples_step_<step>.png` from the same `z_init`
 prefix at step zero and every checkpoint. Omit `--generation-monitor` to keep
 W&B loss tracking without the sampling cost. These grids are qualitative
@@ -457,6 +487,9 @@ Every resolved value is saved in the run's `config.json`.
 | `--lr` | `training.lr` | Optimizer learning rate. |
 | `--seed` | `training.seed` | Data/model seed and base for the fixed-noise seed. |
 | `--batch-size` | `training.batch_cap` | Maximum training batch size, capped at N. |
+| `--effective-batch-size` | `training.effective_batch_size` | Samples per optimizer update through equal gradient-accumulation microbatches. |
+| `--recovery-every` | `training.recovery_every` | Rotating exact-recovery interval in optimizer updates. |
+| `--stop-after-step` | Operational | Pause cleanly at one absolute step while preserving the configured final target. |
 | `--checkpoint-every` | `training.ckpt_every` | Select interval checkpoints and clear the explicit schedule. |
 | `--sampler` | `sampling.method` | `heun` or `euler`. |
 | `--sampling-steps` | `sampling.n_steps` | Number of solver intervals. |
@@ -466,6 +499,11 @@ Every resolved value is saved in the run's `config.json`.
 | `--sampling-start-time` | `sampling.start_time` | Start of integration. |
 | `--sampling-end-time` | `sampling.end_time` | End of integration. |
 | `--sampling-output` | `sampling.output` | Clean endpoint estimate `x_1` or integrated state `x_t_max`. |
+
+Resume an existing image run with `--resume-run-dir RUN_DIR`. Resume loads the
+saved config, data, model, optimizer, random streams, batch position, history,
+and W&B run ID. Scientific overrides are rejected. `--device`,
+`--stop-after-step`, and `--evaluate-after-training` remain operational.
 
 These sampling flags leave the training objective and training-time interval
 unchanged. Unit-MSE eps/eps training compares noise directly. Sampling still
@@ -505,6 +543,22 @@ Post-training image evaluation uses the same setting and saves each batch under
 For an older run, use the image evaluator with
 `--set evaluation.save_generated_samples=true` to retain each replayed batch.
 
+Named profiles reuse the same saved `z_init` prefix and all non-overridden
+sampling settings. Each mapping must contain `name`, `eps_to_v`,
+`use_safe_div`, and `safe_div_denominator_floor`. Profile artifacts use:
+
+- `monitoring/generated_samples/<profile>/step_<step>.pt`;
+- `monitoring/comparison_grids/<profile>/step_<step>.png`;
+- `monitoring/sample_diagnostics/<profile>/step_<step>.json`;
+- `monitoring/f_mem/<profile>/step_<step>.json`.
+
+The diagnostic record reports raw range, standard deviation, nonfinite count,
+and the finite-value fraction outside `[-1,1]`. W&B uses matching
+`generation/<profile>/...` and
+`monitor/random_projected_pixels/<profile>/...` namespaces. A nonfinite first
+profile stops the run. A nonfinite later profile writes its tensor and diagnostic
+record, skips its grid and f_mem, and lets training continue.
+
 This monitor reuses the old runner's fixed random-projected pixel metric:
 normalize/clamp to [0,1], resize to 16 x 16, then project to 256 dimensions.
 It compares against all saved training images at `evaluation.f_mem_threshold`
@@ -515,7 +569,7 @@ and generation quality. A small generated count gives a coarse estimate.
 Projection and cached training vectors are saved under `monitoring/` as
 `f_mem_projection.pt` and `f_mem_train_vectors.pt`. Each checkpoint writes
 `f_mem_step_<step>.json`, including sample count, rho, metric space, and distances.
-W&B logs `generation/random_projected_pixels/f_mem`, `mean_r`, `rho`, `n_samples`,
+W&B logs `monitor/random_projected_pixels/f_mem`, `mean_r`, `rho`, `n_samples`,
 and `N` against `optimizer_step`. Projection settings live in the saved config
 and metric records. The disabled option adds no metric sampling or artifacts.
 
@@ -532,6 +586,29 @@ mem-param-synthetic-eval \
   --eval-name exact_division \
   --set sampling.output=x_1
 ```
+
+Dataset-aware image protocol mode adds explicit checkpoint, metric, feature
+space, sample-count, protocol-ID, output-directory, saved-noise, and pinned
+encoder-asset choices.
+For MNIST32 and MNIST64, `fid` means `mnist_fd_jointae32_v1`. For registered
+natural image data, `fid` means Inception FID. See `docs/image_evaluation.md`.
+
+```bash
+mem-param-image-eval \
+  --run-dir RUN_DIR \
+  --checkpoints 100000,1000000 \
+  --metrics fid,f_mem \
+  --feature-spaces dataset_default,sscd,dinov2,lpips \
+  --sample-count 10000 \
+  --protocol-id fixed10k_v1 \
+  --noise-path SAVED_NOISE_BANK.pt \
+  --assets-manifest outputs/model_assets/feature_f_mem/manifest.json
+```
+
+This example is for a natural-image run. For MNIST, use
+`--feature-spaces dataset_default` and omit `--assets-manifest`. Natural-image
+protocol evaluation requires the schema-v3 staged manifest and verifies every
+requested encoder weight hash.
 
 An optional evaluation config may contain only `sampling` and `evaluation`
 sections. The setting order is saved run, evaluation config, then `--set`.
@@ -575,7 +652,7 @@ migration inventory, not commands that currently work here.
 | `schedule.logit_sigma` | Removed | Logit-normal time sampling was removed. |
 | `schedule.beta_min` | Removed | VP schedules are outside the current FM runner scope. |
 | `schedule.beta_max` | Removed | VP schedules are outside the current FM runner scope. |
-| `network.patch_size`, `depth`, `heads` | Removed | JiT/transformer backbone is not retained. |
+| legacy JiT `network.patch_size`, `depth`, `heads` | DiT uses `patch_size`, `depth`, and `num_heads`; the factory accepts `heads` as an alias. | The old JiT path remains removed. Small DiT now owns these active architecture fields. |
 | `network.bottleneck_dim`, `proj_dropout`, `attn_dropout` | Removed | Same JiT scope removal. |
 | `network.in_context_len`, `in_context_start` | Removed | Same JiT scope removal. |
 | old `sampling.output="state"` | `sampling.output="x_t_max"` | State after the final solver step. |

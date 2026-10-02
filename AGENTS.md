@@ -57,6 +57,12 @@ Key measurements:
   sentence. Keep necessary scientific terms. Cut filler and grand claims.
   Give the text life through clear questions and specific observations.
   State evidence and uncertainty plainly. Keep the stricter notebook rules below.
+- For research-paper prose, explain a technical idea before or while naming it.
+  Avoid dense noun phrases that hide the action, such as "finite-data regression
+  objective," when a short description is clearer. Prefer "what the model
+  predicts" in the main argument, then use "target parameterization" when the
+  exact term helps. Keep compact technical labels for equations, methods, and
+  tables where they improve precision.
 - Do not use slang, hype wording, playful labels, or informal phrases.
 - Prefer direct descriptions of methods, assumptions, metrics, results,
   blockers, and next actions.

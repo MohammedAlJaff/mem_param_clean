@@ -34,6 +34,7 @@ See:
 
 - `docs/objective.md`
 - `docs/config_reference.md`
+- `docs/image_evaluation.md`
 - `docs/repo_map.md`
 - `docs/preservation.md`
 - `TODO.txt`
@@ -88,6 +89,12 @@ mem-param-synthetic-eval --run-dir outputs/gmm_smoke
 Image runs use `mem-param-image-train` and `mem-param-image-eval`. Evaluation
 requires the saved run directory. An optional evaluation config and `--set`
 flags can change only sampling and evaluation settings.
+
+Use the dataset-aware protocol flags for selected checkpoints, explicit sample
+counts, MNIST JointAE FD, natural-image Inception FID, or calibrated
+JointAE/SSCD/DINOv2/LPIPS memorization. Natural-image learned features require
+a pinned encoder asset manifest. See `docs/image_evaluation.md` for the command
+and saved artifact contract.
 
 Each run saves `data_bundle.pt` and `data_manifest.json`. The tensor bundle
 contains the exact training and reference values. The manifest records their
@@ -330,7 +337,60 @@ For a rough f_mem curve alongside previews, add these flags to a new image run:
 
 The grid can still show 16 images while the metric uses 512. Both use prefixes
 of one shared generated batch. The saved noise bank grows as needed. W&B shows
-`generation/random_projected_pixels/f_mem`; local JSON records are saved in
+`monitor/random_projected_pixels/f_mem`; local JSON records are saved in
 `monitoring/f_mem_step_<step>.json`. This optional approximation uses resized,
 random-projected pixels and rho=0.3. It is off by default and is not FID.
 See `docs/config_reference.md` for preprocessing and interpretation limits.
+
+The publication evaluator keeps that approximation separate from
+`eval/full_pixels` and `eval/features/{sscd,lpips,dinov2}`. It replays 10,000
+samples at native 32x32, saves every feature and nearest-neighbor array, and
+calibrates learned-space thresholds from the first 1,024 images of one frozen
+10,000-image validation artifact. Pixel rho values and learned-space percentile
+curves are not interchangeable. The seed-0 resolution check and matched
+three-seed workflow live in:
+
+```text
+jobs/berzelius/eps_recovery_1m/feature_f_mem/README.md
+jobs/berzelius/eps_recovery_multiseed/README.md
+```
+
+## Current 200k-gated image studies
+
+Two seed-0 studies target one million optimizer updates but pause together at
+200k for quality and memorization review:
+
+- `jobs/berzelius/celeba32_prediction_loss_3x3/README.md` defines all nine
+  CelebA32 gray prediction/loss cells.
+- `jobs/berzelius/eps_eps_data_image_format/README.md` defines the seven
+  EPS/EPS dataset, resolution, color, and capacity rows.
+
+Both use deterministic CUDA execution and rotating complete recovery states.
+The launchers freeze a source snapshot per batch. Resume preserves the model,
+Adam, random streams, shuffled-batch position, and W&B run ID; continuation
+from the 200k gate to one million remains a manual, audited action.
+
+## Fresh MNIST diagonal production runs
+
+The [MNIST production workflow](jobs/berzelius/mnist_diagonal_1m/README.md)
+defines 36 fresh one-million-update trajectories. It pairs MNIST32 U-Net-S
+with MNIST64 U-Net-L across N={512,2048}, seeds 0-2, and the `x/x`, `eps/eps`,
+and `v/v` diagonals. It uses physical/effective batch 256/256, one dedicated
+W&B project, frozen source snapshots, and exact staged recovery for MNIST64.
+
+## Fresh CelebA32 U-Net-S full-grid production runs
+
+The [CelebA32 production workflow](jobs/berzelius/celeba32_unet_3x3_1m/README.md)
+defines 108 fresh one-million-update trajectories: the complete prediction/loss
+3x3 at N={512,1024,2048,4096} and seeds 0-2. It uses physical/effective batch
+256/256, exact training conversions, safe via-x monitoring, frozen source
+snapshots, 24-hour thin allocations, and exact manually audited resume.
+
+
+## Small-DiT seed-1 architecture robustness runs
+
+The [seed-1 DiT workflow](jobs/berzelius/celeba32_dit_robustness_s1_1m_viax/README.md)
+defines 18 fresh CelebA32-gray trajectories: the complete prediction/loss 3x3
+at N={512,2048}. It matches the seed-0 DiT configuration except for approved
+seed and tracking-identity fields, uses physical/effective batch 64/256, and
+provides frozen-source exact recovery through manual 24-hour continuations.
