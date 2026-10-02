@@ -79,8 +79,8 @@ def _wandb_failure(state, exc, context):
     return None
 
 
-def start_wandb(config, run_dir):
-    """Start one optional W&B run and save its local identity."""
+def start_wandb(config, run_dir, resume_run_id=None):
+    """Start or strictly resume one optional W&B run."""
     if not bool(config.tracking.wandb.enabled):
         return None
 
@@ -105,7 +105,7 @@ def start_wandb(config, run_dir):
         "group": identity["group"],
         "subexperiment": subexperiment,
         "tags": tags,
-        "run_id": None,
+        "run_id": resume_run_id,
         "url": None,
         "dir": str(wandb_dir.resolve()),
         "warning": None,
@@ -121,6 +121,9 @@ def start_wandb(config, run_dir):
         wandb = importlib.import_module("wandb")
         entity = str(config.tracking.wandb.entity or "").strip() or None
         notes = str(config.tracking.wandb.notes or "").strip() or None
+        init_kwargs = {}
+        if resume_run_id is not None:
+            init_kwargs.update(id=str(resume_run_id), resume="must")
         run = wandb.init(
             project=identity["project"],
             entity=entity,
@@ -133,6 +136,7 @@ def start_wandb(config, run_dir):
             tags=tags,
             config=config_to_dict(config),
             reinit="finish_previous",
+            **init_kwargs,
         )
         state["run"] = run
         state["module"] = wandb
@@ -140,6 +144,7 @@ def start_wandb(config, run_dir):
             wandb.define_metric("optimizer_step")
             wandb.define_metric("train/*", step_metric="optimizer_step")
             wandb.define_metric("generation/*", step_metric="optimizer_step")
+            wandb.define_metric("monitor/*", step_metric="optimizer_step")
 
         metadata.update(
             {

@@ -228,6 +228,29 @@ class TestVelocityLossWeighting(unittest.TestCase):
 
 
 class TestDivisionChoice(unittest.TestCase):
+    def test_eps_eps_training_safe_division_is_an_exact_no_op(self):
+        model = _small_model(prediction_space="eps", loss_space="eps")
+        model.net = _TrainablePrediction(
+            torch.tensor([[0.25, -0.75], [1.5, 0.125]])
+        )
+        clean = torch.tensor([[2.0, -1.0], [0.5, 3.0]])
+        noise = torch.tensor([[1.0, 0.25], [-2.0, 1.5]])
+        times = torch.tensor([0.001, 0.999])
+
+        model.training_use_safe_div = False
+        exact_loss = model.compute_loss(clean, eps=noise, t=times)
+        exact_loss.backward()
+        exact_gradient = model.net.prediction.grad.detach().clone()
+        model.net.prediction.grad = None
+
+        model.training_use_safe_div = True
+        safe_loss = model.compute_loss(clean, eps=noise, t=times)
+        safe_loss.backward()
+        safe_gradient = model.net.prediction.grad.detach().clone()
+
+        self.assertTrue(torch.equal(exact_loss, safe_loss))
+        self.assertTrue(torch.equal(exact_gradient, safe_gradient))
+
     def test_direct_epsilon_velocity_preserves_stationary_prediction_below_floor(self):
         model = _small_model(prediction_space="eps", loss_space="eps")
         state = torch.tensor([[2.0, -1.0]])

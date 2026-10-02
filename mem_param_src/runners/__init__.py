@@ -1,5 +1,7 @@
 """Shared boundaries for the clean image and synthetic runners."""
 
+import os
+
 import torch
 
 
@@ -48,13 +50,19 @@ def resolve_device(name):
 
 
 def configure_runtime(config, device):
-    """Validate the first runner runtime and apply its CUDA TF32 setting."""
+    """Validate runtime settings and configure CUDA math and determinism."""
     if str(config.runtime.precision) != "fp32":
         raise ValueError("The first runner supports runtime.precision='fp32' only.")
     if str(config.runtime.autocast_dtype) != "none":
         raise ValueError("The first runner does not use autocast.")
     if device.type == "cuda":
         tf32_enabled = bool(config.runtime.tf32_enabled)
+        deterministic = bool(config.runtime.get("deterministic", False))
+        if deterministic:
+            os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+        torch.use_deterministic_algorithms(deterministic)
+        torch.backends.cudnn.deterministic = deterministic
+        torch.backends.cudnn.benchmark = False
         torch.backends.cuda.matmul.allow_tf32 = tf32_enabled
         torch.backends.cudnn.allow_tf32 = tf32_enabled
 

@@ -39,6 +39,12 @@ def get_base_config():
     network.middle_attention = True
     network.num_res_blocks = 2
     network.dropout = 0.0
+    network.depth = 12
+    network.hidden_size = 384
+    network.num_heads = 6
+    network.mlp_ratio = 4.0
+    network.patch_size = 2
+    network.learn_sigma = False
 
     data = config.data = ConfigDict()
     data.dataset = "gmm_subspace"
@@ -72,6 +78,9 @@ def get_base_config():
     training.n_training_steps = 200
     training.batch_cap = 64
     training.batch_size = 64
+    # Zero keeps the historical one-physical-batch optimizer update.
+    training.effective_batch_size = 0
+    training.accumulation_steps = 1
     training.lr = 1.0e-3
     training.weight_decay = 0.0
     training.optimizer = "adam"
@@ -80,6 +89,8 @@ def get_base_config():
     training.ckpt_schedule = "interval"
     training.ckpt_steps = ()
     training.resolved_ckpt_steps = ()
+    # Zero saves recovery state only at normal checkpoint steps.
+    training.recovery_every = 0
     training.log_every = 10
     training.show_progress = True
     training.start_time = 0.01
@@ -123,6 +134,10 @@ def get_base_config():
     generation_monitor.enabled = False
     generation_monitor.n_samples = 64
     generation_monitor.n_train_samples = 0
+    # An empty tuple preserves the single sampler from config.sampling. A study
+    # can instead provide named sampler mappings; the first must be direct+safe
+    # and is the required profile for monitoring failure handling.
+    generation_monitor.sampling_profiles = ()
     generation_monitor.show = True
 
     random_projected_f_mem = config.random_projected_f_mem = ConfigDict()
@@ -135,6 +150,7 @@ def get_base_config():
     runtime = config.runtime = ConfigDict()
     runtime.precision = "fp32"
     runtime.tf32_enabled = False
+    runtime.deterministic = False
     runtime.autocast_dtype = "none"
     runtime.pin_memory = True
     runtime.non_blocking_h2d = False

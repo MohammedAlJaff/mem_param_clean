@@ -41,33 +41,66 @@ def save_monitor_curves(run_dir):
     plot_dir = run_dir / "monitoring" / "plots"
     plot_dir.mkdir(parents=True, exist_ok=True)
     history = read_json(run_dir / "train_history.json")
-    metrics = [
+    legacy_metrics = [
         read_json(path)
         for path in sorted((run_dir / "monitoring").glob("f_mem_step_*.json"))
     ]
+    metric_groups = {}
+    if legacy_metrics:
+        metric_groups[""] = legacy_metrics
+    profile_root = run_dir / "monitoring" / "f_mem"
+    if profile_root.is_dir():
+        for profile_dir in sorted(path for path in profile_root.iterdir() if path.is_dir()):
+            records = [
+                read_json(path) for path in sorted(profile_dir.glob("step_*.json"))
+            ]
+            if records:
+                metric_groups[profile_dir.name] = records
+
     paths = {}
-    for key, records, title, ylabel in (
-        ("loss", history, "Training loss", "Batch loss"),
-        ("f_mem", metrics, "Projected-pixel memorization", "f_mem"),
-    ):
-        if not records:
-            continue
+    if history:
         figure = Figure(figsize=(7, 4), layout="constrained")
         FigureCanvasAgg(figure)
         axis = figure.subplots()
         axis.plot(
-            [r["step"] for r in records],
-            [r[key] for r in records],
-            marker="o" if key == "f_mem" else None,
+            [record["step"] for record in history],
+            [record["loss"] for record in history],
             markersize=3,
             linewidth=1.3,
         )
-        if key == "f_mem":
-            axis.set_ylim(-0.02, 1.02)
-            record = records[-1]
-            title += f" | rho={record['rho']:g}, n={record['n_samples']:,}, N={record['N']:,}"
-        axis.set(title=title, xlabel="Training step", ylabel=ylabel)
+        axis.set(title="Training loss", xlabel="Training step", ylabel="Batch loss")
         axis.grid(alpha=0.2)
-        paths[key] = plot_dir / f"{key}.png"
-        figure.savefig(paths[key], dpi=160)
+        paths["loss"] = plot_dir / "loss.png"
+        figure.savefig(paths["loss"], dpi=160)
+
+    if metric_groups:
+        figure = Figure(figsize=(7, 4), layout="constrained")
+        FigureCanvasAgg(figure)
+        axis = figure.subplots()
+        for profile, records in metric_groups.items():
+            axis.plot(
+                [record["step"] for record in records],
+                [record["f_mem"] for record in records],
+                marker="o",
+                markersize=3,
+                linewidth=1.3,
+                label=profile or None,
+            )
+        last_profile = next(reversed(metric_groups))
+        record = metric_groups[last_profile][-1]
+        title = (
+            "Projected-pixel memorization"
+            f" | rho={record['rho']:g}, n={record['n_samples']:,}, N={record['N']:,}"
+        )
+        axis.set(
+            title=title,
+            xlabel="Training step",
+            ylabel="f_mem",
+            ylim=(-0.02, 1.02),
+        )
+        axis.grid(alpha=0.2)
+        if any(metric_groups):
+            axis.legend()
+        paths["f_mem"] = plot_dir / "f_mem.png"
+        figure.savefig(paths["f_mem"], dpi=160)
     return paths
