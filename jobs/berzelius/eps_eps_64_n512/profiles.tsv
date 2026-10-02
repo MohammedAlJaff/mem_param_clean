@@ -1,0 +1,7 @@
+profile_id	capacity	base_channels	channel_mult	time_emb_dim	attention	middle_attention	attn_resolutions	constraint
+0	small	32	[1,2,4]	128	off	false	[]	thin
+1	small	32	[1,2,4]	128	on	true	[16,8]	thin
+2	deep	32	[1,2,4,4]	128	off	false	[]	thin
+3	deep	32	[1,2,4,4]	128	on	true	[16,8]	thin
+4	wide_deep	64	[1,2,4,4]	128	off	false	[]	fat
+5	wide_deep	64	[1,2,4,4]	128	on	true	[16,8]	fat

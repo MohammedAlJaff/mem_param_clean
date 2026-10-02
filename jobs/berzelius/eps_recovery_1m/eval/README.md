@@ -77,9 +77,10 @@ finishes. The dependent combine job writes:
 - `combined/eps_config_comparison.png`
 - `combined/summary.json`
 
-Feature-space `f_mem` is intentionally not part of this quick comparison. The
-reviewer-motivated version is recorded separately as T018 in `TODO.txt`,
-including encoder/layer reporting and feature-space rho calibration.
+Feature-space `f_mem` remains outside this quick comparison. The separate
+`../feature_f_mem/` workflow replays matched eps/v/x checkpoints, retains raw
+SSCD/LPIPS/DINOv2 arrays, and calibrates learned-space rho from held-out
+features. See its README before comparing these pixel results with learned ones.
 
 ## Add the v/v and x/x references
 

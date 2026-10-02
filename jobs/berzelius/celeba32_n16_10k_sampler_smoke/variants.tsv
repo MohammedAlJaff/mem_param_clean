@@ -1,0 +1,6 @@
+id	label	prediction	loss	use_safe_div	eps_to_v	final_pixel_clamp
+0	eps_viax_divsafe_pixraw	eps	eps	true	via_x	false
+1	eps_direct_divsafe_pixraw	eps	eps	true	direct	false
+2	eps_direct_divsafe_pixclip	eps	eps	true	direct	true
+3	eps_direct_divexact_pixclip	eps	eps	false	direct	true
+4	vv_native_pixclip	v	v	true	direct	true

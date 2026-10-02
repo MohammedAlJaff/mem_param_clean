@@ -68,7 +68,7 @@ if (( sample_count == 10000 && fid_reference_count < 10000 )); then
     exit 2
 fi
 
-account="${MP_EPS_EVAL_ACCOUNT:-berzelius-2026-78}"
+account="${MP_EPS_EVAL_ACCOUNT:-berzelius-2026-269}"
 walltime="${MP_EPS_EVAL_TIME:-02:00:00}"
 tag="$(date -u +%Y%m%dT%H%M%SZ)_$$_${mode}"
 output_root="${repo_root}/outputs/evals/eps_recovery_1m/${tag}"

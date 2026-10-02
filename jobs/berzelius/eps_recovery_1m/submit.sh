@@ -20,7 +20,7 @@ if [[ ! "$array_spec" =~ ^[0-7](-[0-7])?(,[0-7](-[0-7])?)*(%[1-8])?$ ]]; then
 fi
 
 # This account comes from the existing Berzelius jobs. Override if needed.
-account="${MP_EPS_1M_ACCOUNT:-berzelius-2026-78}"
+account="${MP_EPS_1M_ACCOUNT:-berzelius-2026-269}"
 walltime="${MP_EPS_1M_TIME:-48:00:00}"
 batch_tag="$(date -u +%Y%m%dT%H%M%SZ)_$$"
 batch_root="${repo_root}/outputs/job_sets/eps_recovery_1m/${batch_tag}"

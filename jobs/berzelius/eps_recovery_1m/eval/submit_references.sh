@@ -24,7 +24,7 @@ for path in "$source_manifest" "$fid_reference_artifact"; do
     fi
 done
 
-account="${MP_EPS_EVAL_ACCOUNT:-berzelius-2026-78}"
+account="${MP_EPS_EVAL_ACCOUNT:-berzelius-2026-269}"
 walltime="${MP_EPS_EVAL_TIME:-02:00:00}"
 manifest_command=(
     python3 "${script_dir}/make_reference_manifest.py"
