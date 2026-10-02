@@ -3,6 +3,7 @@
 import argparse
 
 from mem_param_src.runners.evaluation import evaluate_image_run
+from mem_param_src.runners.image_protocol import evaluate_image_protocol
 
 
 def build_parser():
@@ -14,6 +15,42 @@ def build_parser():
         help="Optional Python config containing sampling or evaluation settings.",
     )
     parser.add_argument("--eval-name", help="New name under run_dir/evaluations.")
+    parser.add_argument(
+        "--checkpoints",
+        help="Comma-separated optimizer steps, or 'all', for protocol evaluation.",
+    )
+    parser.add_argument(
+        "--metrics",
+        help="Comma-separated protocol metrics, such as fid,f_mem,class_fd.",
+    )
+    parser.add_argument(
+        "--feature-spaces",
+        default="dataset_default",
+        help="Comma-separated feature spaces for protocol evaluation.",
+    )
+    parser.add_argument(
+        "--sample-count",
+        type=int,
+        help="Explicit generated and reference count for protocol evaluation.",
+    )
+    parser.add_argument(
+        "--protocol-id",
+        help="Restartable protocol directory name under run_dir/evaluations.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Optional evaluation root outside the source run directory.",
+    )
+    parser.add_argument(
+        "--noise-path",
+        help="Optional saved noise bank when run_dir/z_init.pt is too small.",
+    )
+    parser.add_argument(
+        "--assets-manifest",
+        help="Pinned encoder asset manifest required by natural-image protocols.",
+    )
+    parser.add_argument("--feature-batch-size", type=int, default=256)
+    parser.add_argument("--nn-batch-size", type=int, default=512)
     parser.add_argument("--device", default="auto", help="auto, cpu, mps, or cuda.")
     parser.add_argument(
         "--set",
@@ -29,13 +66,47 @@ def build_parser():
 def main(argv=None):
     """Evaluate one saved image run without rebuilding its dataset."""
     args = build_parser().parse_args(argv)
-    eval_dir = evaluate_image_run(
-        args.run_dir,
-        eval_name=args.eval_name,
-        eval_config=args.eval_config,
-        override_items=args.override_items,
-        device=args.device,
+    protocol_mode = any(
+        value is not None
+        for value in (
+            args.checkpoints,
+            args.metrics,
+            args.sample_count,
+            args.protocol_id,
+            args.output_dir,
+            args.noise_path,
+            args.assets_manifest,
+        )
     )
+    if protocol_mode:
+        if args.eval_name is not None:
+            raise ValueError("Use --protocol-id, not --eval-name, in protocol mode.")
+        eval_dir = evaluate_image_protocol(
+            args.run_dir,
+            checkpoints=args.checkpoints or "all",
+            metrics=args.metrics or "fid",
+            feature_spaces=args.feature_spaces,
+            sample_count=(
+                args.sample_count if args.sample_count is not None else 10000
+            ),
+            protocol_id=args.protocol_id or "dataset-default-v1",
+            output_dir=args.output_dir,
+            noise_path=args.noise_path,
+            assets_manifest=args.assets_manifest,
+            eval_config=args.eval_config,
+            override_items=args.override_items,
+            device=args.device,
+            feature_batch_size=args.feature_batch_size,
+            nn_batch_size=args.nn_batch_size,
+        )
+    else:
+        eval_dir = evaluate_image_run(
+            args.run_dir,
+            eval_name=args.eval_name,
+            eval_config=args.eval_config,
+            override_items=args.override_items,
+            device=args.device,
+        )
     print(eval_dir)
     return 0
 

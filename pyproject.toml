@@ -9,6 +9,7 @@ description = "Target parameterization and memorization dynamics."
 requires-python = ">=3.10"
 dependencies = [
   "ml-collections>=0.1.1",
+  "timm>=0.9",
   "torch>=2.0",
 ]
 
@@ -26,6 +27,7 @@ image = [
   "torchvision>=0.15",
 ]
 evaluation = [
+  "lpips==0.1.4",
   "torch-fidelity>=0.4",
 ]
 tracking = [
@@ -42,6 +44,10 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["mem_param_src*"]
+
+[tool.setuptools.package-data]
+"mem_param_src.networks" = ["LICENSE_SiT.txt"]
+"mem_param_src.metrics.image" = ["assets/*.json", "assets/*.pt"]
 
 [tool.ruff.lint]
 unfixable = ["F401"]
