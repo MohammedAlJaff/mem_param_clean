@@ -1,0 +1,65 @@
+{
+  "experiments": {
+    "celeba32_dit_3x3": {
+      "accepted_run_count": 36,
+      "manifest": "celeba32_dit_3x3/manifest.json",
+      "row_counts": {
+        "diagnostics": 106272,
+        "evaluation": 62208,
+        "runs": 36,
+        "training": 164772
+      }
+    },
+    "celeba32_unet_3x3": {
+      "accepted_run_count": 108,
+      "manifest": "celeba32_unet_3x3/manifest.json",
+      "row_counts": {
+        "diagnostics": 318816,
+        "evaluation": 186624,
+        "runs": 108,
+        "training": 494316
+      }
+    },
+    "celeba32_vv_weighting": {
+      "accepted_run_count": 18,
+      "manifest": "celeba32_vv_weighting/manifest.json",
+      "row_counts": {
+        "diagnostics": 53136,
+        "evaluation": 31104,
+        "runs": 18,
+        "training": 82386
+      }
+    },
+    "celeba64_rgb_diagonal": {
+      "accepted_run_count": 18,
+      "manifest": "celeba64_rgb_diagonal/manifest.json",
+      "row_counts": {
+        "diagnostics": 55350,
+        "evaluation": 32400,
+        "runs": 18,
+        "training": 82818
+      }
+    },
+    "mnist32_diagonal": {
+      "accepted_run_count": 18,
+      "manifest": "mnist32_diagonal/manifest.json",
+      "row_counts": {
+        "diagnostics": 6120,
+        "evaluation": 5760,
+        "runs": 18,
+        "training": 74898
+      }
+    },
+    "mnist64_diagonal": {
+      "accepted_run_count": 18,
+      "manifest": "mnist64_diagonal/manifest.json",
+      "row_counts": {
+        "diagnostics": 6120,
+        "evaluation": 5760,
+        "runs": 18,
+        "training": 74898
+      }
+    }
+  },
+  "schema_version": 1
+}
