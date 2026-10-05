@@ -1,0 +1,33 @@
+{
+  "accepted_run_count": 36,
+  "experiment": "celeba32_dit_3x3",
+  "files": {
+    "evaluation_diagnostics.csv": {
+      "row_count": 106272,
+      "sha256": "c81621173351ec28e524a0d1262f05cdc45d75324473e5c48a0afaa2f845c5f9",
+      "size_bytes": 12390460
+    },
+    "evaluation_metrics.csv": {
+      "row_count": 62208,
+      "sha256": "f2c4cdeff37ca30c5282cc64e36188138a0f60d44346d4943efc8691f43b9092",
+      "size_bytes": 6957212
+    },
+    "runs.csv": {
+      "row_count": 36,
+      "sha256": "7b2d2d7b703470fa47ad49f50fb753e64358e53e3fd07f5eee9039330f9602c3",
+      "size_bytes": 26769
+    },
+    "training_metrics.csv": {
+      "row_count": 164772,
+      "sha256": "4649a3e86de48ce90d7ad0f790b279bf9ce1a8684c329a21b072ae1789b1afd2",
+      "size_bytes": 9877851
+    }
+  },
+  "row_counts": {
+    "diagnostics": 106272,
+    "evaluation": 62208,
+    "runs": 36,
+    "training": 164772
+  },
+  "schema_version": 1
+}

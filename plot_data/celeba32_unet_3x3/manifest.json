@@ -1,0 +1,33 @@
+{
+  "accepted_run_count": 108,
+  "experiment": "celeba32_unet_3x3",
+  "files": {
+    "evaluation_diagnostics.csv": {
+      "row_count": 318816,
+      "sha256": "2fe66daf66c83177883aab4d732493cad23c848e16e4025c08a9af50f5f34b92",
+      "size_bytes": 39167788
+    },
+    "evaluation_metrics.csv": {
+      "row_count": 186624,
+      "sha256": "db806b191fb0115d9c7f3786602c291d88968f06f5f921950553cca32dc09be8",
+      "size_bytes": 22121600
+    },
+    "runs.csv": {
+      "row_count": 108,
+      "sha256": "8b528d0976bc26afe9ebf49402f498ae8ec5517e3c1fda13f25414b0f2a66a5e",
+      "size_bytes": 77927
+    },
+    "training_metrics.csv": {
+      "row_count": 494316,
+      "sha256": "45f268322ff17046696ebdb59dfd2909c89618523a2875d4ce7c063d8e519ae2",
+      "size_bytes": 32600457
+    }
+  },
+  "row_counts": {
+    "diagnostics": 318816,
+    "evaluation": 186624,
+    "runs": 108,
+    "training": 494316
+  },
+  "schema_version": 1
+}

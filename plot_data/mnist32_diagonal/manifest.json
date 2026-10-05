@@ -1,0 +1,33 @@
+{
+  "accepted_run_count": 18,
+  "experiment": "mnist32_diagonal",
+  "files": {
+    "evaluation_diagnostics.csv": {
+      "row_count": 6120,
+      "sha256": "55e5a2b5b9a75477369aed743aa5512a7266d9c18b1211fd6c183157a30b3e42",
+      "size_bytes": 762872
+    },
+    "evaluation_metrics.csv": {
+      "row_count": 5760,
+      "sha256": "b2af242e6c7f5e600b6c0a7811974631aacb5cd00bd2b9992aa9557802b2a9ad",
+      "size_bytes": 765116
+    },
+    "runs.csv": {
+      "row_count": 18,
+      "sha256": "9653c2982028e326975599179e4040215b9055e6e0705adf5603cc7e0f5c18f4",
+      "size_bytes": 13959
+    },
+    "training_metrics.csv": {
+      "row_count": 74898,
+      "sha256": "4ae6ceb4d092fe5de17958d944efe13fa1be37eeceb5b2d5498c41e9141144ee",
+      "size_bytes": 5757524
+    }
+  },
+  "row_counts": {
+    "diagnostics": 6120,
+    "evaluation": 5760,
+    "runs": 18,
+    "training": 74898
+  },
+  "schema_version": 1
+}

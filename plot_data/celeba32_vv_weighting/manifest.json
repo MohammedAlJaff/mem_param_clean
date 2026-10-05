@@ -1,0 +1,33 @@
+{
+  "accepted_run_count": 18,
+  "experiment": "celeba32_vv_weighting",
+  "files": {
+    "evaluation_diagnostics.csv": {
+      "row_count": 53136,
+      "sha256": "b7d732bde1ff5e0eeafd6b1b0be1f25fc2b769e2cee02f769440d6a6ddbc73b5",
+      "size_bytes": 6019890
+    },
+    "evaluation_metrics.csv": {
+      "row_count": 31104,
+      "sha256": "fc5d58836bc7d35b50ee14b23d421ab9b3fa7645c87501d6386fd003a10a9b1f",
+      "size_bytes": 3396134
+    },
+    "runs.csv": {
+      "row_count": 18,
+      "sha256": "78b262a94aba850406a4bb3dc5e976ff9a4d5e2260ce4f10ff0967af52da251e",
+      "size_bytes": 13369
+    },
+    "training_metrics.csv": {
+      "row_count": 82386,
+      "sha256": "c1e7c3678e9b470fe518b943aef299ec1838045e0918c5a95ca9a158d6dd2165",
+      "size_bytes": 4658833
+    }
+  },
+  "row_counts": {
+    "diagnostics": 53136,
+    "evaluation": 31104,
+    "runs": 18,
+    "training": 82386
+  },
+  "schema_version": 1
+}
