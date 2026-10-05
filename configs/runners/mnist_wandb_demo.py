@@ -37,7 +37,7 @@ def get_config():
     config.training.n_training_steps = 10000
     config.training.ckpt_every = 250
     config.training.log_every = 25
-    config.training.use_safe_division = False
+    config.training.use_safe_div = False
 
     # Reuse the same 16 noise tensors at every checkpoint.
     config.evaluation.sample_bank_size = 16
@@ -46,7 +46,7 @@ def get_config():
     config.generation_monitor.n_samples = 16
     config.monitoring.batch_size = 16
     config.sampling.n_steps = 50
-    config.sampling.use_safe_division = False
+    config.sampling.use_safe_div = False
 
     # Fail if monitoring fails, since online monitoring is the purpose of this run.
     config.tracking.wandb.enabled = True

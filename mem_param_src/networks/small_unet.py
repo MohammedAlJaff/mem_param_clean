@@ -189,6 +189,7 @@ class SmallUNet(nn.Module):
         base_channels=64,
         channel_mults=(1, 2, 4, 4),
         attention_resolutions=(8,),
+        middle_attention=True,
         num_res_blocks=2,
         time_embed_dim=None,
         dropout=0.0,
@@ -201,6 +202,8 @@ class SmallUNet(nn.Module):
         if time_embed_dim is None:
             time_embed_dim = base_channels * 4
 
+        if not isinstance(middle_attention, bool):
+            raise ValueError("middle_attention must be true or false")
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.time_embed = TimeMLPEmbedding(time_embed_dim)
@@ -229,7 +232,7 @@ class SmallUNet(nn.Module):
                 self._encoder_channels.append(ch_in)
 
             self.encoder_blocks.append(blocks_at_level)
-            if level < num_levels - 1:
+            if level < num_levels - 1 and attention_resolutions:
                 self.encoder_attns.append(SelfAttention(ch_out, num_groups))
             else:
                 self.encoder_attns.append(nn.Identity())
@@ -241,7 +244,9 @@ class SmallUNet(nn.Module):
                 self.encoder_downsamples.append(nn.Identity())
 
         self.middle_block1 = ResBlock(ch_in, ch_in, time_embed_dim, dropout, num_groups)
-        self.middle_attn = SelfAttention(ch_in, num_groups)
+        self.middle_attn = (
+            SelfAttention(ch_in, num_groups) if middle_attention else nn.Identity()
+        )
         self.middle_block2 = ResBlock(ch_in, ch_in, time_embed_dim, dropout, num_groups)
 
         self.decoder_blocks = nn.ModuleList()

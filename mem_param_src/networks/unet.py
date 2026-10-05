@@ -45,7 +45,8 @@ class BonnaireUNet(nn.Module):
         channel_mult,
         num_res_blocks,
         attn_resolutions,
-        dropout,
+        middle_attention=True,
+        dropout=0.0,
         time_emb_dim=None,
     ):
         """
@@ -68,6 +69,9 @@ class BonnaireUNet(nn.Module):
         self.channel_mult = tuple(channel_mult)
         self.num_res_blocks = num_res_blocks
         self.attn_resolutions = tuple(attn_resolutions)
+        if not isinstance(middle_attention, bool):
+            raise ValueError("middle_attention must be true or false")
+        self.middle_attention = middle_attention
         self.dropout = dropout
         self.time_emb_dim = time_emb_dim
 
@@ -79,6 +83,7 @@ class BonnaireUNet(nn.Module):
             base_channels=base_channels,
             channel_mults=self.channel_mult,
             attention_resolutions=self.attn_resolutions,
+            middle_attention=self.middle_attention,
             num_res_blocks=num_res_blocks,
             time_embed_dim=time_emb_dim,
             dropout=dropout,

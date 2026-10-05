@@ -1,11 +1,14 @@
 """Focused tests for runner configuration, artifacts, training, and replay."""
 
+import random
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import torch
+from ml_collections import ConfigDict
 
 from mem_param_src.config import (
     apply_overrides,
@@ -35,10 +38,17 @@ from mem_param_src.runners.artifacts import (
 from mem_param_src.runners.evaluation import (
     evaluate_image_run,
     evaluate_synthetic_run,
+    resolve_evaluation_config,
+    _sample_checkpoint,
 )
-from mem_param_src.runners.image_monitoring import generate_monitor_samples
+from mem_param_src.runners.image_monitoring import (
+    compute_raw_sample_diagnostics,
+    generate_monitor_samples,
+    resolve_monitor_sampling_profiles,
+)
 from mem_param_src.runners.image_plotting import save_training_comparison_grid
 from mem_param_src.runners.image_train import main as image_train_main
+from mem_param_src.runners.recovery import load_latest_recovery, preserve_rng_state
 from mem_param_src.runners.synthetic_eval import main as synthetic_eval_main
 from mem_param_src.runners.synthetic_train import main as synthetic_train_main
 from mem_param_src.runners.tracking import resolve_wandb_identity
@@ -137,13 +147,79 @@ def _tiny_image_bundle():
     }
 
 
+def _four_monitor_profiles():
+    """Return the sampler comparison used by the 64x64 epsilon study."""
+    return (
+        {
+            "name": "direct_safe",
+            "eps_to_v": "direct",
+            "use_safe_div": True,
+            "safe_div_denominator_floor": 0.05,
+        },
+        {
+            "name": "via_x_safe",
+            "eps_to_v": "via_x",
+            "use_safe_div": True,
+            "safe_div_denominator_floor": 0.05,
+        },
+        {
+            "name": "direct_exact",
+            "eps_to_v": "direct",
+            "use_safe_div": False,
+            "safe_div_denominator_floor": 0.05,
+        },
+        {
+            "name": "via_x_exact",
+            "eps_to_v": "via_x",
+            "use_safe_div": False,
+            "safe_div_denominator_floor": 0.05,
+        },
+    )
+
+
 class TestRunnerConfiguration(unittest.TestCase):
+    def test_old_replay_keeps_old_sampler_until_explicitly_overridden(self):
+        config = get_base_config()
+        del config.sampling["eps_to_v"]
+        del config.sampling["heun_final_euler"]
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            write_json(run_dir / "config.json", config.to_dict())
+            historical, changed = resolve_evaluation_config(run_dir)
+            self.assertEqual(historical.sampling.eps_to_v, "via_x")
+            self.assertIs(historical.sampling.heun_final_euler, False)
+            self.assertFalse(changed)
+
+            current, changed = resolve_evaluation_config(run_dir, override_items=(
+                "sampling.eps_to_v=direct", "sampling.heun_final_euler=true",
+            ))
+            self.assertEqual(current.sampling.eps_to_v, "direct")
+            self.assertIs(current.sampling.heun_final_euler, True)
+            self.assertTrue(changed)
+            self.assertEqual(current.training.to_dict(), historical.training.to_dict())
+            self.assertNotIn("eps_to_v", read_json(run_dir / "config.json")["sampling"])
+
+    def test_checkpoint_sampler_receives_both_comparison_settings(self):
+        config = _tiny_gmm_config()
+        noise = torch.randn(3, 4)
+        for mode, final_euler in (("direct", True), ("via_x", False)):
+            with self.subTest(mode=mode, final_euler=final_euler):
+                config.sampling.eps_to_v = mode
+                config.sampling.heun_final_euler = final_euler
+                model = MagicMock()
+                model.sample.side_effect = lambda z, **kwargs: z.clone()
+                result = _sample_checkpoint(model, noise, config, torch.device("cpu"))
+                self.assertTrue(torch.equal(result, noise))
+                for call in model.sample.call_args_list:
+                    self.assertEqual(call.kwargs["eps_to_v"], mode)
+                    self.assertIs(call.kwargs["heun_final_euler"], final_euler)
+
     def test_cli_overrides_are_typed_and_strict(self):
         config = get_base_config()
         overrides = parse_cli_overrides(
             [
                 "training.n_training_steps=7",
-                "sampling.use_safe_division=false",
+                "sampling.use_safe_div=false",
                 "framework.prediction_space=v",
                 "framework.loss_space=v",
                 "framework.loss_weighting=x_equivalent",
@@ -154,7 +230,7 @@ class TestRunnerConfiguration(unittest.TestCase):
         apply_overrides(config, overrides)
 
         self.assertEqual(config.training.n_training_steps, 7)
-        self.assertIs(config.sampling.use_safe_division, False)
+        self.assertIs(config.sampling.use_safe_div, False)
         self.assertEqual(config.framework.prediction_space, "v")
         self.assertEqual(config.framework.loss_space, "v")
         self.assertEqual(config.framework.loss_weighting, "x_equivalent")
@@ -384,7 +460,9 @@ class TestRunnerCommands(unittest.TestCase):
                 "--steps", "1200", "--lr", "0.0002", "--seed", "9",
                 "--batch-size", "8", "--checkpoint-every", "300",
                 "--sampler", "heun", "--sampling-steps", "200",
-                "--sampling-safe-division", "--sampling-denom-eps", "0.05",
+                "--set", "sampling.heun_final_euler=false", "--heun-final-euler",
+                "--set", "sampling.eps_to_v=via_x",
+                "--sampling-safe-div", "--sampling-safe-div-denominator-floor", "0.05",
                 "--sampling-start-time", "0.02", "--sampling-end-time", "0.98",
                 "--sampling-output", "x_t_max",
             ])
@@ -396,24 +474,130 @@ class TestRunnerCommands(unittest.TestCase):
         self.assertEqual(resolve_checkpoint_steps(config), (0, 300, 600, 900, 1200))
         self.assertEqual(config.sampling.method, "heun")
         self.assertEqual(config.sampling.n_steps, 200)
-        self.assertIs(config.sampling.use_safe_division, True)
-        self.assertEqual(config.sampling.safe_div_denom_eps, 0.05)
+        self.assertIs(config.sampling.heun_final_euler, True)
+        self.assertEqual(config.sampling.eps_to_v, "via_x")
+        self.assertIs(config.sampling.use_safe_div, True)
+        self.assertEqual(config.sampling.safe_div_denominator_floor, 0.05)
         self.assertEqual(config.sampling.start_time, 0.02)
         self.assertEqual(config.sampling.end_time, 0.98)
         self.assertEqual(config.sampling.output, "x_t_max")
-        self.assertIs(config.training.use_safe_division, False)
-        self.assertEqual(config.training.safe_div_denom_eps, 0.01)
+        self.assertIs(config.training.use_safe_div, False)
+        self.assertEqual(config.training.safe_div_denominator_floor, 0.01)
         self.assertEqual(config.framework.loss_weighting, "unit")
 
         with patch("mem_param_src.runners.image_train.train_run") as train:
             image_train_main(base_args + [
-                "--set", "sampling.use_safe_division=true",
-                "--no-sampling-safe-division",
+                "--set", "sampling.use_safe_div=true",
+                "--no-sampling-safe-div", "--no-heun-final-euler",
             ])
-        self.assertIs(train.call_args.args[0].sampling.use_safe_division, False)
+        self.assertIs(train.call_args.args[0].sampling.use_safe_div, False)
+        self.assertIs(train.call_args.args[0].sampling.heun_final_euler, False)
 
 
 class TestSyntheticRunnerIntegration(unittest.TestCase):
+    def test_monitor_callback_rng_isolation(self):
+        random.seed(17)
+        np.random.seed(17)
+        torch.manual_seed(17)
+        with preserve_rng_state():
+            random.random()
+            np.random.rand()
+            torch.rand(3)
+        actual = (random.random(), float(np.random.rand()), torch.rand(3))
+
+        random.seed(17)
+        np.random.seed(17)
+        torch.manual_seed(17)
+        expected = (random.random(), float(np.random.rand()), torch.rand(3))
+        self.assertEqual(actual[0], expected[0])
+        self.assertEqual(actual[1], expected[1])
+        self.assertTrue(torch.equal(actual[2], expected[2]))
+
+    def test_planned_stop_and_resume_match_uninterrupted_training(self):
+        def config():
+            value = _tiny_gmm_config()
+            value.training.n_training_steps = 6
+            value.training.batch_cap = 4
+            value.training.effective_batch_size = 8
+            value.training.ckpt_every = 1
+            value.training.recovery_every = 1
+            return value
+
+        with tempfile.TemporaryDirectory() as temporary:
+            baseline_dir = Path(temporary) / "baseline"
+            resumed_dir = Path(temporary) / "resumed"
+            train_run(config(), baseline_dir, run_kind="synthetic", device="cpu")
+            train_run(
+                config(),
+                resumed_dir,
+                run_kind="synthetic",
+                device="cpu",
+                stop_after_step=3,
+            )
+            saved_config = ConfigDict(read_json(resumed_dir / "config.json"))
+            train_run(
+                saved_config,
+                resumed_dir,
+                run_kind="synthetic",
+                device="cpu",
+                resume=True,
+            )
+
+            baseline = load_torch(baseline_dir / "checkpoints/step_000006.pt")
+            resumed = load_torch(resumed_dir / "checkpoints/step_000006.pt")
+            self.assertEqual(baseline["step"], resumed["step"])
+            self.assertEqual(baseline["model"].keys(), resumed["model"].keys())
+            for name in baseline["model"]:
+                self.assertTrue(torch.equal(baseline["model"][name], resumed["model"][name]))
+
+            _, _, baseline_recovery = load_latest_recovery(baseline_dir)
+            _, _, resumed_recovery = load_latest_recovery(resumed_dir)
+            baseline_optimizer = baseline_recovery["optimizer"]
+            resumed_optimizer = resumed_recovery["optimizer"]
+            self.assertEqual(
+                baseline_optimizer["param_groups"],
+                resumed_optimizer["param_groups"],
+            )
+            self.assertEqual(
+                baseline_optimizer["state"].keys(),
+                resumed_optimizer["state"].keys(),
+            )
+            for parameter in baseline_optimizer["state"]:
+                baseline_state = baseline_optimizer["state"][parameter]
+                resumed_state = resumed_optimizer["state"][parameter]
+                self.assertEqual(baseline_state.keys(), resumed_state.keys())
+                for name in baseline_state:
+                    self.assertTrue(
+                        torch.equal(baseline_state[name], resumed_state[name])
+                    )
+            self.assertTrue(
+                torch.equal(
+                    baseline_recovery["rng"]["torch_cpu"],
+                    resumed_recovery["rng"]["torch_cpu"],
+                )
+            )
+            self.assertEqual(
+                baseline_recovery["rng"]["python"],
+                resumed_recovery["rng"]["python"],
+            )
+            baseline_numpy = baseline_recovery["rng"]["numpy"]
+            resumed_numpy = resumed_recovery["rng"]["numpy"]
+            self.assertEqual(baseline_numpy[0], resumed_numpy[0])
+            self.assertTrue(np.array_equal(baseline_numpy[1], resumed_numpy[1]))
+            self.assertEqual(baseline_numpy[2:], resumed_numpy[2:])
+            self.assertEqual(
+                baseline_recovery["batch_sampler"]["cursor"],
+                resumed_recovery["batch_sampler"]["cursor"],
+            )
+            self.assertEqual(
+                read_json(baseline_dir / "train_history.json"),
+                read_json(resumed_dir / "train_history.json"),
+            )
+            record = read_json(resumed_dir / "run.json")
+            self.assertEqual(record["state"], "trained")
+            self.assertEqual(record["attempt_count"], 2)
+            self.assertEqual(record["attempts"][1]["start_step"], 3)
+
     def test_saved_run_supports_standalone_deterministic_replay(self):
         with tempfile.TemporaryDirectory() as temporary:
             run_dir = Path(temporary) / "synthetic_run"
@@ -466,7 +650,7 @@ class TestSyntheticRunnerIntegration(unittest.TestCase):
                 "def get_config():\n"
                 "    config = ConfigDict()\n"
                 "    config.sampling = ConfigDict()\n"
-                "    config.sampling.use_safe_division = False\n"
+                "    config.sampling.use_safe_div = False\n"
                 "    return config\n",
                 encoding="utf-8",
             )
@@ -475,13 +659,13 @@ class TestSyntheticRunnerIntegration(unittest.TestCase):
                 eval_name="x_t_max",
                 eval_config=eval_config,
                 override_items=(
-                    "sampling.use_safe_division=true",
+                    "sampling.use_safe_div=true",
                     "sampling.output=x_t_max",
                 ),
                 device="cpu",
             )
             settings = read_json(named_dir / "settings.json")
-            self.assertIs(settings["sampling"]["use_safe_division"], True)
+            self.assertIs(settings["sampling"]["use_safe_div"], True)
             self.assertEqual(settings["sampling"]["output"], "x_t_max")
             self.assertTrue((named_dir / "final_samples_x_t_max.pt").is_file())
 
@@ -558,6 +742,53 @@ class TestImageRunnerIntegration(unittest.TestCase):
 
 
 class TestImageTrainingMonitoring(unittest.TestCase):
+    def test_named_monitor_profiles_validate_primary_and_unique_names(self):
+        config = _tiny_image_config()
+        config.generation_monitor.sampling_profiles = _four_monitor_profiles()
+
+        profiles = resolve_monitor_sampling_profiles(config)
+
+        self.assertEqual(
+            [profile["name"] for profile in profiles],
+            ["direct_safe", "via_x_safe", "direct_exact", "via_x_exact"],
+        )
+        self.assertEqual(
+            [profile["required"] for profile in profiles],
+            [True, False, False, False],
+        )
+
+        config.generation_monitor.sampling_profiles = (
+            _four_monitor_profiles()[1],
+            _four_monitor_profiles()[0],
+        )
+        with self.assertRaisesRegex(ValueError, "first.*direct"):
+            resolve_monitor_sampling_profiles(config)
+
+        duplicate = dict(_four_monitor_profiles()[1])
+        duplicate["name"] = "direct_safe"
+        config.generation_monitor.sampling_profiles = (
+            _four_monitor_profiles()[0],
+            duplicate,
+        )
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            resolve_monitor_sampling_profiles(config)
+
+    def test_raw_diagnostics_keep_nonfinite_values_out_of_json_scalars(self):
+        profile = {
+            **_four_monitor_profiles()[1],
+            "required": False,
+        }
+        samples = torch.tensor([[[[-2.0, 0.0, 2.0, float("nan"), float("inf")]]]])
+
+        record = compute_raw_sample_diagnostics(samples, step=25, profile=profile)
+
+        self.assertEqual(record["status"], "nonfinite")
+        self.assertEqual(record["nonfinite_count"], 2)
+        self.assertEqual(record["finite_count"], 3)
+        self.assertEqual(record["raw_min"], -2.0)
+        self.assertEqual(record["raw_max"], 2.0)
+        self.assertAlmostEqual(record["fraction_abs_gt_1"], 2.0 / 3.0)
+
     def test_wandb_identity_uses_comparison_fields(self):
         config = _tiny_image_config()
         config.study.dataset_key = "mnist"
@@ -571,6 +802,58 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         )
         self.assertEqual(identity["group"], "mnist-unet-steps1")
 
+    def test_planned_resume_reuses_the_same_wandb_run(self):
+        config = _tiny_image_config()
+        config.training.n_training_steps = 2
+        config.training.ckpt_every = 1
+        config.training.recovery_every = 1
+        config.tracking.wandb.enabled = True
+        config.tracking.wandb.mode = "offline"
+
+        fake_run = MagicMock()
+        fake_run.id = "resume-test"
+        fake_run.url = "https://wandb.invalid/resume-test"
+        fake_wandb = MagicMock()
+        fake_wandb.init.return_value = fake_run
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "image_wandb_resume"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    return_value=fake_wandb,
+                ),
+            ):
+                train_run(
+                    config,
+                    run_dir,
+                    run_kind="image",
+                    device="cpu",
+                    stop_after_step=1,
+                )
+                saved_config = ConfigDict(read_json(run_dir / "config.json"))
+                train_run(
+                    saved_config,
+                    run_dir,
+                    run_kind="image",
+                    device="cpu",
+                    resume=True,
+                )
+
+            self.assertEqual(fake_wandb.init.call_count, 2)
+            resumed_init = fake_wandb.init.call_args_list[1].kwargs
+            self.assertEqual(resumed_init["id"], "resume-test")
+            self.assertEqual(resumed_init["resume"], "must")
+            record = read_json(run_dir / "run.json")
+            self.assertEqual(record["state"], "trained")
+            self.assertEqual(record["attempt_count"], 2)
+            self.assertEqual(record["wandb"]["run_id"], "resume-test")
+            self.assertEqual(fake_run.finish.call_count, 2)
+
     def test_wandb_logs_loss_and_fixed_noise_checkpoint_grids(self):
         config = _tiny_image_config()
         config.study.dataset_key = "mnist"
@@ -578,6 +861,7 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         config.training.ckpt_every = 1
         config.tracking.wandb.enabled = True
         config.tracking.wandb.mode = "offline"
+        config.tracking.wandb.subexperiment = "eps_t001_099_floor001"
         config.generation_monitor.enabled = True
         config.generation_monitor.n_samples = 2
         config.monitoring.batch_size = 1
@@ -635,13 +919,36 @@ class TestImageTrainingMonitoring(unittest.TestCase):
             ]
             self.assertEqual([item["train/step"] for item in train_payloads], [1, 2])
             self.assertEqual(
+                [item["optimizer_step"] for item in train_payloads],
+                [1, 2],
+            )
+            self.assertEqual(
                 [item["generation/step"] for item in generation_payloads],
                 [0, 1, 2],
+            )
+            self.assertEqual(
+                [item["optimizer_step"] for item in generation_payloads],
+                [0, 1, 2],
+            )
+            fake_wandb.define_metric.assert_any_call("optimizer_step")
+            fake_wandb.define_metric.assert_any_call(
+                "train/*", step_metric="optimizer_step"
+            )
+            fake_wandb.define_metric.assert_any_call(
+                "generation/*", step_metric="optimizer_step"
             )
             init_config = fake_wandb.init.call_args.kwargs["config"]
             self.assertEqual(
                 init_config["training"]["resolved_ckpt_steps"],
                 [0, 1, 2],
+            )
+            self.assertEqual(
+                init_config["tracking"]["wandb"]["subexperiment"],
+                "eps_t001_099_floor001",
+            )
+            self.assertIn(
+                "subexperiment:eps_t001_099_floor001",
+                fake_wandb.init.call_args.kwargs["tags"],
             )
             run_record = read_json(run_dir / "run.json")
             self.assertIs(run_record["wandb"]["active"], False)
@@ -728,14 +1035,16 @@ class TestImageTrainingMonitoring(unittest.TestCase):
                 self.assertEqual(record["f_mem"], 1.0)
                 self.assertEqual(record["rho"], 0.3)
                 self.assertEqual(record["space"], "random_projected_pixels")
+                self.assertEqual(record["metric_path"], "monitor/random_projected_pixels")
             payloads = [c.args[0] for c in fake_run.log.call_args_list]
             metrics = [
-                p for p in payloads if "generation/random_projected_pixels/f_mem" in p
+                p for p in payloads if "monitor/random_projected_pixels/f_mem" in p
             ]
             self.assertEqual([p["generation/step"] for p in metrics], [0, 1, 2])
+            self.assertEqual([p["optimizer_step"] for p in metrics], [0, 1, 2])
             self.assertTrue(
                 all(
-                    p["generation/random_projected_pixels/f_mem"] == 1.0
+                    p["monitor/random_projected_pixels/f_mem"] == 1.0
                     for p in metrics
                 )
             )
@@ -767,13 +1076,291 @@ class TestImageTrainingMonitoring(unittest.TestCase):
         config.monitoring.batch_size = 2
         model = MagicMock()
         model.training = True
-        model.sample.side_effect = lambda z, **kwargs: z.clone()
+        model.sample.side_effect = lambda z, **kwargs: (
+            (z.clone(), z.clone()) if kwargs["return_raw"] else z.clone()
+        )
         noise = torch.randn(5, 1, 8, 8)
+        config.sampling.eps_to_v = "via_x"
+        config.sampling.heun_final_euler = False
         samples = generate_monitor_samples(model, noise, config, "cpu")
         self.assertTrue(torch.equal(samples, noise))
         self.assertEqual(
             [c.args[0].shape[0] for c in model.sample.call_args_list], [2, 2, 1]
         )
+        for call in model.sample.call_args_list:
+            self.assertEqual(call.kwargs["eps_to_v"], "via_x")
+            self.assertIs(call.kwargs["heun_final_euler"], False)
+
+        model.sample.reset_mock()
+        profile = {
+            **_four_monitor_profiles()[2],
+            "required": False,
+        }
+        samples, raw_samples = generate_monitor_samples(
+            model,
+            noise,
+            config,
+            "cpu",
+            return_raw=True,
+            sampling_profile=profile,
+        )
+        self.assertTrue(torch.equal(samples, noise))
+        self.assertTrue(torch.equal(raw_samples, noise))
+        for call in model.sample.call_args_list:
+            self.assertEqual(call.kwargs["eps_to_v"], "direct")
+            self.assertIs(call.kwargs["use_safe_div"], False)
+            self.assertEqual(call.kwargs["safe_div_denominator_floor"], 0.05)
+
+    def test_profile_monitor_namespaces_outputs_and_planned_stop_artifacts(self):
+        config = _tiny_image_config()
+        config.framework.prediction_space = "eps"
+        config.framework.loss_space = "eps"
+        config.training.n_training_steps = 3
+        config.training.ckpt_steps = (3,)
+        config.generation_monitor.enabled = True
+        config.generation_monitor.n_samples = 2
+        config.generation_monitor.n_train_samples = 2
+        config.generation_monitor.sampling_profiles = _four_monitor_profiles()
+        config.evaluation.save_generated_samples = True
+        config.random_projected_f_mem.enabled = True
+        config.random_projected_f_mem.n_samples = 4
+        config.random_projected_f_mem.resize_size = 8
+        config.random_projected_f_mem.projection_dim = 16
+        config.tracking.wandb.enabled = True
+        bundle = _tiny_image_bundle()
+        fake_run = MagicMock()
+        fake_run.id = "profile-monitor"
+        fake_run.url = "https://wandb.invalid/profile-monitor"
+        fake_wandb = MagicMock()
+        fake_wandb.init.return_value = fake_run
+        fake_wandb.Image.side_effect = str
+        seen = []
+
+        def sample(
+            model,
+            z_init,
+            resolved_config,
+            device,
+            *,
+            return_raw,
+            sampling_profile,
+            allow_nonfinite,
+        ):
+            del model, resolved_config, device
+            self.assertTrue(return_raw)
+            self.assertTrue(allow_nonfinite)
+            seen.append((sampling_profile["name"], z_init.clone()))
+            samples = bundle["train"][:4].clone()
+            if sampling_profile["name"] == "via_x_exact":
+                samples.flatten()[0] = float("nan")
+            return samples, samples.clone()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "profile_monitor"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=bundle,
+                ),
+                patch(
+                    "mem_param_src.runners.tracking.importlib.import_module",
+                    return_value=fake_wandb,
+                ),
+                patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    side_effect=sample,
+                ),
+            ):
+                train_run(
+                    config,
+                    run_dir,
+                    run_kind="image",
+                    device="cpu",
+                    stop_after_step=2,
+                )
+                self.assertTrue((run_dir / "checkpoints/step_000002.pt").is_file())
+                latest_step, _, _ = load_latest_recovery(run_dir)
+                self.assertEqual(latest_step, 2)
+                self.assertEqual(read_json(run_dir / "run.json")["state"], "paused")
+                saved_config = ConfigDict(read_json(run_dir / "config.json"))
+                train_run(
+                    saved_config,
+                    run_dir,
+                    run_kind="image",
+                    device="cpu",
+                    resume=True,
+                )
+
+            latest_step, _, _ = load_latest_recovery(run_dir)
+            self.assertEqual(latest_step, 3)
+            run_record = read_json(run_dir / "run.json")
+            self.assertEqual(run_record["state"], "trained")
+            self.assertEqual(run_record["attempt_count"], 2)
+            self.assertEqual(run_record["attempts"][1]["start_step"], 2)
+            self.assertEqual(len(seen), 12)
+            self.assertTrue(all(torch.equal(seen[0][1], item[1]) for item in seen))
+            for step in (0, 2, 3):
+                for profile in _four_monitor_profiles():
+                    name = profile["name"]
+                    self.assertTrue(
+                        (
+                            run_dir
+                            / "monitoring/generated_samples"
+                            / name
+                            / f"step_{step:06d}.pt"
+                        ).is_file()
+                    )
+                    diagnostic = read_json(
+                        run_dir
+                        / "monitoring/sample_diagnostics"
+                        / name
+                        / f"step_{step:06d}.json"
+                    )
+                    expected_status = "nonfinite" if name == "via_x_exact" else "ok"
+                    self.assertEqual(diagnostic["status"], expected_status)
+                    grid = (
+                        run_dir
+                        / "monitoring/comparison_grids"
+                        / name
+                        / f"step_{step:06d}.png"
+                    )
+                    metric = (
+                        run_dir
+                        / "monitoring/f_mem"
+                        / name
+                        / f"step_{step:06d}.json"
+                    )
+                    self.assertEqual(grid.is_file(), name != "via_x_exact")
+                    self.assertEqual(metric.is_file(), name != "via_x_exact")
+
+            payloads = [call.args[0] for call in fake_run.log.call_args_list]
+            monitored = [
+                payload
+                for payload in payloads
+                if "generation/direct_safe/samples" in payload
+            ]
+            self.assertEqual(
+                [payload["optimizer_step"] for payload in monitored],
+                [0, 2, 3],
+            )
+            for payload in monitored:
+                self.assertEqual(payload["generation/direct_safe/success"], 1)
+                self.assertEqual(payload["generation/via_x_exact/success"], 0)
+                self.assertIn(
+                    "monitor/random_projected_pixels/direct_safe/f_mem",
+                    payload,
+                )
+                self.assertNotIn(
+                    "monitor/random_projected_pixels/via_x_exact/f_mem",
+                    payload,
+                )
+
+    def test_nonfinite_required_monitor_profile_fails_the_run(self):
+        config = _tiny_image_config()
+        config.framework.prediction_space = "eps"
+        config.framework.loss_space = "eps"
+        config.generation_monitor.enabled = True
+        config.generation_monitor.n_samples = 2
+        config.generation_monitor.sampling_profiles = _four_monitor_profiles()
+        config.evaluation.save_generated_samples = True
+
+        def nonfinite(*args, **kwargs):
+            del args, kwargs
+            samples = torch.full((2, 1, 8, 8), float("nan"))
+            return samples, samples.clone()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "required_profile_failure"
+            with (
+                patch(
+                    "mem_param_src.runners.training.build_data_bundle",
+                    return_value=_tiny_image_bundle(),
+                ),
+                patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    side_effect=nonfinite,
+                ),
+                self.assertRaisesRegex(FloatingPointError, "direct_safe"),
+            ):
+                train_run(config, run_dir, run_kind="image", device="cpu")
+
+            diagnostic = read_json(
+                run_dir
+                / "monitoring/sample_diagnostics/direct_safe/step_000000.json"
+            )
+            self.assertEqual(diagnostic["status"], "nonfinite")
+            self.assertEqual(read_json(run_dir / "run.json")["state"], "failed")
+
+    def test_profile_monitor_preserves_training_rng_and_final_weights(self):
+        def make_config(monitored):
+            config = _tiny_image_config()
+            config.framework.prediction_space = "eps"
+            config.framework.loss_space = "eps"
+            config.training.n_training_steps = 2
+            config.training.ckpt_every = 1
+            config.generation_monitor.enabled = monitored
+            config.generation_monitor.n_samples = 2
+            if monitored:
+                config.generation_monitor.sampling_profiles = (
+                    _four_monitor_profiles()
+                )
+            return config
+
+        def consume_rngs(*args, **kwargs):
+            del args, kwargs
+            random.random()
+            np.random.rand()
+            torch.rand(7)
+            samples = torch.zeros(2, 1, 8, 8)
+            return samples, samples.clone()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            baseline_dir = Path(temporary) / "baseline"
+            monitored_dir = Path(temporary) / "monitored"
+            with patch(
+                "mem_param_src.runners.training.build_data_bundle",
+                return_value=_tiny_image_bundle(),
+            ):
+                train_run(
+                    make_config(False),
+                    baseline_dir,
+                    run_kind="image",
+                    device="cpu",
+                )
+                with patch(
+                    "mem_param_src.runners.image_monitoring.generate_monitor_samples",
+                    side_effect=consume_rngs,
+                ):
+                    train_run(
+                        make_config(True),
+                        monitored_dir,
+                        run_kind="image",
+                        device="cpu",
+                    )
+
+            baseline = load_torch(baseline_dir / "checkpoints/step_000002.pt")
+            monitored = load_torch(monitored_dir / "checkpoints/step_000002.pt")
+            for name in baseline["model"]:
+                self.assertTrue(
+                    torch.equal(baseline["model"][name], monitored["model"][name])
+                )
+            _, _, baseline_recovery = load_latest_recovery(baseline_dir)
+            _, _, monitored_recovery = load_latest_recovery(monitored_dir)
+            self.assertTrue(
+                torch.equal(
+                    baseline_recovery["rng"]["torch_cpu"],
+                    monitored_recovery["rng"]["torch_cpu"],
+                )
+            )
+            self.assertEqual(
+                baseline_recovery["rng"]["python"],
+                monitored_recovery["rng"]["python"],
+            )
+            baseline_numpy = baseline_recovery["rng"]["numpy"]
+            monitored_numpy = monitored_recovery["rng"]["numpy"]
+            self.assertEqual(baseline_numpy[0], monitored_numpy[0])
+            self.assertTrue(np.array_equal(baseline_numpy[1], monitored_numpy[1]))
+            self.assertEqual(baseline_numpy[2:], monitored_numpy[2:])
 
     def test_monitor_flag_off_does_not_sample(self):
         config = _tiny_image_config()

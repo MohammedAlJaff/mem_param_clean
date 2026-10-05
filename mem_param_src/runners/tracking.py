@@ -41,6 +41,19 @@ def resolve_wandb_identity(config):
     return {field: str(getattr(wandb_config, field)) for field in defaults}
 
 
+def _wandb_tags(config):
+    """Return configured W&B tags plus one normalized subexperiment tag."""
+    tags = [str(tag) for tag in config.tracking.wandb.tags]
+    subexperiment = str(
+        getattr(config.tracking.wandb, "subexperiment", "") or ""
+    ).strip()
+    if subexperiment:
+        tag = "subexperiment:" + _slug(subexperiment, "unnamed")
+        if tag not in tags:
+            tags.append(tag)
+    return subexperiment, tags
+
+
 def _wandb_failure(state, exc, context):
     """Disable failed tracking without changing the model update sequence."""
     message = f"W&B {context} failed: {type(exc).__name__}: {exc}"
@@ -66,8 +79,8 @@ def _wandb_failure(state, exc, context):
     return None
 
 
-def start_wandb(config, run_dir):
-    """Start one optional W&B run and save its local identity."""
+def start_wandb(config, run_dir, resume_run_id=None):
+    """Start or strictly resume one optional W&B run."""
     if not bool(config.tracking.wandb.enabled):
         return None
 
@@ -82,6 +95,7 @@ def start_wandb(config, run_dir):
     wandb_dir = Path(run_dir) / relative_dir
     wandb_dir.mkdir(parents=True, exist_ok=True)
 
+    subexperiment, tags = _wandb_tags(config)
     metadata = {
         "enabled": True,
         "active": False,
@@ -89,7 +103,9 @@ def start_wandb(config, run_dir):
         "project": identity["project"],
         "name": identity["name"],
         "group": identity["group"],
-        "run_id": None,
+        "subexperiment": subexperiment,
+        "tags": tags,
+        "run_id": resume_run_id,
         "url": None,
         "dir": str(wandb_dir.resolve()),
         "warning": None,
@@ -105,6 +121,9 @@ def start_wandb(config, run_dir):
         wandb = importlib.import_module("wandb")
         entity = str(config.tracking.wandb.entity or "").strip() or None
         notes = str(config.tracking.wandb.notes or "").strip() or None
+        init_kwargs = {}
+        if resume_run_id is not None:
+            init_kwargs.update(id=str(resume_run_id), resume="must")
         run = wandb.init(
             project=identity["project"],
             entity=entity,
@@ -114,17 +133,18 @@ def start_wandb(config, run_dir):
             group=identity["group"],
             job_type="image_train",
             notes=notes,
-            tags=list(config.tracking.wandb.tags),
+            tags=tags,
             config=config_to_dict(config),
             reinit="finish_previous",
+            **init_kwargs,
         )
         state["run"] = run
         state["module"] = wandb
         if hasattr(wandb, "define_metric"):
-            wandb.define_metric("train/step")
-            wandb.define_metric("train/*", step_metric="train/step")
-            wandb.define_metric("generation/step")
-            wandb.define_metric("generation/*", step_metric="generation/step")
+            wandb.define_metric("optimizer_step")
+            wandb.define_metric("train/*", step_metric="optimizer_step")
+            wandb.define_metric("generation/*", step_metric="optimizer_step")
+            wandb.define_metric("monitor/*", step_metric="optimizer_step")
 
         metadata.update(
             {

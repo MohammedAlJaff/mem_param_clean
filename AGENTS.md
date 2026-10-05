@@ -20,6 +20,10 @@ Canonical instructions for agents and contributors working in this repo.
 - Check `git status` before editing so existing user changes are preserved.
 - Read `TODO.txt` and the latest relevant `MIGRATION_JOURNAL.md` entry for
   context. Do not begin a TODO item unless the current user request selects it.
+- Read `RUN_JOURNAL.md` before launching or checking Berzelius compute. Update
+  it immediately after every submission and append evidence-based status checks.
+- Submit arrays of about 80 tasks or fewer without a concurrency throttle. For
+  larger arrays, agree on and record an explicit throttle before submission.
 - Treat the current user request as the scope for the session. Historical
   journal entries describe past decisions; they do not authorize new work.
 - Within repository documentation, use `mem_param_src/config.py` for executable
@@ -53,6 +57,12 @@ Key measurements:
   sentence. Keep necessary scientific terms. Cut filler and grand claims.
   Give the text life through clear questions and specific observations.
   State evidence and uncertainty plainly. Keep the stricter notebook rules below.
+- For research-paper prose, explain a technical idea before or while naming it.
+  Avoid dense noun phrases that hide the action, such as "finite-data regression
+  objective," when a short description is clearer. Prefer "what the model
+  predicts" in the main argument, then use "target parameterization" when the
+  exact term helps. Keep compact technical labels for equations, methods, and
+  tables where they improve precision.
 - Do not use slang, hype wording, playful labels, or informal phrases.
 - Prefer direct descriptions of methods, assumptions, metrics, results,
   blockers, and next actions.

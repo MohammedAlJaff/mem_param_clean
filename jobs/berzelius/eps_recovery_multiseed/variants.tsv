@@ -1,0 +1,7 @@
+id	label	seed	prediction	loss
+0	eps_direct_full_heun	1	eps	eps
+1	vv_reference	1	v	v
+2	xx_reference	1	x	x
+3	eps_direct_full_heun	2	eps	eps
+4	vv_reference	2	v	v
+5	xx_reference	2	x	x

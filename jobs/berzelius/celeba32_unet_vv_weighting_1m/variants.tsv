@@ -1,0 +1,10 @@
+task_id	label	n_train	seed	prediction	loss	weighting
+0	n512_v_v_xeq_s0	512	0	v	v	x_equivalent
+1	n512_v_v_unit_s0	512	0	v	v	unit
+2	n512_v_v_epseq_s0	512	0	v	v	eps_equivalent
+3	n512_v_v_xeq_s1	512	1	v	v	x_equivalent
+4	n512_v_v_unit_s1	512	1	v	v	unit
+5	n512_v_v_epseq_s1	512	1	v	v	eps_equivalent
+6	n512_v_v_xeq_s2	512	2	v	v	x_equivalent
+7	n512_v_v_unit_s2	512	2	v	v	unit
+8	n512_v_v_epseq_s2	512	2	v	v	eps_equivalent

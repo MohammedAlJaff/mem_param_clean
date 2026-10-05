@@ -1,0 +1,6 @@
+id	variant	prediction	loss	train_start	train_end	sample_start	sample_end	use_safe_div	safe_div_denominator_floor	eps_to_v	final_pixel_clamp
+0	eps_t0001_0999_floor005	eps	eps	0.001	0.999	0.001	0.999	true	0.05	direct	true
+1	eps_t001_099_floor005	eps	eps	0.01	0.99	0.01	0.99	true	0.05	direct	true
+2	eps_t001_099_floor001	eps	eps	0.01	0.99	0.01	0.99	true	0.01	direct	true
+3	vv_t001_099_reference	v	v	0.01	0.99	0.01	0.99	true	0.01	direct	true
+4	xx_t001_099_reference	x	x	0.01	0.99	0.01	0.99	true	0.01	direct	true

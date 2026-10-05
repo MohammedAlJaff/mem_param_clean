@@ -22,6 +22,11 @@ scientific terms when needed. Cut filler and grand claims. Keep the text alive
 through clear questions and specific observations. State the evidence and its
 limits simply. Do not turn a proposed explanation into a result.
 
+Explain a technical idea before or while naming it. Avoid dense noun phrases
+that hide the action. In the main argument, prefer "what the model predicts"
+to an unexplained label such as "prediction space." Keep exact technical terms
+in equations, method definitions, and tables when they improve precision.
+
 
 001 - BACK TO BASICS: GENERATION AND MEMORIZATION
 Added: 2026-09-07
@@ -77,3 +82,363 @@ arXiv:2511.13720v1, 17 November 2025. Sections 1, 2, 3.2, and 4.2.
 https://arxiv.org/abs/2511.13720
 https://arxiv.org/html/2511.13720v1
 Checked online on 2026-09-07.
+
+
+002 - CURRENT EMPIRICAL RECORD FOR THE AISTATS PAPER
+Added: 2026-09-21
+Status: Evidence ledger. Seed-zero findings are preliminary unless stated.
+Use in: Experiment design, results, limitations, and the next full-run decision.
+
+CORE QUESTION
+Under matched data, architecture, optimizer, sampler, and evaluation, how do
+prediction and loss parameterizations change the route to memorization?
+
+The current evidence supports a timing claim. It does not yet support a final
+multi-seed parameterization ranking. The online monitor uses only 128 samples
+in a random projection of resized pixels. Final paper claims require fixed-10k
+FID, full-pixel f_mem, learned-feature f_mem, and multiple seeds.
+
+COMPLETED EXPERIMENT GROUPS
+
+1. CelebA32 seed-zero one-million-update anchors.
+   Eight jobs completed to one million updates. They contain six EPS/EPS
+   sampling or learning-rate variants and x/x and v/v references. Corrected
+   fixed-10k evaluation exists at 100k, 390k, and 695k. The 1M checkpoints
+   have not received the same fixed-10k evaluation.
+
+2. CelebA32 gray prediction/loss 3x3.
+   All nine prediction/loss cells completed to the planned 200k gate. Every
+   row is recoverably paused and can continue to one million updates.
+
+3. EPS/EPS data and image-format study.
+   Seven rows completed to 200k. They change dataset, resolution, color, and
+   one depth setting. The design identifies failure regimes but is not a full
+   factorial estimate of all main effects.
+
+4. EPS/EPS 64x64 N=512 capacity and attention study.
+   All 24 rows completed exact 0-200k and 200k-400k process segments. The
+   matrix crosses four formats, three capacities, and attention fully off/on.
+
+ONE-MILLION CELEBA32 ANCHOR
+
+The corrected evaluation uses 10,000 generated images and one frozen 10,000
+image CelebA validation reference. The primary pixel f_mem values use
+rho=0.3. The table reports checkpoint values, not the unevaluated 1M endpoint.
+
+| Training and sampler | 100k FID / f_mem | 390k FID / f_mem | 695k FID / f_mem |
+| --- | --- | --- | --- |
+| eps/eps, direct safe, full Heun | 20.57 / 0.9059 | 24.43 / 0.9589 | 27.13 / 0.9709 |
+| eps/eps, via-x safe, full Heun | 21.90 / 0.9216 | 25.15 / 0.9660 | 26.65 / 0.9726 |
+| x/x saved reference | 25.69 / 0.9996 | 27.70 / 1.0000 | 24.97 / 1.0000 |
+| v/v saved reference | 25.86 / 0.9995 | 28.72 / 1.0000 | 30.19 / 1.0000 |
+
+Direct-safe and via-x-safe EPS/EPS are close. Direct-safe is better at 100k
+and 390k. Via-x-safe is 0.49 FID better at 695k. This small late difference is
+not a stable scientific ordering.
+
+Exact EPS/EPS sampling fails badly early. Exact full-Heun FID is 440.13 at
+100k, 176.95 at 390k, and 79.54 at 695k. At 100k, 85.77% of raw pixels lie
+outside [-1,1]. Safe division is therefore required for robust generation in
+the current endpoint range. Exact division remains a diagnostic.
+
+The saved x/x and v/v references used final Euler, while the primary EPS/EPS
+run used full Heun without final Euler. Their checkpoints are useful, but the
+paper must replay all compared parameterizations with one common sampler
+before treating the FID difference as a parameterization effect.
+
+The five standard-learning-rate EPS/EPS jobs mainly change monitoring-time
+sampling. They are not independent training seeds. Do not report them as
+replicates.
+
+CELEBA32 PREDICTION/LOSS 3X3
+
+Shared setting: gray CelebA32, N=256, seed 0, base-32 UNet, Adam at 1e-4,
+unit weighting, effective batch 256, and 200k updates. Training used literal
+division wherever an off-diagonal target conversion required division.
+Monitoring used direct-safe full Heun without final Euler.
+
+Projected-pixel f_mem at 200k, with prediction as rows and loss as columns:
+
+|  | loss x | loss eps | loss v |
+| --- | ---: | ---: | ---: |
+| prediction x | 1.000 | 0.469 | 0.977 |
+| prediction eps | 0.961 | 0.961 | 0.875 |
+| prediction v | 1.000 | 0.961 | 1.000 |
+
+Selected trajectories at 25k, 50k, 100k, and 200k:
+
+| prediction/loss | 25k | 50k | 100k | 200k |
+| --- | ---: | ---: | ---: | ---: |
+| x/x | 1.000 | 0.992 | 1.000 | 1.000 |
+| x/eps | 0.000 | 0.000 | 0.008 | 0.469 |
+| x/v | 0.000 | 0.008 | 0.453 | 0.977 |
+| eps/x | 0.023 | 0.539 | 0.109 | 0.961 |
+| eps/eps | 0.703 | 0.828 | 0.914 | 0.961 |
+| eps/v | 0.578 | 0.867 | 0.656 | 0.875 |
+| v/x | 0.953 | 1.000 | 1.000 | 1.000 |
+| v/eps | 0.812 | 0.883 | 0.977 | 0.961 |
+| v/v | 0.977 | 1.000 | 1.000 | 1.000 |
+
+The diagonal result is not unique to EPS/EPS. All three diagonal cells reach
+high projected-pixel f_mem, but x/x and v/v do so earlier. x/eps is the major
+low-memorization endpoint. x/v changes from almost zero at 50k to 0.977 at
+200k. eps/x and eps/v are non-monotonic at the saved monitor points.
+
+All nine 200k grids contain recognizable faces. eps/x is visibly the noisiest.
+x/eps remains visually coherent despite f_mem 0.469. This disagreement shows
+that projected-pixel f_mem measures training-set proximity, not sample quality.
+
+EPS/EPS DATA AND IMAGE-FORMAT STUDY
+
+Shared setting: N=256, seed 0, EPS/EPS, Adam at 1e-4, effective batch 256,
+and 200k updates. The base model has about 3.92 million parameters. The deep
+Flowers model has about 6.47 million parameters.
+
+| Variant | 25k | 50k | 100k | 200k |
+| --- | ---: | ---: | ---: | ---: |
+| CelebA32 gray | 0.672 | 0.805 | 0.906 | 0.977 |
+| MNIST32 gray | 0.891 | 0.945 | 0.961 | 0.977 |
+| CelebA32 RGB | 0.031 | 0.328 | 0.609 | 0.727 |
+| CelebA64 gray | 0.000 | 0.023 | 0.102 | 0.117 |
+| CelebA64 RGB | 0.000 | 0.000 | 0.000 | 0.000 |
+| Flowers64 RGB, base | 0.000 | 0.000 | 0.000 | 0.000 |
+| Flowers64 RGB, deep | 0.000 | 0.000 | 0.008 | 0.031 |
+
+The controlled pairs show three effects. RGB slows memorization at 32x32.
+Increasing grayscale CelebA from 32x32 to 64x64 produces coherent faces but a
+much slower f_mem trajectory. Combining 64x64 and RGB breaks the small model.
+Extra depth alone does not recover Flowers generation.
+
+The study does not isolate every main effect. Dataset, size, and color change
+together in some rows. Treat it as a failure-regime study, not a factorial
+causal analysis.
+
+EPS/EPS 64X64 N=512 CAPACITY STUDY
+
+The table gives direct-safe projected-pixel f_mem as `200k -> 400k`. Each cell
+is `attention off / attention on`.
+
+| Format | Small | Deep | Wide-deep |
+| --- | ---: | ---: | ---: |
+| CelebA gray | 0.000->0.000 / 0.016->0.016 | 0.266->0.328 / 0.305->0.359 | 0.906->0.938 / 0.859->0.922 |
+| CelebA RGB | 0.000->0.000 / 0.000->0.000 | 0.016->0.023 / 0.055->0.016 | 0.477->0.570 / 0.406->0.531 |
+| MNIST gray | 0.297->0.445 / 0.352->0.680 | 0.875->0.961 / 0.883->0.945 | 0.992->0.992 / 0.984->0.992 |
+| Flowers RGB | 0.000->0.000 / 0.000->0.000 | 0.000->0.000 / 0.000->0.000 | 0.125->0.148 / 0.086->0.164 |
+
+Capacity is the dominant factor. The base-64 wide-deep model is the first
+profile with recognizable CelebA64 RGB faces and Flowers64 samples. Attention
+has mixed, secondary effects. It helps small MNIST in this seed but does not
+rescue a low-capacity RGB model.
+
+Additional updates from 200k to 400k do not repair the small or deep 64x64 RGB
+models. A viable architecture matters more than another 200k updates in these
+cells.
+
+At 400k, attention-averaged wide-deep f_mem is:
+
+| Format | direct-safe | via-x-safe | exact |
+| --- | ---: | ---: | ---: |
+| CelebA gray | 0.930 | 0.938 | 0.938 |
+| CelebA RGB | 0.551 | 0.609 | 0.180 |
+| MNIST gray | 0.992 | 0.992 | 0.992 |
+| Flowers RGB | 0.156 | 0.234 | 0.102 |
+
+Both safe samplers remain finite and visually usable. Exact division produces
+severe saturation for most small and deep face and flower rows. Between 56%
+and 95% of their raw pixels can lie outside [-1,1]. Direct-exact and via-x-
+exact are numerically close; the safe floor makes the direct and via-x paths
+meaningfully different.
+
+CROSS-STUDY FINDINGS THAT THE CURRENT EVIDENCE SUPPORTS
+
+1. Prediction and loss parameterization change when memorization appears.
+   The 3x3 trajectories separate strongly before many endpoints saturate.
+
+2. Sample quality and memorization are distinct axes.
+   x/eps gives coherent faces with lower f_mem. eps/x gives noisier faces with
+   high f_mem. Failed Flowers models also have low f_mem, but this is not useful
+   generalization.
+
+3. A parameterization comparison is valid only in a useful-generation regime.
+   The 64x64 studies show that insufficient capacity can dominate the outcome.
+
+4. Safe EPS/EPS sampling is an empirical requirement in the current endpoint
+   range. Exact division is a diagnostic, not the primary paper sampler.
+
+5. Optional attention is secondary to width and depth in the seed-zero 64x64
+   matrix. A stable attention claim still needs multiple seeds.
+
+6. Endpoint-only reporting hides the main effect. The paper must show
+   checkpoint trajectories and quality beside memorization.
+
+CLAIMS THAT ARE NOT YET SUPPORTED
+
+- No final ordering across x, eps, and v is established across seeds.
+- The off-diagonal 3x3 ordering has not been tested with fixed-10k metrics.
+- The projected-pixel ordering has not been confirmed in SSCD, LPIPS, or
+  DINOv2 space.
+- No 64x64 parameterization comparison exists. The 64x64 matrix is EPS/EPS
+  only and mainly diagnoses capacity and sampling.
+- Attention does not have a confirmed population effect.
+- The 1M endpoints have not received the corrected fixed-10k evaluation.
+
+RESULT LOCATIONS
+
+- One-million CelebA32 corrected evaluation:
+  outputs/evals/eps_recovery_1m/20260915T111553Z_3025872_three_point/
+- Full 3x3 report:
+  outputs/job_sets/celeba32_prediction_loss_3x3/20260918T164642Z_3540146/RESULTS_200K.md
+- Full data/image-format report:
+  outputs/job_sets/eps_eps_data_image_format/20260918T164620Z_3539380/RESULTS_200K.md
+- Full 64x64 capacity report:
+  outputs/job_sets/eps_eps_64_n512/20260919T155341Z_3213634/RESULTS_400K.md
+
+
+003 - NEXT SESSION: FULL RUNS AND AISTATS FIGURES
+Added: 2026-09-21
+Status: Decision agenda. No job is authorized by this note alone.
+Use in: The next research-planning session.
+
+FIRST DECISION: DEFINE THE PAPER CORE
+
+The paper question concerns parameterization under matched conditions. The
+CelebA32 prediction/loss 3x3 is therefore the cleanest core experiment. The
+64x64 capacity sweep is supporting evidence about valid operating regimes. It
+should not replace the matched parameterization comparison unless the paper's
+question changes.
+
+Choose one full-run scope:
+
+A. Full 3x3 across three seeds to one million updates.
+   This is the strongest factorial answer and the largest compute commitment.
+
+B. Diagonal x/x, eps/eps, and v/v across three seeds to one million updates,
+   with the seed-zero off-diagonal grid as mechanism evidence.
+   This matches the prepared multi-seed and feature-evaluation workflows.
+
+C. A selected six-cell matrix across three seeds.
+   A defensible set would retain x/x, eps/eps, v/v, x/eps, x/v, and eps/x or
+   eps/v. The selection rule must be fixed before examining new seeds.
+
+Do not choose only from the 128-sample endpoint. First run a common saved-
+artifact evaluation on the existing 200k 3x3 checkpoints.
+
+SECOND DECISION: FREEZE THE COMMON PROTOCOL
+
+- Use one viable CelebA32 architecture and N=256 unless the paper explicitly
+  studies scale.
+- Use Adam at 1e-4, unit weighting, effective batch 256, deterministic CUDA,
+  and the saved Bonnaire checkpoint schedule.
+- Use 50-step full Heun on `[0.001,0.999]`, direct conversion where relevant,
+  safe denominator floor 0.05, `x_t_max`, and no final Euler for the primary
+  replay.
+- Keep via-x-safe and exact division as diagnostics or appendix controls.
+- Replay x/x and v/v checkpoints with the same no-final-Euler sampler used for
+  the primary EPS/EPS path.
+- Preserve one fixed 10,000-noise bank and one frozen 10,000-image reference.
+- Evaluate full pixels, SSCD, LPIPS, DINOv2, FID-10k, raw range, and nearest-
+  neighbor identities from saved artifacts.
+
+THIRD DECISION: USE EXISTING COMPUTE BEFORE BUYING MORE
+
+1. Evaluate the existing 3x3 step-200k checkpoints with the common fixed-10k
+   protocol. The current generic feature workflow covers diagonal trajectories,
+   not the complete off-diagonal grid, so confirm or extend its scope first.
+2. Evaluate the existing seed-zero 1M checkpoints at 100k, 200k or the closest
+   saved point, 390k, 695k, and 1M under one common sampler.
+3. Use those results to select full-run cells and checkpoints.
+4. Resume selected 3x3 cells exactly from 200k. Do not restart them.
+5. Add seeds 1 and 2 only after the final matrix and artifact contract are
+   frozen.
+
+CHECKPOINT RULE FOR THE PAPER
+
+Report trajectories, not only final values. A candidate common set is 100k,
+200k, 390k, 695k, and 1M. Use the nearest saved checkpoint only when the exact
+step is unavailable, and state the substitution. Keep both step-matched and
+quality-matched comparisons. Fix the quality-matching rule before inspecting
+the final multi-seed result.
+
+PROVISIONAL FIGURE SET
+
+Figure 1: Main quality-memorization trajectory.
+Show FID-10k and feature-space f_mem over training for the primary matched
+parameterizations. Include seed mean and uncertainty. This figure should carry
+the main claim that parameterization changes the route to memorization.
+
+Figure 2: Prediction/loss structure.
+Show the 3x3 endpoint as aligned heatmaps for quality, full-pixel f_mem, SSCD,
+LPIPS, and DINOv2. If only seed zero exists for off-diagonal cells, label the
+figure exploratory or move it to the appendix.
+
+Figure 3: Qualitative nearest-neighbor evidence.
+For selected x/eps, eps/eps, and v/v or eps/x samples, show the generated image,
+nearest training image, second-nearest training image, d1, d2, and r. Select
+examples by a fixed rule, not by visual preference.
+
+Figure 4: Robustness or operating-regime result.
+Show the 64x64 capacity matrix as a compact heatmap or small-multiple grid.
+This figure supports the statement that comparisons require useful generation.
+It is likely an appendix figure unless scale becomes a main paper question.
+
+Appendix figure A: Sampling stability.
+Compare direct-safe, via-x-safe, and exact EPS/EPS sampling using FID, raw range,
+and out-of-range fraction. This documents why the primary sampler is safe.
+
+Appendix figure B: Metric agreement.
+Show per-image ratio correlations, memorized-set overlap, and parameterization
+ordering across full pixels, SSCD, LPIPS, and DINOv2.
+
+Main table: Final multi-seed results.
+Report mean and standard deviation for FID-10k, each f_mem space, mean r, and
+raw-range diagnostics at the declared checkpoint rule. Keep raw loss out of
+cross-parameterization rankings.
+
+FIGURE RULES TO LOCK NEXT SESSION
+
+- Define the main claim before choosing panels.
+- Decide which figures are main-paper and appendix figures.
+- Generate figures from combined CSV or JSON records, never from W&B screenshots.
+- Use the same colors and cell order for x, eps, and v in every figure.
+- Show uncertainty for multi-seed claims.
+- Mark seed-zero diagnostics clearly.
+- Pair every memorization plot with a quality or validity check.
+- Preserve raw arrays and plotting inputs for every reported point.
+
+STOP CONDITION FOR THE NEXT PLANNING SESSION
+
+The session is complete when it produces one frozen training matrix, one
+checkpoint rule, one evaluation artifact contract, one compute budget, and one
+main/appendix figure list. Only then should new full runs be submitted.
+
+
+004 - CONSERVATIVE ABSTRACT DRAFT
+Added: 2026-09-21
+Status: Current working abstract before the full multi-seed evaluation.
+Use in: Manuscript planning. Revise after T019 and T020 are complete.
+
+This version uses natural research-paper prose. It describes the current
+evidence without claiming a stable ordering. It treats multi-seed and learned-
+feature results as future validation rather than completed findings.
+
+LATEX
+
+\begin{abstract}
+Flow matching models trained on finite data can memorize their training
+examples, but model size, training time, and model design can delay or limit
+this behavior. We ask whether target parameterization---the choice to predict
+clean data $\vx$, noise $\veps$, or velocity $\vv$---also changes when and how
+memorization develops. We study this question in controlled image-generation
+experiments. We vary both what the model predicts and how its training loss is
+defined. Throughout training, we measure sample quality and how closely
+generated images match individual training examples. We also examine changes
+in dataset, image size, color, and model size. Our experiments indicate that
+what the model predicts and how its loss is defined can alter when memorization
+appears and how it grows, even when the models produce recognizable samples.
+Sample quality and memorization do not always move together. In more demanding
+settings, models that are too small can fail to produce coherent images, making
+memorization results hard to interpret. These observations suggest that target
+parameterization shapes not only generation quality but also the path to
+memorization. They motivate broader tests across random seeds and different
+ways of comparing images.
+\end{abstract}

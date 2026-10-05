@@ -38,7 +38,7 @@ def _resolve_batch_size(value, name):
 
 
 def _top2_distances(query, reference, reference_batch_size=None):
-    """Return `d1`, `d2`, and nearest-neighbor indices."""
+    """Return both nearest distances and their reference indices."""
     n_reference = int(reference.shape[0])
     reference_batch_size = _resolve_batch_size(
         reference_batch_size,
@@ -47,7 +47,12 @@ def _top2_distances(query, reference, reference_batch_size=None):
     if reference_batch_size is None or reference_batch_size >= n_reference:
         distances = torch.cdist(query, reference)
         topk = torch.topk(distances, k=2, largest=False, dim=1)
-        return topk.values[:, 0], topk.values[:, 1], topk.indices[:, 0]
+        return (
+            topk.values[:, 0],
+            topk.values[:, 1],
+            topk.indices[:, 0],
+            topk.indices[:, 1],
+        )
 
     best_values = torch.full(
         (query.shape[0], 2),
@@ -76,7 +81,12 @@ def _top2_distances(query, reference, reference_batch_size=None):
         best_values = merged.values
         best_indices = torch.gather(candidate_indices, 1, merged.indices)
 
-    return best_values[:, 0], best_values[:, 1], best_indices[:, 0]
+    return (
+        best_values[:, 0],
+        best_values[:, 1],
+        best_indices[:, 0],
+        best_indices[:, 1],
+    )
 
 
 def compute_nn_stats(
@@ -86,7 +96,7 @@ def compute_nn_stats(
     query_batch_size=None,
     reference_batch_size=None,
 ):
-    """Compute `d1`, `d2`, `r = d1 / d2`, and nearest-neighbor indices."""
+    """Compute `d1`, `d2`, `r = d1 / d2`, and both neighbor indices."""
     query_batch_size = _resolve_batch_size(
         chunk_size if query_batch_size is None else query_batch_size,
         "query_batch_size",
@@ -102,9 +112,10 @@ def compute_nn_stats(
     d1_list = []
     d2_list = []
     nn_idx_list = []
+    second_nn_idx_list = []
     for start in range(0, samples.shape[0], query_batch_size):
         chunk = samples[start : start + query_batch_size]
-        d1, d2, nn_idx = _top2_distances(
+        d1, d2, nn_idx, second_nn_idx = _top2_distances(
             chunk,
             reference,
             reference_batch_size=reference_batch_size,
@@ -112,7 +123,7 @@ def compute_nn_stats(
         d1_list.append(d1)
         d2_list.append(d2)
         nn_idx_list.append(nn_idx)
-
+        second_nn_idx_list.append(second_nn_idx)
     d1 = torch.cat(d1_list)
     d2 = torch.cat(d2_list)
     r = d1 / d2.clamp(min=1.0e-12)
@@ -121,6 +132,7 @@ def compute_nn_stats(
         "d2": d2,
         "r": r,
         "nn_idx": torch.cat(nn_idx_list),
+        "second_nn_idx": torch.cat(second_nn_idx_list),
     }
 
 

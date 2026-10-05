@@ -139,8 +139,8 @@ def main(argv=None):
             time,
             source="eps",
             target="v",
-            use_safe_division=False,
-            safe_div_denom_eps=float(config.sampling.safe_div_denom_eps),
+            use_safe_div=False,
+            safe_div_denominator_floor=float(config.sampling.safe_div_denominator_floor),
         )
         velocity_error = velocity_prediction - velocity
 

@@ -11,7 +11,7 @@ in meaningful choices without routine approval requests. Apply this rule to
 future notes and documentation. Full guidance: root AGENTS.md, Collaboration
 and Code Understanding.
 
-Updated: 2026-09-09
+Updated: 2026-09-21
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -28,13 +28,63 @@ close an item. When an item is complete, record the result in
 MIGRATION_JOURNAL.md and remove it from this file.
 
 
-NEXT SESSION: BERZELIUS EPS/EPS DIAGNOSIS
+NEXT SESSION: LOCK FULL RUNS AND AISTATS FIGURES
+
+[ ] T019 - Freeze the final paper training matrix and continuation plan.
+    Current evidence: The seed-zero diagonal anchors reached one million
+    updates. The complete 3x3 is paused at 200k. The EPS/EPS 64x64 capacity
+    matrix is paused at 400k. All selected 3x3 rows can resume exactly.
+    First action: Run a common fixed-10k saved-artifact evaluation on the
+    existing 3x3 gate. Re-evaluate the existing seed-zero diagonal checkpoints,
+    including 1M, under one full-Heun, direct-safe, no-final-Euler sampler.
+    Decision: Choose full 3x3 x three seeds, diagonal x three seeds, or a
+    predeclared selected matrix. Fix the seed count, checkpoints, quality-
+    matching rule, resource class, and cost before submission.
+    Important: The prepared multi-seed and feature workflows cover diagonal
+    x/x, eps/eps, and v/v trajectories. They do not yet establish a complete
+    off-diagonal multi-seed 3x3.
+    Done when: One frozen matrix, checkpoint schedule, evaluation contract,
+    exact-resume launch plan, and compute budget are recorded before launch.
+
+[ ] T020 - Freeze the AISTATS figure and table contract.
+    Current evidence: PAPER_NOTES.txt entry 003 lists provisional main and
+    appendix figures. No final figure selection has been made.
+    First action: State the main claim, then assign each result to a main or
+    appendix figure. Define plotting inputs, parameterization colors, seed
+    aggregation, uncertainty, checkpoint selection, and qualitative example
+    selection before generating final figures.
+    Required outputs: quality-memorization trajectory, prediction/loss result,
+    nearest-neighbor evidence, metric-agreement analysis, and a final multi-
+    seed table. Treat the 64x64 capacity and sampler-stability panels as
+    supporting results unless the paper scope changes.
+    Done when: Every planned paper claim maps to a frozen figure or table, and
+    every panel maps to a reproducible combined artifact.
+
+
+EARLIER OPEN CONTEXT: BERZELIUS EPS/EPS DIAGNOSIS
+
+The one-million CelebA32 recovery, corrected FID-10k evaluation, prediction/
+loss 3x3, data/image-format gate, and 64x64 capacity gate now supersede the
+old launch instructions below. Retain this section as causal background for
+T016. Do not treat its old first-run command as the current next action.
+
+Prepared but NOT submitted: jobs/berzelius/eps_recovery_smoke/README.md describes
+six user-launched 2,000-update CelebA32/W&B comparisons. The submission script
+supports --dry-run and task selection. Use saved raw samples and input hashes
+when comparing results. This is an early-behavior smoke study, not evidence that
+historical convergence has been restored. The researcher executes all jobs.
 
 Read CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt first. It contains the
 current CelebA32 audit, historical comparison, artifact hashes, and an unrun
-GPU replay command. The next session is on Berzelius, with mem_param_env.
+GPU replay command. The next session is on Berzelius.
+The user supplied /proj/rep-learning-robotics/users/x_moalj/project_mem_par
+as the parent directory. The requested siblings are old_mem_par and
+mem_param_clean. Verify the actual checkout and environment before setup;
+mem_param_env is an earlier convention, not confirmed remote state.
 Continue the standalone current-code diagnosis and the historical comparison.
-No sampler refactor or causal resolution has been established.
+The direct epsilon sampling conversion and optional final Euler step are
+implemented with comparison controls. Causal resolution still requires matched
+checkpoint replay; analytical tests do not establish generation recovery.
 
 First obtain outputs/session_runs/celeba32_eps_eps_n32_exact_01 on Berzelius;
 GitHub does not contain the saved data, checkpoint, or noise bank. Replay the
@@ -74,14 +124,16 @@ have not been completed; the MNIST runs do not resolve that contradiction.
     useful FID values. The clean Flowers102 run converges in loss but generates
     noise. These protocols differ in sampling division, endpoints, data,
     architecture, learning rate, training budget, output, and runtime.
-    Evidence: CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt adds the current
-    CelebA32 N=32 run and source audit. The earlier Flowers evidence remains in
-    protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md.
-    Next action: On Berzelius, replay the fixed current CelebA32 checkpoint
-    with exact and 0.05-clamped sampling on the same GPU and saved noise. Check
-    numerical contracts and recover the original old checkpoint/config before
-    matched historical replay. Retain Flowers clamp and dimension controls as
-    follow-ups; do not start a broad retraining sweep before these comparisons.
+    Evidence: The one-million CelebA32 study shows that direct-safe and via-x-
+    safe full Heun both produce useful samples. Exact division is severely
+    unstable early. The 64x64 N=512 matrix shows that safe sampling alone does
+    not rescue undersized RGB models; base-64 wide-deep capacity is the first
+    useful CelebA64 RGB and Flowers regime. See PAPER_NOTES.txt entry 002 and
+    the three linked result reports.
+    Next action: Separate the remaining historical-code question from the new
+    paper runs. Use a common saved-checkpoint replay if historical equivalence
+    remains necessary. Do not attribute Flowers failure to EPS/EPS alone; the
+    current evidence shows a strong capacity and format interaction.
     Done when: A matched multi-seed comparison identifies the causal protocol
     change or interaction and reproduces useful CelebA32 eps/eps samples.
 
@@ -91,13 +143,12 @@ MNIST EPS/EPS FOLLOW-UP
 [ ] T017 - Test eps/eps generation with and without attention.
     Question: Does attention improve or worsen generation under the same
     eps/eps training and sampling protocol?
-    Important: attn_resolutions=() disables optional attention only. The current
-    UNet always includes middle-block attention. Add an explicit tested control
-    for a genuinely attention-free model before running this comparison.
-    Compare the larger MNIST UNet with all attention off, middle attention only,
-    and optional attention at 16/8 pixels if needed. Keep widths, depth, data,
-    optimizer, update budget, time sampling, exact division, and z_init fixed.
-    Record parameter counts; attention adds parameters. Repeat across seeds.
+    Current evidence: The 24-row 64x64 N=512 study includes complete attention
+    removal and middle-plus-16/8 attention. Attention helps small MNIST in seed
+    zero but has mixed effects elsewhere. Capacity is the larger factor.
+    Next action: Repeat attention states across seeds only if the paper needs an
+    attention claim. Otherwise retain the seed-zero matrix as a supporting
+    control and do not expand this axis.
     Inspect raw sample ranges, fixed-noise grids, and generation quality beside
     loss and f_mem. Low loss or low f_mem alone cannot establish success.
     Done when: A saved comparison shows how attention affects sample quality
@@ -108,11 +159,15 @@ NOW: SETTLE SAFE-DIVISION AND ENDPOINT POLICY
 
 [ ] T014 - Choose safe-division settings for the actual experiment ranges.
     Problem: The current paired default uses start/end = 0.01/0.99 and
-    safe_div_denom_eps = 0.01, so the clamp threshold matches the smallest
+    safe_div_denominator_floor = 0.01, so the clamp threshold matches the smallest
     ideal FM coefficient in the configured interval. This still needs empirical
     validation before paper runs.
-    Next action: Compare exact division and several epsilon values over the
-    intended time ranges, then record one justified setting per experiment.
+    Evidence: At `[0.001,0.999]`, floor 0.05 remains stable in the one-million
+    CelebA32 evaluation and all 24 64x64 rows. Exact division causes severe
+    early or persistent endpoint excursions. The paper can justify safe versus
+    exact, but has not compared several nonzero floor values.
+    Next action: Keep 0.05 as the provisional primary floor. Test another
+    nonzero floor only if the paper needs a floor-sensitivity claim.
     Done when: Paper runs do not rely on an unexplained default clamp.
 
 [ ] T015 - Reconsider non-uniform training-time sampling only if needed.
@@ -138,10 +193,28 @@ NEXT: FINISH IMAGE VALIDATION
     Problem: Code paths exist for full pixels, random-projected pixels, encoder
     features, and rho sweeps, but their agreement has not been established in
     the clean repository.
-    Next action: Use selected saved checkpoints to compare metric spaces and
-    rho values against the same saved training and held-out tensors.
+    Next action: Run the prepared seed-0 feature evaluation, then review its
+    per-image correlations, memorized-set overlap, and parameterization order.
     Done when: Correlations, disagreements, and parameterization ordering are
     summarized in a small reviewed result table.
+
+[ ] T018 - Add and validate feature-space f_mem.
+    Motivation: The workshop paper reviewers suggested measuring memorization
+    in a learned feature space, not only in pixels.
+    Scope: Reuse exact generated, training, and frozen validation tensors in
+    native pixels, SSCD, LPIPS v0.1 AlexNet, and DINOv2 ViT-S/14. Retain all
+    feature matrices, distances, ratios, and both neighbor identities.
+    Implemented: Public adapters, raw-first caches, offline hashed assets,
+    seed-0 resolution sensitivity, strict aggregation, six matched seed-1/2
+    training tasks, and a visual feature-space sanity notebook are ready. No
+    feature evaluation or new training job has been submitted yet.
+    Important: Learned spaces calibrate rho from the first 1,024 frozen
+    validation images. They never silently reuse a pixel-space rho.
+    Next action: The researcher submits the seed-0 runtime check. If acceptable,
+    submit all six seed-1/2 training tasks and then all nine evaluation tasks.
+    Done when: The complete three-seed result passes artifact/count/FID/range
+    checks and a reviewed table reports seed values, mean, standard deviation,
+    paired differences, cross-space agreement, and parameterization ordering.
 
 
 LATER: PORT ONLY AFTER LIVE ENTRYPOINTS EXIST

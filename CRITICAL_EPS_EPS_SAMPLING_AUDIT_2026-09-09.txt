@@ -1,4 +1,136 @@
 CRITICAL: EPS/EPS SAMPLING AUDIT AND BERZELIUS HANDOFF
+Updated: 2026-09-10, Europe/Stockholm
+Status: OPEN. We have stronger evidence and clear next checks, but no proven fix.
+
+EXECUTIVE SUMMARY - FOLLOW-UP ANSWER, 2026-09-10
+
+WHAT WE KNOW
+
+Epsilon prediction worked in the old CelebA experiments. The recent failures
+therefore do not show that eps/eps cannot work. The old run also produced mostly
+noise and saturated images early in training. It produced clear faces later.
+
+We found the successful old 25,000-step checkpoint, its actual settings, training
+images, and saved noise on Berzelius. All its weights load into the clean model
+when we use the old architecture. Small CPU checks found no basic difference
+in the tested loss and solver calculations. Sampling the trained weights through
+both implementations is still needed.
+
+WHAT CHANGED
+
+The recent CelebA run stopped at 1,000 updates. The old run's best recorded
+quality was at 25,000. The new learning rate is ten times larger. The network,
+training-set size, time bounds, output convention, and device also changed.
+Old sampling used a denominator floor of 0.05. Recent sampling used exact
+division. Training settings and this sampling change are the leading suspects.
+
+TRAINING AND SAMPLING HAVE SEPARATE CLAMPS
+
+Yes, the external sampler accepts use_safe_div and safe_div_denominator_floor.
+Training has its own settings. Direct eps/eps training does not divide by t,
+so its training clamp has no effect. Sampling converts epsilon to velocity by
+dividing by t. Near zero, that can turn a small prediction error into a large
+velocity error. Our current positive time bounds already avoid literal zero.
+
+WHAT WE COULD TRY
+
+First compare exact sampling with the historical 0.05 floor. Another proposal
+is to integrate in logit time: a different time coordinate removes the explicit
+small-denominator division and gives more steps near the endpoints. It preserves
+the continuous equation, so it cannot repair an inaccurate learned field by
+itself. For new training, a residual output can build the required cancellation
+into the model. The existing v/v plus eps_equivalent loss provides that control.
+It changes the prediction representation and requires a separate training run.
+
+Other options include better time coverage, bounded loss weights, higher
+precision, adaptive steps, smooth floors, and bounded clean-image estimates.
+They address different problems. Some change the loss or the sampled field.
+Using the same training and sampling floor is not automatically correct,
+especially for a converted training loss such as eps/v.
+
+WHAT TO CHECK NEXT
+
+1. Replay the successful old weights with old and clean code using identical
+   settings and saved noise on one CUDA device.
+2. Change only the sampling floor. Then isolate the other sampling changes.
+3. Transfer the recent failed Mac run before comparing its checkpoint here.
+   The old artifacts are present; the recent clean run artifacts are absent.
+4. Test logit-time sampling as a separate numerical experiment. For training
+   comparisons, keep the historical raw eps/eps condition as the reference.
+
+Judge success from the samples, their raw values, and generation quality.
+Low loss and zero measured memorization do not establish useful generation.
+The direct epsilon sampling conversion and optional final Euler step are now
+implemented. Neither has yet been shown to fix trained-checkpoint generation.
+
+IMPLEMENTED SAMPLING CHANGES - 2026-09-10
+
+New configurations use sampling.eps_to_v="direct" and
+sampling.heun_final_euler=True. The direct formula is (z_t-eps_hat)/t, with
+max(t, sampling.safe_div_denominator_floor) when clamping is enabled. It is applied
+inside sampling.model_to_velocity at every Euler/Heun velocity evaluation.
+Training conversions and losses are unchanged.
+
+Heun now defaults to an Euler final interval: 49 Heun intervals plus one Euler
+interval for 50 steps. Set sampling.heun_final_euler=False for full Heun.
+Set sampling.eps_to_v="via_x" to retain the old epsilon reconstruction route.
+Both choices are saved in new run configurations and evaluation settings.
+Standalone evaluation fills missing old fields with via_x and False, so an
+older saved run changes behavior only when these fields are overridden.
+
+The old successful implementation also used full Heun. Missing final Euler
+is therefore not an identified old-to-clean regression. Epsilon's divisor t
+is smallest near the START; the paper's image-prediction divisor 1-t is
+smallest near the END. Final Euler can change endpoint error, but it does not
+remove epsilon's initial amplification. A zero-epsilon analytical example
+still amplifies state 99 times over [.01,.99] with either final-step choice.
+
+The output="x_1" option still makes an extra model call at end_time after
+integration. When epsilon's endpoint clamp is inactive, that readout equals
+an Euler extension to t=1. output="x_t_max" returns the solver state directly.
+Keep this output choice fixed when testing either change.
+
+Verification: 45 tests passed in CPU mem_param_env across model/sampling,
+runner, and configuration-reference modules. Tests cover the direct formula,
+unchanged training losses/gradients, Heun call times, output readout, and old
+saved-config compatibility. No research checkpoint generation was run.
+
+Compare via_x/full-Heun, direct/full-Heun, then direct/final-Euler using the
+same checkpoint and saved noise. Hold the floor, time range, steps, and output
+fixed. Do not infer generation recovery from analytical unit tests alone.
+
+The historical Python replay example in Part 2 now explicitly passes via_x
+and heun_final_euler=False. Part 1 remains the original Mac report; when
+executing its older direct model.sample snippets, add those same fields to
+preserve its historical baseline. Direct Python calls otherwise use the new
+defaults. The standalone image_eval command handles older saved configs.
+
+PREPARED BERZELIUS SMOKE COMPARISONS - NOT RUN
+
+jobs/berzelius/eps_recovery_smoke/README.md documents six 2,000-update W&B jobs.
+They use CelebA32 grayscale, N=batch=256, seed 0, the historical network size,
+and training/sampling times [.001,.999]. Compare old versus direct conversion,
+full Heun versus final Euler, clamp on versus off, LR=1e-4 versus 1e-3, and a
+native v/v reference. Every run saves fixed-noise raw samples at 250-step
+checkpoints. A separate read-only helper reports raw ranges and matching-input
+hashes. The user executes the submission commands; no jobs were launched.
+Two thousand updates cannot establish the old ~25,000-update convergence.
+
+HOW TO READ THIS FILE
+
+Part 1 preserves the original Mac audit, including its commands and hashes.
+Its missing-artifact statements describe that earlier machine and date.
+Parts 2 and 3 contain the complete follow-up answers, including code comparisons,
+separate clamp arguments, equations, numerical options, checks, limitations,
+and a user-launched historical replay command. Use these later parts and the
+summary above for the current cluster evidence and proposed order of checks.
+All research replay commands below remain unexecuted in these audits.
+
+============================================================================
+PART 1 - ORIGINAL MAC AUDIT, RECORDED 2026-09-09
+============================================================================
+
+CRITICAL: EPS/EPS SAMPLING AUDIT AND BERZELIUS HANDOFF
 Recorded: 2026-09-09, Europe/Stockholm
 Status: OPEN. The causal explanation remains unresolved.
 
@@ -9,6 +141,31 @@ data flow, evidence, and uncertainty. Keep routine updates short. Give ordinary
 conda activate and Python commands. The user currently launches compute;
 do not launch training or evaluation unless explicitly authorized.
 The next session is on Berzelius. Do not run further compute on this Mac.
+Assume less: verify remote paths, environments, and completed setup steps
+from terminal evidence before prescribing dependent commands.
+
+FINAL BERZELIUS ACCESS HANDOFF
+
+The user supplied this existing parent directory on berzelius1:
+/proj/rep-learning-robotics/users/x_moalj/project_mem_par
+
+The requested layout is:
+- old_mem_par/: renamed historical checkout, retained as reference.
+- mem_param_clean/: new checkout on codex/reproducible-runners.
+
+Use this intended clean checkout path for the next session:
+/proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_clean
+
+The user handled GitHub authentication interactively and reports that access
+is sorted. HTTPS guidance used a personal access token restricted to this
+repository, with Contents read/write for future pushes. No credential is
+recorded here. Successful clone, directory rename, environment installation,
+and saved-run transfer have not been independently verified on Berzelius.
+
+Verify the checkout and existing Conda/PyTorch environment first. The earlier
+mem_param_env name is a project convention, not evidence that this environment
+exists or is ready. Do not assume ~/projects is the repository location.
+Keep compute launches user-controlled unless explicitly authorized.
 
 SESSION SUMMARY
 
@@ -136,7 +293,7 @@ This is not (z-eps_hat)/max(t,c). Below c it changes the field even for a perfec
 paired epsilon prediction: v_hat=(t/c)*x-eps. At t=0.01 and c=0.05, sensitivity
 to epsilon error is (1-t)/c+1 = 20.8 instead of 100.
 
-Changing the floor alone does nothing while use_safe_division=False.
+Changing the floor alone does nothing while use_safe_div=False.
 Enabling floor=0.01 has essentially no effect on eps sampling in [0.01,0.99].
 A 0.05 floor is meaningful, but success under it is a clamped-sampling result,
 not evidence that strict exact sampling works.
@@ -364,7 +521,7 @@ assert model.prediction_space == model.loss_space == "eps"
 base = cfg.sampling.to_dict()
 variants = {
     "exact": dict(base),
-    "floor005": dict(base, use_safe_division=True, safe_div_denom_eps=0.05),
+    "floor005": dict(base, use_safe_div=True, safe_div_denominator_floor=0.05),
 }
 
 out.mkdir(parents=True, exist_ok=False)
@@ -411,3 +568,811 @@ separate variants when needed.
 A clamp improvement establishes a sampling-policy effect for this checkpoint.
 It does not by itself explain why historical training succeeded. Preserve
 that distinction in the next report.
+
+
+============================================================================
+PART 2 - ANSWER TO THE ISSUE: CLUSTER CODE COMPARISON AND RECOVERY CHECKS
+============================================================================
+Added to this critical note: 2026-09-10
+Companion document: docs/eps_eps_recovery_audit_2026-09-09.md
+
+Epsilon generation: cluster code comparison and recovery checks
+
+Date: 2026-09-09. Status: diagnosis open; historical artifacts recovered.
+
+The strongest next check is to replay the successful historical weights through
+both implementations under the same sampling policy. This can separate a code
+regression from changed sampling and training without a new training run.
+
+This report follows the critical audit (CRITICAL_EPS_EPS_SAMPLING_AUDIT_2026-09-09.txt)
+and the Flowers failure record (protoypinging_and_trubbleshoting/eps_eps_sampling/OPEN_PROBLEM.md).
+Those notes were written on the Mac. This review inspected both cluster folders.
+No research training or trained-checkpoint inference ran during this review.
+
+New evidence from the cluster
+
+The successful historical N=256, seed=0 checkpoint and its original config exist:
+
+```text
+../old_mem_par/outputs/job_sets/mem_gen_boundary_20260427/runs/
+mem_gen_boundary_20260427_celeba32_N256_B256_eps_eps_steps1000000_s0-bd48e9dab3/
+seeds/seed_0000/attempts/DONE_20260427_020458/
+```
+
+The lines above form one path. It contains:
+
+- checkpoints/step_025000.pt: step, model, and optimizer state.
+- artifacts/config.json: the actual saved historical settings.
+- artifacts/train_tensor.pt: [256, 1, 32, 32], float32, finite, range [-1,1].
+- artifacts/reference_tensor.pt: [1024, 1, 32, 32], float32, finite, range [-1,1].
+- artifacts/z_init.pt: [1024, 1, 32, 32], finite float32 Gaussian noise.
+- figures/generation_monitor_samples_step_000750.png and _025000.png.
+
+All 228 model-state tensors loaded strictly into the clean GDFM after copying
+the saved historical network/data settings. That model has 3,917,409 parameters.
+This checks state compatibility, not forward-output or generation parity.
+
+The stored step-750 grid shows mostly saturation and speckled noise, with one
+clearer face. The step-25,000 grid shows eight recognizable faces. Both grids
+use the same saved noise. The early historical failure resembles the recent
+symptom; useful samples emerged later under the historical protocol.
+
+The original CSV confirms:
+
+| Update | FID on 10,000 generated samples |
+| ---: | ---: |
+| 750 | 257.793 |
+| 1,250 | 230.806 |
+| 10,000 | 172.636 |
+| 15,000 | 51.061 |
+| 20,000 | 24.211 |
+| 25,000 | 19.622 |
+| 1,000,000 | 27.551 |
+
+Source: ../old_mem_par/outputs/evals/mem_boundary_20260427_all_done_quality_20260501/all_checkpoint_metrics.csv.
+The monitoring bank has 1,024 samples; the post-hoc quality evaluation used
+10,000. A small replay does not reproduce the published CSV's FID protocol.
+
+The clean outputs/ directory is absent from this cluster checkout. Its recent
+N=32 MPS checkpoint and samples remain unavailable here. Their loss and range
+statistics below are from the critical audit, not fresh artifact inspection.
+
+Actual protocol differences
+
+| Factor | Historical CelebA32 | Recent clean CelebA32 | Failed clean Flowers |
+| --- | --- | --- | --- |
+| Data shape | 1x32x32 | 1x32x32 | 3x64x64 |
+| Training images / batch | 256 / 256 | 32 / 32 | 8 / 8 |
+| Seed | 0 | 7 | 7 |
+| Model parameters | 3,917,409 | 9,393,985 | 669,251 |
+| UNet widths | 32/64/128 | 64/128/192 | Smaller diagnostic UNet |
+| Time embedding | 128, derived from None | 64, inherited default | See saved experiment config |
+| Attention | 16px encoder plus 8px middle | 8px middle | Different diagnostic profile |
+| Dropout | 0.1 | 0 | 0 |
+| Adam LR | 1e-4 | 1e-3 | 1e-3 |
+| Training updates | Best at 25k; continued to 1M | 1k | 10k |
+| Training times | Uniform [0.001,0.999] | Uniform [0.01,0.99] | Uniform [0.01,0.99] |
+| Sampling | Heun50, [0.001,0.999] | Heun50, [0.01,0.99] | Heun50, [0.01,0.99] |
+| Sampling division | Floor 0.05 | Exact | Exact |
+| Returned output | Integrated state x_t_max | Endpoint estimate x_1 | Endpoint estimate x_1 |
+| Runtime | CUDA, TF32 requested | MPS, FP32 | MPS, FP32 |
+
+Historical optimizer state confirms Adam betas (0.9,0.999), epsilon 1e-8,
+weight decay 0, and LR 1e-4. The clean optimizer uses the same Adam construction;
+the selected LR differs. Neither inspected update loop adds EMA, a learning-rate
+scheduler, or gradient clipping. Their removal is not an explanation supported
+by these paths.
+
+Ranked causes and discriminating checks
+
+1. Too little training under a changed optimization setup
+
+This has direct historical support. Even the successful old run still had FID
+172.6 at 10k. Failure at 1k does not establish that clean CelebA cannot work.
+The higher LR, smaller full batch, changed network, and different seed prevent
+extrapolating the exact recovery step to the clean run.
+
+Check: first recover generation from old weights in clean code. Then reproduce
+the old training settings and exact saved subset, with checkpoints at 1k, 5k,
+10k, 15k, 20k, 25k, and 30k. Do not jump directly to a million-step sweep.
+Compare LR 1e-4 versus 1e-3 only after establishing that reference condition.
+Keep parameterization and unit epsilon MSE fixed.
+
+2. Removing the historical early-time denominator floor
+
+For z_t=t*x+(1-t)*eps, exact conversion is:
+
+```text
+v_hat = (z_t - eps_hat) / t
+```
+
+At fixed state, prediction error is amplified by 1/t. At t=0.01 the factor is
+100. The historical and clean safe code instead reconstruct x first:
+
+```text
+x_hat = (z_t - (1-t)*eps_hat) / max(t, c)
+v_hat = x_hat - eps_hat
+```
+
+This is NOT (z_t-eps_hat)/max(t,c). At t=0.01, c=0.05, epsilon-error sensitivity
+is 20.8. At the old start t=0.001 it is 20.98, despite the smaller start time.
+The floor changes the field below c; it is more than protection against NaNs.
+For a perfect paired epsilon target there, velocity becomes (t/c)*x-eps.
+
+Check: same checkpoint, noise, device, batch, endpoints, output, and step count;
+change only sampling.use_safe_div and sampling.safe_div_denominator_floor.
+Both True and 0.05 must be set. Changing the floor while division is disabled
+has no effect. Floor 0.01 is effectively inactive over [0.01,0.99].
+
+Use the successful old checkpoint as well as the current one when available:
+if old weights work with the historical floor but fail with exact division,
+the successful historical result itself depended on that sampling policy.
+If current weights improve under the floor, this shows a sampling effect for
+that checkpoint; it does not prove all training differences are irrelevant.
+
+3. Time conditioning, attention, and architecture settings
+
+The computational SmallUNet implementation is preserved. The configured model
+is different. Increasing widths does not recreate the historical time embedding
+or attention locations. The clean CelebA config inherits time embedding 64;
+old time_emb_dim=null resolves to 4*32=128.
+
+Check: construct from the entire saved network section, not just base width.
+Include channel_mult=(1,2,4), two residual blocks, dropout 0.1, and attention
+resolutions (16,8). attn_resolutions=() does not disable middle attention.
+The attention-resolution set is not encoded as learned weights, so strict
+state loading alone cannot detect a wrong attention setting.
+
+The sinusoidal time embedding consumes raw t in [0,1] in both versions. No
+new time rescaling or time-direction reversal was found. Treat stronger time
+features or a residual epsilon head as later experiments, not missing repairs.
+
+4. Start/end times and the approximate initial distribution
+
+Training and sampling now have separate controls. Old schedule.t_min/t_max
+set both. Sampling outside the clean training interval is an extrapolation.
+Both inspected historical and clean paths start from raw Gaussian noise at a
+positive time; that only approximates the true interpolated marginal.
+
+Check: reproduce the historical bounds first with historical weights. Then
+change bounds independently from the floor and output. Do not start exact
+epsilon sampling at t=0. A scaled-noise start removes only part of the mismatch
+and changes the protocol; it was not active in the saved April configuration.
+
+5. Dataset, dimensionality, and sample coverage
+
+Flowers RGB64 has 12 times as many scalar coordinates as CelebA grayscale32.
+Its diagnostic model is also much smaller and saw only eight images. The same
+per-coordinate error gives a larger total L2 error at higher dimension.
+However, current CelebA and MNIST failures mean dimension alone cannot explain
+every recorded failure.
+
+Check after CelebA recovery: same selected Flowers identities at RGB64, RGB32,
+and grayscale32; then CelebA gray32 versus Flowers gray32. Hold the training
+and sampling protocol fixed and record parameter counts. Compare per-coordinate
+RMSE or L2/sqrt(D), not raw cross-resolution distance. Distinguish total noisy
+training pairs from visits per image when changing N and batch size.
+
+6. Solver resolution or accumulating off-path error
+
+The Flowers 50/200/500-step results converge to essentially the same failed
+samples. This weakens the claim that more steps alone repair that checkpoint.
+It does not settle the current CelebA checkpoint. A solver can accurately
+integrate an inaccurate learned field.
+
+Check: 50 versus 200 steps with everything else fixed; inspect the first solver
+stages and the full trajectory. Log RMS of state, predicted epsilon, velocity,
+and the update dt*v. Compare the Euler trial state and corrected Heun state.
+Locate whether errors appear near the start, gradually, or only in final decode.
+
+7. Endpoint output convention
+
+Old sampling returns the state at t_max. Clean x_1 performs another network
+prediction and converts it to x. It does not integrate to 1.
+For exact epsilon conversion, x_1-z = ((1-t)/t)*(z-eps_hat). At t=0.99 that
+coefficient is about 0.0101, making this a lower-priority candidate unless the
+late prediction is already large. It cannot explain state blow-up observed
+before the endpoint.
+
+Check: save the integrated state and its final decode from the same trajectory.
+Compare x_t_max and x_1 without changing anything else.
+
+8. Device, precision, checkpoint/config mismatch, or mode handling
+
+CUDA/TF32 and MPS/FP32 differ. Epsilon conversion subtracts similar quantities
+near the noise endpoint, so precision should be controlled before attribution.
+Current previews use the trained in-memory model, which makes a checkpoint
+reload mismatch unlikely as the cause of the observed preview failure.
+Both monitors enter eval mode and restore the previous training mode.
+
+Check: establish both old/clean controls on one CUDA device in FP32 with TF32
+off. Compare network predictions first, then converted velocities, then solver
+states. Use eval() and no autocast. Test TF32 separately afterward.
+Read prediction/loss spaces from the saved config; string metadata is not in the
+weights. The clean model needs the new training fields, so do not pass the old
+JSON to it unchanged. Sampling overrides must be applied to the sampling
+section; mutating a config after model construction does not update stored
+model attributes.
+
+9. Metrics and display can misclassify failure
+
+The critical note records 59.3% of current CelebA pixels outside [-1,1], despite
+loss 0.0144 and projected f_mem=0. The projection metric clips/normalizes pixels;
+it loses raw magnitude information. Historical canonical rho=0.5 differs from
+the clean rho=0.3. Pixel, projected-pixel, and feature-space distances differ.
+
+Check: retain raw tensors, fixed-range grids, out-of-range fraction, and quality
+beside f_mem. Compare the same metric space and threshold. Avoid autoscaling
+each image, which can conceal amplitude failure. Low f_mem on noise is not
+successful generation.
+
+Checks already completed
+
+Environment: mem_param_env, Python 3.10.20, PyTorch 2.5.1.post303, CPU.
+Clean revision: 7606bed8197509833b3f814f2af6c028cb349a3e before this report.
+Old revision: 9c21d19b07a169e809d7c1664e1e517732ebe754, with pre-existing local
+changes including model and trainer files. These were preserved. Historical
+saved config is authoritative; exact April executable provenance is not fully
+established by today's working tree.
+
+- python -B tests/test_model_sampling.py: 13 tests passed in 0.147 seconds.
+  Initial pytest invocation could not run because pytest is not installed;
+  the test module's existing unittest entrypoint ran the tests successfully.
+- Old/clean analytical epsilon-field Euler and Heun comparisons: exact numerical
+  equality for three interval/floor combinations, six comparisons total.
+- Direct epsilon MSE with identical x, noise, time, and analytical predictions:
+  exact equality between old and clean code.
+- Zero-output epsilon test: clean Heun with exact division and x_1 returned
+  z_init/0.01, maximum absolute FP32 error 1.90735e-5.
+- Historical checkpoint strict load into the matching clean architecture passed.
+- Saved historical tensors, optimizer settings, quality CSV, and two existing
+  sample grids were inspected. No datasets were rebuilt.
+
+These checks rule out specific basic incompatibilities. They do not replace
+trained-model forward parity or full image-generation replay.
+
+Most informative replay order
+
+| Case | Weights | Implementation | Sampling | Interpretation |
+| --- | --- | --- | --- | --- |
+| A | Old 25k | Old | Historical floor/bounds/state | Available reference |
+| B | Same | Clean | Identical to A | A/B mismatch points to code/config/runtime |
+| C | Same | Clean | B with exact division only | B/C difference isolates the floor |
+| D | Same | Clean | Current exact/bounds/x_1 bundle | Tests current policy with successful weights |
+| E | Same | Clean | D with floor 0.05 only | D/E isolates floor at current bounds |
+
+If A and B match and generate faces, useful epsilon generation has been recovered
+in clean code for the historical checkpoint. If D also works, investigate the
+recent training settings and training duration. If B works but D fails, isolate
+sampling changes before retraining. If A fails, inspect artifact selection and
+runtime/provenance before blaming migration. Small grids establish a diagnostic
+result; use more samples and repeated seeds for research claims.
+
+User-launched GPU replay example
+
+Run from the clean repository in an allocated CUDA session. This example is
+syntax-checked but has not been executed. It runs inference on existing weights,
+creates one fresh results folder, and does not train or compute FID/f_mem.
+
+```bash
+module load Mambaforge
+conda activate mem_param_env
+PYTHONPATH=. python -u -B - <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import torch
+from ml_collections import ConfigDict
+from torchvision.utils import save_image
+
+from mem_param_src.config import get_base_config
+from mem_param_src.model import GDFM as CleanGDFM
+
+root = Path.cwd()
+old_root = root.parent / "old_mem_par"
+sys.path.insert(0, str(old_root / "src"))
+from gdfm.core import GDFM as OldGDFM
+
+assert torch.cuda.is_available(), "Use an allocated CUDA GPU."
+device = torch.device("cuda")
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
+torch.set_float32_matmul_precision("highest")
+
+run_id = "mem_gen_boundary_20260427_celeba32_N256_B256_eps_eps_steps1000000_s0-bd48e9dab3"
+attempt = (old_root / "outputs/job_sets/mem_gen_boundary_20260427/runs"
+           / run_id / "seeds/seed_0000/attempts/DONE_20260427_020458")
+old_config = ConfigDict(json.loads((attempt / "artifacts/config.json").read_text()))
+checkpoint = torch.load(attempt / "checkpoints/step_025000.pt",
+                        map_location="cpu", weights_only=True)
+noise = torch.load(attempt / "artifacts/z_init.pt", map_location="cpu",
+                   weights_only=True)[:16].to(device)
+
+config = get_base_config()
+config.framework.prediction_space = config.framework.loss_space = "eps"
+config.framework.loss_weighting = "unit"
+config.network = ConfigDict(old_config.network.to_dict())
+config.data = ConfigDict(old_config.data.to_dict())
+config.training.start_time = old_config.schedule.t_min
+config.training.end_time = old_config.schedule.t_max
+config.training.use_safe_div = True
+config.training.safe_div_denominator_floor = old_config.schedule.denom_eps
+
+old_model = OldGDFM(old_config).to(device).eval()
+clean_model = CleanGDFM(config).to(device).eval()
+for model in (old_model, clean_model):
+    model.load_state_dict(checkpoint["model"], strict=True)
+    assert model.prediction_space == model.loss_space == "eps"
+
+stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+out = root / "outputs/session_runs" / f"historical_eps_replay_{stamp}"
+out.mkdir(parents=True, exist_ok=False)
+records = {}
+
+def record(name, samples):
+    samples = samples.detach().cpu()
+    torch.save(samples, out / f"{name}.pt")
+    finite = bool(torch.isfinite(samples).all())
+    records[name] = dict(finite=finite, minimum=samples.min().item(),
+                         maximum=samples.max().item(),
+                         rms=samples.square().mean().sqrt().item(),
+                         outside_fraction=(samples.abs() > 1).float().mean().item())
+    if finite:
+        save_image(samples, out / f"{name}.png", nrow=8,
+                   normalize=True, value_range=(-1, 1))
+    print(name, records[name], flush=True)
+    return samples
+
+base = dict(n_steps=50, method="heun", start_time=.001, end_time=.999,
+            use_safe_div=True, safe_div_denominator_floor=.05, output="x_t_max",
+            eps_to_v="via_x", heun_final_euler=False)
+variants = {
+    "B_clean_historical": dict(base),
+    "C_clean_historical_exact": dict(base, use_safe_div=False),
+    "D_clean_current": dict(base, start_time=.01, end_time=.99,
+                            use_safe_div=False, output="x_1"),
+    "E_clean_current_floor005": dict(base, start_time=.01, end_time=.99,
+                                     output="x_1"),
+}
+with torch.no_grad():
+    # Compare predictions before comparing trajectories.
+    for value in (.001, .01, .5, .999):
+        times = torch.full((len(noise),), value, device=device)
+        old_pred = old_model.predict(noise, times)
+        clean_pred = clean_model.predict(noise, times)
+        torch.testing.assert_close(old_pred, clean_pred, rtol=1e-5, atol=1e-5)
+    a = record("A_old_historical", old_model.sample(
+        noise.clone(), n_steps=50, method="heun", device=device,
+        t_min=.001, t_max=.999, protocol="default", start_mode="raw_noise",
+        final_decode=False))
+    for name, settings in variants.items():
+        result = record(name, clean_model.sample(noise.clone(), **settings, device=device))
+        if name == "B_clean_historical":
+            records[name]["versus_old_rmse"] = (result-a).square().mean().sqrt().item()
+            records[name]["versus_old_max_abs"] = (result-a).abs().max().item()
+            print("A/B parity", records[name], flush=True)
+
+(out / "report.json").write_text(json.dumps({
+    "historical_attempt": str(attempt), "checkpoint_step": checkpoint["step"],
+    "old_config": old_config.to_dict(), "clean_config": config.to_dict(),
+    "variants": variants, "noise_prefix_count": len(noise),
+    "torch_version": str(torch.__version__), "device": torch.cuda.get_device_name(device),
+    "tf32": False, "results": records,
+}, indent=2))
+print(f"Saved: {out}", flush=True)
+PY
+```
+
+Expected files: five raw .pt batches, five PNG grids if samples are finite,
+and report.json. Inspect A/B numerical agreement and the grids before deciding
+on further compute. This uses old source only in a diagnostic comparison; the
+clean library remains independent of the old repository.
+
+If learned-field error remains: measure the right quantities
+
+At fixed times (0.001 only for models trained there, then 0.01, 0.02, 0.05,
+0.1, 0.5, 0.9, 0.99), construct exact noisy path states with saved training
+images and fixed noise. Record epsilon MSE and its implied velocity error.
+Compare against the simple predictor eps_hat=z_t; this exposes whether a low
+reported epsilon loss beats an almost-identity baseline near zero.
+
+Paired epsilon/velocity error includes conditional target variance. For these
+small finite training sets, an additional reference field is available directly:
+
+```text
+p_i(z,t) = softmax_i(-||z-t*x_i||^2 / (2*(1-t)^2))
+x_bar(z,t) = sum_i p_i(z,t)*x_i
+v_empirical(z,t) = (x_bar(z,t)-z)/(1-t)
+```
+
+This is the exact conditional field for the uniform empirical distribution of
+the saved training images, with unit Gaussian noise and the stated linear path.
+Compare the learned field against it at supervised states and sampled states.
+It removes paired-target variance from that comparison. It is a memorizing
+empirical reference, not a measure of generalization or a proposed replacement
+training target. The formula is derived from the stated Gaussian interpolation;
+this diagnostic was not executed.
+
+Changing to eps/v, inverse-time weighting, a residual epsilon head, or a different
+time distribution may improve learning. Those are separate interventions. First
+recover the original direct unit-MSE eps/eps condition and identify why the
+new protocol differs.
+
+
+============================================================================
+PART 3 - ANSWER TO THE FOLLOW-UP: SEPARATE CLAMPS AND NUMERICAL OPTIONS
+============================================================================
+Added to this critical note: 2026-09-10
+Companion document: docs/division_stability_options_2026-09-10.md
+
+Separate division controls and numerical stability options
+
+Date: 2026-09-10. Status: analysis and proposals; no implementation changes.
+
+Confirmed API and ownership
+
+Training and sampling division controls are separate in the clean repository:
+
+| Purpose | Enable flag | Denominator floor |
+| --- | --- | --- |
+| Training conversion | training.use_safe_div | training.safe_div_denominator_floor |
+| Sampling conversion | sampling.use_safe_div | sampling.safe_div_denominator_floor |
+
+The external sampling.sample, sample_euler, and sample_heun functions accept
+use_safe_div and safe_div_denominator_floor explicitly. GDFM.sample forwards
+both unchanged. Each Heun stage uses that sampling policy. Optional final x
+conversion uses the sampling policy too. GDFM.compute_loss reads the training
+policy stored when the model was constructed. The old implementation shared
+schedule.denom_eps across conversion calls.
+
+An API example for an already constructed model and noise bank:
+
+```python
+from mem_param_src.sampling import sample
+
+model.eval()
+samples = sample(
+    model, z_init, n_steps=50, method="heun",
+    start_time=0.01, end_time=0.99,
+    use_safe_div=True, safe_div_denominator_floor=0.05,
+    output="x_t_max", device=z_init.device,
+)
+```
+
+This example was not executed on a trained model. It returns a tensor with the
+same shape as z_init. The sampler handles no-grad; the caller sets eval mode.
+
+Image-training CLI controls are --sampling-safe-div,
+--no-sampling-safe-div, and --sampling-safe-div-denominator-floor 0.05.
+Training controls can be set through the existing config or --set overrides.
+There is no implemented selector for smooth floors, velocity damping, logit-time
+integration, or other alternative clamp algorithms. The implemented policy is
+sign-preserving division by max(abs(denominator), floor).
+
+Base defaults enable each flag with floor 0.01 and bounds [0.01,0.99]. That floor
+is effectively inactive for the linear FM coefficients in that interval. The
+recent CelebA/MNIST configs explicitly disable safe division. Changing a floor
+without enabling its corresponding flag has no effect.
+
+Sources: mem_param_src/model.py, sampling.py, config.py, and
+runners/image_train.py. Previous recovery evidence is in
+the cluster audit (docs/eps_eps_recovery_audit_2026-09-09.md).
+
+What actually becomes singular
+
+All equations below use the repository convention:
+
+```text
+z_t = t*x + (1-t)*eps
+v = x-eps
+noise at t=0, data at t=1
+```
+
+| Conversion | Potentially small denominator |
+| --- | --- |
+| eps to x or v | t, near the noise endpoint |
+| x to eps or v | 1-t, near the data endpoint |
+| v to x or eps | None for the linear FM path; determinant is 1 |
+| Diagonal eps/eps, x/x, v/v loss | No target conversion division |
+
+Direct unit-MSE eps/eps training has no division to stabilize. Its sampling
+conversion does. Cross-space eps/v training also has the sensitive conversion.
+The configured positive bounds already avoid literal zero. The remaining
+problems are error amplification, cancellation, solver error, and inaccurate
+predictions along the generated trajectory.
+
+At a fixed state and time, exact epsilon velocity obeys:
+
+```text
+v_hat = (z-eps_hat)/t
+velocity error = -epsilon prediction error/t
+```
+
+No algebraic rewrite can recover an accurate velocity from an arbitrary epsilon
+prediction with fixed absolute error as t approaches zero. A method must reduce
+roundoff/discretization error, improve prediction accuracy, enforce the needed
+cancellation, or deliberately change the field.
+
+Existing checkpoints: options affecting sampling
+
+A. Establish the historical floor as a reference
+
+The existing implementation reconstructs x first:
+
+```text
+d = max(t, c)
+x_hat = (z-(1-t)*eps_hat)/d
+v_hat = x_hat-eps_hat
+```
+
+This differs from direct velocity damping (z-eps_hat)/max(t,c). The current
+floor changes the field below c even for the true paired epsilon. At t=0.01,
+c=0.05, its epsilon-error sensitivity is 20.8 versus 100 for exact division.
+Direct velocity damping would give sensitivity 20 and scale the entire exact
+field by t/d. These should be separate named experimental policies.
+
+Use c=0.05 as a historical control, not a proven universal setting. Test the
+same weights/noise/device/bounds/output before attributing an improvement.
+A floor can suppress magnitude errors without restoring image structure.
+
+B. Integrate in logit time: same continuous ODE, different discretization
+
+Define:
+
+```text
+s = log(t/(1-t))
+t = sigmoid(s)
+dt/ds = t*(1-t)
+```
+
+Applying the chain rule gives the exact fields:
+
+```text
+eps prediction: dz/ds = (1-t)*(z-eps_hat)
+x prediction:   dz/ds = t*(x_hat-z)
+v prediction:   dz/ds = t*(1-t)*v_hat
+```
+
+These avoid explicit division by the small endpoint coefficients. The trained
+network still receives physical t, not s. Integrate from logit(start_time) to
+logit(end_time). Each Heun stage must evaluate the network at its own physical
+time and trial state. Compute the transformed field directly; computing an
+infinite velocity first and multiplying by zero is not a stable implementation.
+
+This preserves the exact continuous trajectory on the chosen open interval,
+uses existing weights, and changes the numerical grid and finite-step method.
+With 50 intervals on [0.01,0.99], the first physical step is about 0.001994,
+versus 0.0196 on the current uniform-t grid. Central physical steps become
+larger. Compare at the same network-evaluation budget and check convergence.
+
+Uniform logit nodes with Heun in t and Heun performed in s are distinct finite
+step methods. Both deserve clear naming if implemented. Do not confuse either
+with changing the training-time distribution.
+
+Limit: this removes an explicit division, not the sensitivity of the original
+learned flow. For eps_hat=0, the exact endpoint sample is still z_init/start_time.
+The scalar logit-Heun check converged toward 100*z_init at start_time=0.01.
+A wrong field can still generate bad samples in either coordinate system.
+
+This transformation is derived here for linear FM. It follows the broader
+practice of changing time variables and exploiting ODE structure discussed in
+DPM-Solver (https://arxiv.org/abs/2206.00927). It is not a claim that an existing
+VP diffusion scheduler can be used unchanged for this repository's convention.
+
+C. Improve arithmetic and step control
+
+- For exact FM epsilon conversion, evaluate (z-eps_hat)/t directly instead of
+  reconstructing x and then subtracting eps. For x, use (x_hat-z)/(1-t).
+  This removes intermediate operations; it does not remove cancellation.
+- Keep model evaluation, subtraction, and state accumulation in FP32 for the
+  initial control. Test FP64 arithmetic or a complete FP64 forward separately
+  if necessary. Casting an already inaccurate network output to FP64 cannot
+  recover its lost precision. Control CUDA TF32 and autocast explicitly.
+- Use smaller endpoint steps or adaptive step rejection based on a local error
+  estimate, scaled per coordinate. Bound maximum work and retain accepted times.
+  A rejected step should be retried, rather than clipping its update silently.
+- Consider higher-order methods that integrate the known linear term
+  analytically. DPM-Solver provides that principle, but adaptation needs the
+  current path and time direction. A first-order frozen-epsilon update here is
+  exactly Euler in t: z_next=z+(t_next-t)/t*(z-eps_hat). Renaming it as an
+  exponential method gives no improvement at the same nodes.
+
+The Flowers replay already showed convergence to poor samples at 50/200/500
+steps. Solver improvements must be checked on that learned field, not assumed
+to solve it. There is no current evidence that roundoff dominates its error.
+
+D. Smooth reciprocal regularization and denoiser projection
+
+A smooth floor such as sqrt(t*t+c*c) avoids the hard-floor kink, but modifies
+the denominator even above c. The regularized reciprocal t/(t*t+c*c) is
+bounded and tends to zero near t=0; it damps the field and introduces bias.
+Neither is algebraically equivalent to the original flow. Smoothness alone is
+not enough to prefer these over the reproducible historical hard floor.
+
+For pixel data supported in [-1,1], project the estimated clean image x_hat into
+that box and derive a consistent update from it. The exact conditional mean of
+bounded pixels also lies in that box. Projection cannot increase squared error
+to that mean, but it changes the approximate field and can saturate an inaccurate
+estimate. Avoid extending pixel bounds to arbitrary latent representations.
+The official DPM-Solver implementation (https://github.com/LuChengTHU/dpm-solver)
+also distinguishes pixel-space thresholding from latent-space sampling.
+
+A first-order data-estimate update can be expressed as:
+
+```text
+alpha = (t_next-t)/(1-t)
+z_next = (1-alpha)*z + alpha*x_hat_projected
+```
+
+For t <= t_next <= 1 and t<1, alpha lies in [0,1]. This expresses the Euler
+update as interpolation and avoids constructing a large intermediate velocity.
+It is an alternative sampler; adding ordinary Heun afterward does not inherit
+this convex-combination guarantee. The initial Gaussian state may legitimately
+be outside the pixel box. Clipping the noisy state itself is a different,
+usually less justified intervention.
+
+Training: objective-preserving choices and objective changes
+
+E. Improve time coverage while preserving epsilon MSE
+
+Use stratified times or more endpoint samples. If the original time density is
+p(t) and sampling uses q(t), weighting each example by p(t)/q(t) preserves the
+original expected loss. Without correction, changing time sampling changes the
+objective. More low-t examples may improve estimation there but does not remove
+the small low-t gradients inherent in epsilon loss for velocity-sized errors.
+
+For uniform s=logit(t) on a finite interval, q(t)=1/(S*t*(1-t)), where S is the
+logit interval length. To preserve uniform-t training on [a,b], use the weight
+S*t*(1-t)/(b-a). Keep loss evaluation on a fixed stated reference distribution.
+This is a training change separate from logit-time sampling of the ODE.
+
+F. Use bounded time weights instead of a singular cross-space loss
+
+For exact conversion at the same state:
+
+```text
+||v_hat-v||^2 = ||eps_hat-eps||^2 / t^2
+```
+
+The velocity loss can therefore be computed directly from epsilon residuals,
+without constructing two large velocities and subtracting them. Its gradients
+are still scaled by 1/t^2. To bound that scale, test:
+
+```text
+L = mean(||eps_hat-eps||^2 / max(t,c_train)^2)
+```
+
+This changes the time weighting while keeping epsilon as the regression target.
+The conditional epsilon optimum is unchanged for unlimited capacity and a
+positive time-only weight, but finite-model optimization changes. Normalize
+weights if needed to avoid confounding the comparison with overall loss scale;
+record the normalization and gradient norms. Gradient clipping can limit large
+optimizer updates, but cannot repair sampling from an inaccurate field.
+
+The clean code does not currently expose this capped epsilon weighting as a
+named mode. eps/v with exact conversion gives the uncapped common-velocity
+loss on the truncated interval. Do not silently relabel a weighted condition
+as the historical direct unit-MSE eps/eps experiment.
+
+G. Why simply matching training and sampling floors can be wrong
+
+The current eps/v training path converts the prediction with the training
+floor, then compares against the true velocity x-eps. If eps_hat=eps, its
+clamped prediction is:
+
+```text
+v_hat_clamped = (t/max(t,c_train))*x-eps
+```
+
+Below the floor, this generally differs from x-eps. Thus even a perfect paired
+epsilon prediction need not minimize that clamped cross-space loss. Applying
+the same floor during sampling does not remove the discrepancy.
+
+For direct eps/eps, the training floor is unused, so it need not match sampling.
+For a common-velocity comparison, use exact conversion on a positive interval
+or explicitly defined residual weighting. Another possible objective converts
+both prediction and target with the same clamped operator, but then it measures
+a modified metric, not the original true-velocity MSE. That alternative is not
+implemented. Separate configuration is scientifically useful; automatic equality
+of the two floor values should not be imposed.
+
+Both training and sampling: enforce cancellation through the output
+
+H. Residual epsilon parameterization
+
+Let a network u_theta predict a bounded-scale residual and construct:
+
+```text
+eps_hat(z,t) = z-t*u_theta(z,t)
+```
+
+Then sampling velocity is directly u_theta, with no division or subtraction of
+nearly equal large values. On training path states:
+
+```text
+||eps_hat-eps||^2 = t^2*||u_theta-(x-eps)||^2
+```
+
+The clean code already exposes the right-hand-side control:
+
+```python
+config.framework.prediction_space = "v"
+config.framework.loss_space = "v"
+config.framework.loss_weighting = "eps_equivalent"
+```
+
+This uses the epsilon-equivalent objective through a native velocity network.
+It is equivalent to a structured residual epsilon output, not to unchanged raw
+epsilon-network optimization. It requires retraining. It guarantees eps_hat=z
+at t=0; with a zero residual head, initial velocity is zero instead of the large
+velocity from a zero raw epsilon head. It still weights velocity-sized errors
+by t^2 during training, so weak low-time learning can remain.
+
+A raw epsilon checkpoint cannot gain this property by wrapping its existing
+output: computing u=(z-eps_hat)/t would reintroduce the original problem.
+Use this as a separate representation control, preserving historical eps/eps.
+
+I. Variance-based input/output preconditioning
+
+EDM (https://arxiv.org/abs/2206.00364) motivates separating network scaling,
+skip connections, and loss weights; its official implementation (https://github.com/NVlabs/edm/blob/main/training/networks.py)
+uses explicit input, output, and skip coefficients. The following is a derived
+linear-FM epsilon construction, not a copied EDM formula or a tested fix.
+
+Assume centered data with scalar per-coordinate variance sigma_x^2 > 0. Let:
+
+```text
+a=t, b=1-t
+q=t^2*sigma_x^2+b^2
+eps_hat = (b/q)*z + (t*sigma_x/sqrt(q))*F_theta(z/sqrt(q), t)
+```
+
+The implied velocity has a division-free endpoint form:
+
+```text
+v_hat = ((t*sigma_x^2-b)/q)*z - (sigma_x/sqrt(q))*F_theta
+```
+
+q remains strictly positive on [0,1]. The identity skip is built in at t=0,
+and the input/output scales are controlled. Predicting scaled residuals can
+reduce the burden of learning the near-identity epsilon map. It does not ensure
+a good learned field. Data centering, variance estimation, epsilon-loss scaling,
+and prediction-space reporting need explicit choices. This requires retraining
+and changes the model class. It is more involved than the existing weighted-v
+control, so test that simpler control first.
+
+Proposed sequence
+
+1. Finish successful-old-checkpoint replay with matched old/clean settings.
+2. On identical weights and noise, compare exact uniform-t Heun against the
+   historical floor. Keep all other settings fixed.
+3. Add an explicitly named exact logit-time Heun prototype. Compare at equal
+   function evaluations and at higher resolution to check convergence.
+4. Investigate arithmetic precision only with a matched FP32/FP64 comparison;
+   do not infer precision failure from sample magnitudes alone.
+5. For new training, compare raw eps/eps against the existing v/v,
+   eps_equivalent control under matched training settings. Test bounded weights
+   or more elaborate preconditioning afterward as distinct conditions.
+
+Report raw sample range, out-of-range fraction, fixed-noise grids, quality,
+time-resolved losses, and trajectory norms. Existing artifacts remain necessary
+for reproducibility. A finite or bounded image is not sufficient evidence of
+useful generation.
+
+Verification and limitations
+
+- Re-read the actual separate sampler/training arguments and CLI mappings.
+- Verified exact rational identities for the logit fields, residual epsilon
+  loss, and clamped cross-loss discrepancy at several times.
+- Verified the variance-based preconditioning identity numerically, including
+  finite endpoint limits.
+- A scalar zero-epsilon logit-Heun example returned endpoint factors 98.4447,
+  99.8932, and 99.9932 at 50/200/800 steps, approaching the exact factor 100.
+  This demonstrates that changing time coordinates does not fix a wrong field.
+- These were small Python standard-library analytical checks. No project model,
+  GPU, checkpoint inference, training, or new sampler implementation ran.
+- The source links support general solver/preconditioning ideas. The equations
+  specialized to this repository are explicit derivations and proposals, not
+  externally established empirical results for these experiments.

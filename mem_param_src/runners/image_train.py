@@ -1,12 +1,16 @@
 """Command-line entry point for image training runs."""
 
 import argparse
+from pathlib import Path
+
+from ml_collections import ConfigDict
 
 from mem_param_src.config import (
     apply_overrides,
     load_python_config,
     parse_cli_overrides,
 )
+from mem_param_src.runners.artifacts import read_json
 from mem_param_src.runners.evaluation import evaluate_image_run
 from mem_param_src.runners.training import train_run
 
@@ -14,8 +18,12 @@ from mem_param_src.runners.training import train_run
 def build_parser():
     """Build the image training command parser."""
     parser = argparse.ArgumentParser(description="Train one saved image run.")
-    parser.add_argument("--config", required=True, help="Python experiment config.")
-    parser.add_argument("--run-dir", required=True, help="New run directory.")
+    parser.add_argument("--config", help="Python experiment config for a new run.")
+    parser.add_argument("--run-dir", help="New run directory.")
+    parser.add_argument(
+        "--resume-run-dir",
+        help="Existing run directory; load its config, data, and latest recovery state.",
+    )
     parser.add_argument("--device", default="auto", help="auto, cpu, mps, or cuda.")
     parser.add_argument(
         "--set",
@@ -77,6 +85,21 @@ def build_parser():
         "--batch-size", type=int, help="Maximum training batch size, capped at N."
     )
     training.add_argument(
+        "--effective-batch-size",
+        type=int,
+        help="Samples per optimizer update; must be a multiple of physical batch size.",
+    )
+    training.add_argument(
+        "--recovery-every",
+        type=int,
+        help="Save rotating exact recovery state every this many optimizer updates.",
+    )
+    training.add_argument(
+        "--stop-after-step",
+        type=int,
+        help="Stop cleanly at this absolute optimizer step without changing the target.",
+    )
+    training.add_argument(
         "--checkpoint-every",
         type=int,
         help="Use interval checkpoints, replacing any configured explicit schedule.",
@@ -85,13 +108,19 @@ def build_parser():
     sampling.add_argument("--sampler", choices=("heun", "euler"), help="ODE solver.")
     sampling.add_argument("--sampling-steps", type=int, help="ODE solver intervals.")
     sampling.add_argument(
-        "--sampling-safe-division",
+        "--heun-final-euler",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Finish Heun with one Euler step; --no-heun-final-euler keeps full Heun.",
+    )
+    sampling.add_argument(
+        "--sampling-safe-div",
         action=argparse.BooleanOptionalAction,
         default=None,
         help="Clamp sampling conversion denominators; does not change the training loss.",
     )
     sampling.add_argument(
-        "--sampling-denom-eps",
+        "--sampling-safe-div-denominator-floor",
         type=float,
         help="Denominator floor when sampling safe division is enabled.",
     )
@@ -102,28 +131,77 @@ def build_parser():
         choices=("x_1", "x_t_max"),
         help="Return the clean endpoint estimate or the final integrated state.",
     )
+    sampling.add_argument(
+        "--final-pixel-clamp",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Clamp only completed image samples to [-1, 1].",
+    )
     return parser
 
 
 def main(argv=None):
     """Run image training and optional default evaluation."""
-    args = build_parser().parse_args(argv)
-    config = load_python_config(args.config)
-    apply_overrides(config, parse_cli_overrides(args.override_items))
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    resume = args.resume_run_dir is not None
+    if resume:
+        if args.config is not None or args.run_dir is not None:
+            parser.error("--resume-run-dir cannot be combined with --config or --run-dir.")
+        scientific_flags = (
+            args.override_items
+            or args.steps is not None
+            or args.lr is not None
+            or args.seed is not None
+            or args.batch_size is not None
+            or args.effective_batch_size is not None
+            or args.recovery_every is not None
+            or args.checkpoint_every is not None
+            or args.sampler is not None
+            or args.sampling_steps is not None
+            or args.heun_final_euler is not None
+            or args.sampling_safe_div is not None
+            or args.sampling_safe_div_denominator_floor is not None
+            or args.sampling_start_time is not None
+            or args.sampling_end_time is not None
+            or args.sampling_output is not None
+            or args.final_pixel_clamp is not None
+            or args.wandb is not None
+            or args.wandb_mode is not None
+            or args.generation_monitor is not None
+            or args.save_generated_samples is not None
+            or args.training_grid_samples is not None
+            or args.f_mem_monitor is not None
+            or args.f_mem_samples is not None
+        )
+        if scientific_flags:
+            parser.error("Resume accepts only operational device, stop, and evaluation flags.")
+        run_dir_arg = args.resume_run_dir
+        config = ConfigDict(read_json(f"{run_dir_arg}/config.json"))
+    else:
+        if args.config is None or args.run_dir is None:
+            parser.error("New training requires both --config and --run-dir.")
+        run_dir_arg = args.run_dir
+        config = load_python_config(args.config)
+        apply_overrides(config, parse_cli_overrides(args.override_items))
     # Explicit convenience flags override the corresponding --set fields.
     for argument, field in (
         ("steps", "training.n_training_steps"),
         ("lr", "training.lr"),
         ("seed", "training.seed"),
         ("batch_size", "training.batch_cap"),
+        ("effective_batch_size", "training.effective_batch_size"),
+        ("recovery_every", "training.recovery_every"),
         ("checkpoint_every", "training.ckpt_every"),
         ("sampler", "sampling.method"),
         ("sampling_steps", "sampling.n_steps"),
-        ("sampling_safe_division", "sampling.use_safe_division"),
-        ("sampling_denom_eps", "sampling.safe_div_denom_eps"),
+        ("heun_final_euler", "sampling.heun_final_euler"),
+        ("sampling_safe_div", "sampling.use_safe_div"),
+        ("sampling_safe_div_denominator_floor", "sampling.safe_div_denominator_floor"),
         ("sampling_start_time", "sampling.start_time"),
         ("sampling_end_time", "sampling.end_time"),
         ("sampling_output", "sampling.output"),
+        ("final_pixel_clamp", "sampling.final_pixel_clamp"),
     ):
         value = getattr(args, argument)
         if value is not None:
@@ -147,13 +225,23 @@ def main(argv=None):
         config.random_projected_f_mem.enabled = bool(args.f_mem_monitor)
     if args.f_mem_samples is not None:
         config.random_projected_f_mem.n_samples = args.f_mem_samples
-    run_dir = train_run(config, args.run_dir, run_kind="image", device=args.device)
+    run_dir = train_run(
+        config,
+        run_dir_arg,
+        run_kind="image",
+        device=args.device,
+        resume=resume,
+        stop_after_step=args.stop_after_step,
+    )
     if args.evaluate_after_training:
         print("[eval] Evaluating saved checkpoints...", flush=True)
         evaluate_image_run(run_dir, device=args.device)
     print(f"[done] Results: {run_dir}", flush=True)
+    record_path = Path(run_dir) / "run.json"
+    if record_path.is_file() and read_json(record_path)["state"] == "interrupted":
+        return 75
     return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

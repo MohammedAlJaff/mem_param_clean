@@ -1,0 +1,6 @@
+profile	eps_to_v	use_safe_div	safe_div_denominator_floor	heun_final_euler	description
+old_full_heun	via_x	true	0.05	false	Historical chained epsilon conversion with safe division and full Heun
+direct_full_heun	direct	true	0.05	false	Direct epsilon conversion with safe division and full Heun
+exact_full_heun	direct	false	0.05	false	Direct epsilon conversion with exact division and full Heun
+direct_final_euler	direct	true	0.05	true	Direct epsilon conversion with safe division and a final Euler interval
+exact_final_euler	direct	false	0.05	true	Direct epsilon conversion with exact division and a final Euler interval

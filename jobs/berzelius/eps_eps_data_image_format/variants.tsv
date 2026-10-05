@@ -1,0 +1,8 @@
+id	label	dataset	dataset_key	train_split	reference_split	image_size	channels	channel_mult	attn_resolutions
+0	celeba32_gray_control	celeba32_grey	celeba32-gray	train	valid	32	1	[1,2,4]	[16,8]
+1	mnist32_gray	mnist	mnist32-gray	train	test	32	1	[1,2,4]	[16,8]
+2	celeba32_rgb	celeba32_grey	celeba32-rgb	train	valid	32	3	[1,2,4]	[16,8]
+3	celeba64_gray	celeba32_grey	celeba64-gray	train	valid	64	1	[1,2,4]	[16,8]
+4	celeba64_rgb	celeba32_grey	celeba64-rgb	train	valid	64	3	[1,2,4]	[16,8]
+5	flowers64_rgb	flowers102	flowers64-rgb	train	val	64	3	[1,2,4]	[16,8]
+6	flowers64_rgb_deep	flowers102	flowers64-rgb-deep	train	val	64	3	[1,2,4,4]	[16,8]

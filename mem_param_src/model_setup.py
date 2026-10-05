@@ -20,7 +20,7 @@ be adapted into this factory without rewriting the rest of the repo first.
 
 from collections.abc import Mapping
 
-from mem_param_src.networks import BonnaireUNet, TimeCondMLP
+from mem_param_src.networks import BonnaireUNet, SmallDiT, TimeCondMLP
 
 _MISSING = object()
 
@@ -195,6 +195,12 @@ def _normalize_network_config(cfg):
                 default=(),
             )
         )
+        spec["middle_attention"] = _search_value(
+            network_sources,
+            ("middle_attention",),
+            "network.middle_attention",
+            default=True,
+        )
         spec["num_res_blocks"] = _search_value(
             network_sources,
             ("num_res_blocks",),
@@ -215,6 +221,55 @@ def _normalize_network_config(cfg):
         )
         return spec
 
+    if arch == "dit":
+        spec["image_size"] = _search_value(
+            data_sources,
+            ("image_size", "resolution"),
+            "data.image_size",
+        )
+        spec["image_channels"] = _search_value(
+            data_sources,
+            ("image_channels", "in_channels"),
+            "data.image_channels",
+        )
+        spec["depth"] = _search_value(
+            network_sources,
+            ("depth",),
+            "network.depth",
+            default=12,
+        )
+        spec["hidden_size"] = _search_value(
+            network_sources,
+            ("hidden_size",),
+            "network.hidden_size",
+            default=384,
+        )
+        spec["num_heads"] = _search_value(
+            network_sources,
+            ("num_heads", "heads"),
+            "network.num_heads",
+            default=6,
+        )
+        spec["mlp_ratio"] = _search_value(
+            network_sources,
+            ("mlp_ratio",),
+            "network.mlp_ratio",
+            default=4.0,
+        )
+        spec["patch_size"] = _search_value(
+            network_sources,
+            ("patch_size",),
+            "network.patch_size",
+            default=2,
+        )
+        spec["learn_sigma"] = _search_value(
+            network_sources,
+            ("learn_sigma",),
+            "network.learn_sigma",
+            default=False,
+        )
+        return spec
+
     raise ValueError(f"Unknown network: {arch}")
 
 
@@ -223,7 +278,7 @@ def build_network(cfg):
     Instantiate the backbone selected by cfg.network.
 
     Canonical config shape:
-        cfg.network.arch = "mlp" | "unet"
+        cfg.network.arch = "mlp" | "unet" | "dit"
         cfg.network.*
         cfg.data.*
 
@@ -256,11 +311,24 @@ def build_network(cfg):
             channel_mult=spec["channel_mult"],
             num_res_blocks=spec["num_res_blocks"],
             attn_resolutions=spec["attn_resolutions"],
+            middle_attention=spec["middle_attention"],
             dropout=spec["dropout"],
             time_emb_dim=spec["time_emb_dim"],
+        )
+
+    if network_name == "dit":
+        return SmallDiT(
+            image_size=spec["image_size"],
+            image_channels=spec["image_channels"],
+            depth=spec["depth"],
+            hidden_size=spec["hidden_size"],
+            num_heads=spec["num_heads"],
+            mlp_ratio=spec["mlp_ratio"],
+            patch_size=spec["patch_size"],
+            learn_sigma=spec["learn_sigma"],
         )
 
     raise ValueError(f"Unknown network: {network_name}")
 
 
-__all__ = ["build_network", "BonnaireUNet", "TimeCondMLP"]
+__all__ = ["build_network", "BonnaireUNet", "SmallDiT", "TimeCondMLP"]

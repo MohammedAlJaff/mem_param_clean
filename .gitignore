@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.ipynb_checkpoints/
 *.egg-info/
 build/
 dist/
@@ -19,6 +20,8 @@ ENV/
 .vscode/
 *.swp
 *.swo
+*.orig
+*.log
 
 # Data and generated outputs
 /data/
@@ -32,6 +35,9 @@ wandb/
 *.ckpt
 *.npz
 *.pkl
+!mem_param_src/metrics/image/assets/
+!mem_param_src/metrics/image/assets/mnist_jointae32_v1.pt
+!mem_param_src/metrics/image/assets/mnist_jointae32_v1_reference.pt
 
 # Local paths
 **/paths.local.yaml

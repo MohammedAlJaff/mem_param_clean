@@ -540,12 +540,12 @@ Use plain, separate settings for training and sampling:
 ```text
 training.start_time
 training.end_time
-training.use_safe_division
+training.use_safe_div
 training.denominator_epsilon
 
 sampling.start_time
 sampling.end_time
-sampling.use_safe_division
+sampling.use_safe_div
 sampling.denominator_epsilon
 sampling.n_steps
 sampling.method
@@ -562,8 +562,8 @@ The step count creates equal intervals from sampling start to sampling end.
 ### Safe Division
 Both training conversions and sampling conversions can use either:
 
-- exact division, when `use_safe_division = False`; or
-- sign-preserving denominator clamping, when `use_safe_division = True`.
+- exact division, when `use_safe_div = False`; or
+- sign-preserving denominator clamping, when `use_safe_div = True`.
 
 The clamp changes the conversion equation whenever a denominator magnitude is
 below `denominator_epsilon`. Choosing experiment ranges and clamp sizes remains
@@ -615,8 +615,8 @@ Do not retain aliases for the old names in the clean repository.
 The safe-division flags remain:
 
 ```text
-training.use_safe_division
-sampling.use_safe_division
+training.use_safe_div
+sampling.use_safe_div
 ```
 
 ### Checks
@@ -682,7 +682,7 @@ Change both training and sampling defaults to:
 ```text
 start_time = 0.01
 end_time = 0.99
-use_safe_division = true
+use_safe_div = true
 denominator_epsilon = 0.01
 ```
 
@@ -728,7 +728,7 @@ single end-of-day state summary.
   sampling start/end times.
 - Training times are sampled uniformly over the configured training interval.
   Logit-normal training-time sampling was removed.
-- Training and sampling each have an explicit `use_safe_division` flag and
+- Training and sampling each have an explicit `use_safe_div` flag and
   `denominator_epsilon` value.
 - Exact division remains available. Safe division uses sign-preserving
   denominator clamping.
@@ -1077,7 +1077,7 @@ TODO.txt: not changed by this task
 ## 2026-08-18T20:20:00Z - Rename the safe-division denominator field
 
 ### Decision
-Rename the active `denominator_epsilon` field to `safe_div_denom_eps`. Apply a
+Rename the active `denominator_epsilon` field to `safe_div_denominator_floor`. Apply a
 strict rename with no compatibility alias. Update the model API, sampling API,
 configuration, tests, documentation, TODO wording, and the GMM sanity notebook.
 
@@ -1172,7 +1172,7 @@ exact-safe pair. Use 128 training images, 64 reference images, batch size 8,
 two-level UNet with 32 base channels and 669,251 parameters.
 
 Sample 16 fixed initial tensors with Heun, 20 steps, and the time interval
-`[0.01, 0.99]`. Set `safe_div_denom_eps = 0.01`. Compare exact division with
+`[0.01, 0.99]`. Set `safe_div_denominator_floor = 0.01`. Compare exact division with
 safe epsilon values from `1e-6` through `5e-2` in the numerical sweep.
 
 The safe-division flag did not change diagonal training. Each exact-safe pair
@@ -1224,7 +1224,7 @@ prediction to clean-data space with `model_to_x`. It does not integrate from
 `t_max` to one.
 
 Keep the two safe-division controls independent. Training reads
-`training.use_safe_division`. Inference reads `sampling.use_safe_division`. Do
+`training.use_safe_div`. Inference reads `sampling.use_safe_div`. Do
 not add a duplicate inference configuration section.
 
 Expand `notebooks/experiments/safe_division_diagonal_sanity.ipynb` to cross
@@ -1451,7 +1451,7 @@ using a new default. Keep the earlier `rho = 0.5` Flowers run unchanged as
 historical evidence.
 
 Training and sampling still enable safe division by default with
-`safe_div_denom_eps = 0.01`. The Flowers sanity run uses `v` prediction and `v`
+`safe_div_denominator_floor = 0.01`. The Flowers sanity run uses `v` prediction and `v`
 loss. Its training conversion and sampling velocity conversion do not divide.
 The final linear-path conversion from `v` to `x_1` has denominator one. Safe
 division is therefore enabled but does not clamp any conversion in this run.
@@ -1507,7 +1507,7 @@ training safe-division flag is therefore inactive. Sampling converts `eps` to
 velocity as `v_hat = (z_t - eps_hat) / t`. Exact sampling uses `t` directly.
 
 Replay the same trained checkpoints in a named `safe_sampling` evaluation.
-This changes only `sampling.use_safe_division` to `True`. Use the saved data
+This changes only `sampling.use_safe_div` to `True`. Use the saved data
 and fixed noise bank for both evaluations.
 
 ### Result
@@ -1789,7 +1789,7 @@ pixel distances are not directly comparable across these tensor shapes.
 ```text
 first next task: T016
 problem status: open and unresolved
-first test: fixed Flowers102 replay with safe_div_denom_eps = 0.05
+first test: fixed Flowers102 replay with safe_div_denominator_floor = 0.05
 second test: matched Flowers RGB64, RGB32, and grayscale32 dimensionality screen
 new experiment started during closeout: no
 repository commit created: no
@@ -2100,7 +2100,7 @@ Mark the latent-autoencoder setting as proposed, not an established result.
 
 ## 2026-09-07 - Disable safe division in the MNIST demo config
 
-- Set training.use_safe_division and sampling.use_safe_division to False in
+- Set training.use_safe_div and sampling.use_safe_div to False in
   configs/runners/mnist_wandb_demo.py. Time limits remain [0.01,0.99].
 - Local memcompgen config-load assertions passed for both flags.
 - Completed run artifacts retain their original settings. No new run launched.
@@ -2462,3 +2462,977 @@ Validation and publication scope:
   Python files and the documented GPU replay example without executing them.
   git diff --check passed; saved run artifacts remain ignored and untracked.
   The earlier 25-test result above was not rerun during this closeout.
+
+## 2026-09-09 - Final Berzelius access handoff
+
+- The user supplied the existing cluster parent directory:
+  /proj/rep-learning-robotics/users/x_moalj/project_mem_par. The requested
+  layout preserves the historical checkout as old_mem_par and places the
+  new mem_param_clean checkout beside it on codex/reproducible-runners.
+- Provided rename/clone and HTTPS authentication instructions. The user
+  reports access is sorted. No remote commands were executed by the agent;
+  clone, rename, environment readiness, and artifact transfer remain unverified.
+- Recorded the path and the user's instruction to assume less in the critical
+  handoff and TODO. Check remote state before installing or launching compute.
+  The earlier mem_param_env name remains a convention to verify.
+- Before this documentation update, the local tree was clean at 7606bed and
+  matched the fetched origin branch. That commit was previously verified on
+  GitHub. No additional training, inference, or tests ran in this closeout.
+- Documentation validation: git diff --check passed.
+
+## 2026-09-09T13:19:36+00:00 - Compare epsilon-generation failure against recovered cluster artifacts
+
+- User requested a code comparison and prioritized checks for restoring eps/eps
+  generation. Read the critical audit and open problem, then inspected old/clean
+  model, conversion, samplers, UNet, optimizer loop, monitor, data, and runtime.
+- Recovered the actual old N=256 seed-0 April run under old_mem_par/outputs.
+  Its step_025000 checkpoint, config, training/reference tensors, noise bank,
+  optimizer state, figures, and historical quality CSV are available here.
+  The Mac-era notes about missing old artifacts do not apply to this cluster.
+- All 228 state tensors loaded strictly into a clean model configured from the
+  saved historical network/data sections; parameter count is 3,917,409. No
+  trained-network forward or generation ran. Existing 750/25k grids show the
+  historical transition from mostly noisy/saturated outputs to clear faces.
+- Saved config confirms LR=1e-4, N/batch=256, widths 32/64/128, time embedding
+  derived as 128, dropout=0.1, attention=(16,8), uniform [0.001,0.999], Heun50,
+  floor=0.05, and integrated-state output. The recent clean settings differ.
+- CPU mem_param_env: Python 3.10.20, PyTorch 2.5.1.post303. The pytest entrypoint
+  failed because pytest is absent; python -B tests/test_model_sampling.py ran
+  the same module via unittest and passed all 13 tests in 0.147 seconds.
+- Ad hoc analytical CPU checks compared old/clean Euler and Heun for three
+  endpoint/floor settings: all six matched exactly. Identical direct epsilon
+  loss also matched exactly. Zero-output exact epsilon sampling matched the
+  expected z_init/0.01 scaling within FP32 tolerance (max abs 1.90735e-5).
+- Added docs/eps_eps_recovery_audit_2026-09-09.md with the ranked causes, actual
+  protocol differences, artifact locations, verification limits, and a
+  syntax-checked but unexecuted five-case GPU replay example. The next decisive
+  comparison is old/clean sampling of the same successful historical weights,
+  followed by isolated floor changes. Current clean outputs/ is absent here;
+  transfer the Mac N=32 run before replaying that separate failed checkpoint.
+- No research training, checkpoint inference, dataset rebuilding, or Slurm jobs
+  were launched. No implementation/config changes were made. Preserved the old
+  checkout's pre-existing changes. Diagnosis remains open pending GPU replay.
+
+
+## 2026-09-10T11:02:36+00:00 - Record independent division controls and stability options
+
+- User asked to record the separation of training/sampling clamps and reason
+  about numerical alternatives. Verified external sample/Euler/Heun expose
+  use_safe_div and safe_div_denominator_floor; GDFM.sample forwards them. Training
+  uses separate stored settings. No alternate clamp-policy selector exists.
+- Added docs/division_stability_options_2026-09-10.md. Direct eps/eps training
+  has no conversion division. The note distinguishes conditioning, cancellation,
+  and solver error, and explains why matching cross-loss floors can bias the
+  target relationship. Separate training/sampling floors should be preserved.
+- Derived exact logit-time fields with no explicit endpoint division. Proposed
+  them as a sampling-only experiment with existing weights. Explained that the
+  same inaccurate continuous flow remains inaccurate after a time change.
+- Documented the existing v/v plus eps_equivalent control as equivalent to a
+  structured residual epsilon head. Also analyzed bounded loss weights, time
+  importance sampling, precision, adaptive steps, projection, and variance-based
+  preconditioning. None was implemented or claimed to repair generation.
+- Read primary EDM and DPM-Solver sources for general preconditioning/integration
+  principles; specialized FM equations are labelled as our derivations.
+- Exact rational and scalar numerical checks passed for logit fields, residual
+  loss, cross-loss clamp bias, and bounded preconditioning coefficients. The
+  zero-epsilon logit-Heun solution converged toward the same 100x endpoint
+  amplification, confirming the method's limitation. No model was evaluated.
+- No research compute or implementation/config changes. Prior audit notes and
+  pre-existing worktree changes remain intact. Recovery still awaits matched
+  historical trained-checkpoint replay.
+
+
+## 2026-09-10T11:16:19+00:00 - Consolidate the full answers into the critical epsilon audit
+
+- User requested all numerical options and the preceding code-comparison answer
+  in the existing critical text file, with a simple executive summary at its top.
+- Added a plain-language summary covering what worked before, recovered cluster
+  artifacts, changed settings, separate training/sampling clamps, proposed
+  numerical approaches, and the next diagnostic checks. Kept the issue open.
+- Preserved the original Mac audit verbatim under a dated historical label.
+  Clarified that its old-artifact availability statements describe the Mac;
+  historical artifacts exist on Berzelius while recent clean run outputs do not.
+- Included the complete code-comparison and numerical-options documents as
+  dated follow-up answers. Preserved equations, API examples, verification
+  limits, source references, and the unexecuted GPU command. Adjusted relative
+  document links for the root-level text file.
+- Verification: checked exact preservation of the original audit and inclusion
+  of both full follow-up documents; parsed the copied GPU Python example without
+  executing it. Documentation only; no model/config changes or research compute.
+
+
+## 2026-09-10T12:50:16+00:00 - Add direct epsilon sampling and optional final Euler
+
+- User requested the simpler epsilon sampling conversion and an explicit check
+  of Heun's final step. Implemented in mem_param_clean only.
+- sampling.model_to_velocity uses (z_t-eps_hat)/t with the existing optional
+  sampling denominator floor. sampling.eps_to_v="via_x" retains the previous
+  reconstruction route for comparisons. Training conversions, targets, losses,
+  and the final x_1 readout are unchanged.
+- New configs and direct Python calls default to eps_to_v="direct" and
+  heun_final_euler=True. Fifty intervals use 49 Heun intervals plus one Euler
+  interval. False keeps full Heun. GDFM.sample, monitoring, and checkpoint replay
+  forward both settings. Image CLI adds --heun-final-euler and its negative;
+  --set supports both fields. Monitoring prints the chosen sampling behavior.
+- New config.json and evaluation settings.json record both settings. Evaluation
+  fills missing historical fields with via_x and False before overrides, so
+  older saved runs preserve their behavior unless changed explicitly.
+- Both inspected old samplers used full Heun; the successful historical config
+  selected Heun50 over [.001,.999]. Missing final Euler is not an established
+  old-to-clean regression. Epsilon divides by t near the start, while the
+  paper's x prediction divides by 1-t near the end.
+- x_1 still makes a separate model call at end_time. For epsilon with inactive
+  endpoint clamping, this equals an Euler extension to t=1. Final Euler skips
+  the final Heun correction, not that separate readout. x_t_max returns state.
+- Updated README with real Python usage, comparison flags, and expected shape;
+  config reference, repo map, TODO, and critical audit describe these changes.
+  Made historical parity example and its critical-text copy explicitly request
+  via_x/full-Heun. Original Mac audit remains unchanged with a current notice.
+- Validation: Berzelius mem_param_env, Python 3.10.20, CPU.
+  PYTHONPATH=. python -B tests/test_model_sampling.py: 20 tests passed.
+  PYTHONPATH=. python -B -m unittest discover -s tests -p test_runners.py:
+  24 tests passed in 3.106 seconds. Initial failure was a new test comparing
+  JSON-loaded lists with original tuples; corrected the test comparison.
+  The corresponding test_config_reference.py discovery passed 1 test.
+  Total: 45 passing tests. Checks cover direct/clamped algebra, tensor shapes,
+  unchanged training losses and gradients, all sampler entrypoints, final-step
+  model calls, endpoint readout, CLI precedence, runner forwarding, legacy
+  replay defaults, and small temporary CPU integrations with mocked tracking.
+- Changed Python, README API example, and historical replay examples parsed
+  with the project interpreter. System Python 3.6 cannot parse the existing
+  Python 3.10 tests; the successful syntax check used mem_param_env.
+  git diff --check passed before this append and is checked at closeout.
+- No research training, saved research checkpoint inference, GPU generation,
+  Slurm submission, commit, or push. Generation recovery remains unverified.
+
+
+## 2026-09-10T13:08:24+00:00 - Prepare Berzelius epsilon recovery smoke jobs; do not execute
+
+- User requested a comparison plan and scripts for 2,000-update W&B smoke jobs,
+  explicitly reserving all execution/submission to the researcher.
+- Selected CelebA32 grayscale to anchor comparisons to the recovered successful
+  historical study. Added configs/runners/celeba32_eps_recovery_smoke.py with
+  N=batch=256, seed0, UNet32/64/128, time128, dropout0.1, attention16/8,
+  Adam1e-4, times [.001,.999], 50 sampling intervals, integrated-state output,
+  FP32 plus CUDA TF32, checkpoints every250, and 128 saved raw samples.
+- Added six rows: old via_x/full-Heun/floor.05; direct/full-Heun/floor.05;
+  direct/final-Euler/floor.05; direct/full-Heun/exact; direct/final-Euler
+  with LR1e-3; and native v/v reference. Training/sample settings otherwise
+  match. Sampler-only jobs repeat training to obtain separate W&B histories
+  through the existing runner; later checkpoint replay is the cheaper control.
+- Added jobs/berzelius/eps_recovery_smoke/submit.sh and run_array.sbatch.
+  Default array0-5%2, oneGPU/fourCPUs/32GB per task, two-hour limit, historical
+  account berzelius-2026-78 with account/time overrides. No partition forced.
+  submit.sh --dry-run prints only; task selection allows one job. Each actual
+  submission will create a unique batch, copy config/matrix, and record source
+  commit/diff and commands. Workers import the live source tree.
+- Workers load Mambaforge and mem_param_env, set clean PYTHONPATH, read existing
+  old_mem_par/data cache, and disable downloads. W&B uses existing login and
+  WANDB_ENTITY/current default maj90, project celeba32-unet, common batch group,
+  distinct variant names, and strict tracking failure behavior. No credentials
+  were inspected; current allocation validity and runtime were not verified.
+- Added read-only inspect_results.py for future user execution: stdout CSV
+  reports raw finite/min/max/RMS/outside-range values, recorded losses and
+  projected f_mem, run state, recorded data hashes, and computed noise hash.
+  It saves no files. W&B itself currently shows loss, panels, and rough f_mem;
+  raw range diagnostics are obtained from the helper after user-run jobs.
+- Wrote the job README with exact commands, controlled contrasts, output paths,
+  W&B setup, duplicate-training cost, checks, and next-stage decisions. Linked
+  from root README/repo_map; recorded prepared-but-unrun status in TODO and
+  critical audit. Two thousand updates are early-behavior checks, not restored
+  historical convergence; the historical best result was around25,000 updates.
+- Validation only: bash -n on both shell files; ast.parse on the new config
+  and inspector without imports; static config-field and six-row matrix checks;
+  confirmed each advertised pair changes only its intended settings. Independent
+  read-only review found no blocking script/path/forwarding/hash issue.
+  git diff --check passed. No project runtime tests or script dry-run executed.
+- No training, inference, dataset loading, W&B connection, scheduler command,
+  job submission, commit, or push. Existing source edits from the previous
+  sampler task were preserved; this task changes scripts/config/docs only.
+
+
+## 2026-09-14T13:33:20+02:00 - Launch one-million-step CelebA32 epsilon recovery array
+
+- User requested a broad epsilon sweep at one million optimizer updates with the
+  Bonnaire checkpoint schedule, plus native velocity and clean-data references.
+- Added `configs/runners/celeba32_eps_recovery_1m.py` and
+  `jobs/berzelius/eps_recovery_1m/`. The eight-task matrix contains six eps/eps
+  runs covering via-x/direct sampling conversion, sampling floor on/off, final
+  Euler on/off, and Adam learning rates 1e-4/1e-3, followed by v/v and x/x
+  references. All tasks use seed 0, CelebA32 N=batch=256, the recovered
+  3,917,409-parameter UNet recipe, and 72 `bonnaire-1m` checkpoints.
+- Requested one GPU, four CPUs, 32 GB, and 48 hours per task. Submitted array
+  `17513629`, tasks `0-7%4`, under account `berzelius-2026-78`. Batch snapshot:
+  `outputs/job_sets/eps_recovery_1m/20260914T113123Z_2308577`.
+- Validation before submission: both shell scripts passed `bash -n`; Python
+  config and inspector parsed; the matrix resolved eight rows with six epsilon
+  tasks and x/v references; checkpoint resolution returned 72 steps from 0 to
+  1,000,000; dry-run and `git diff --check` passed. CelebA cache exists.
+- Startup check: tasks 0-3 entered RUNNING. All loaded 256 training and 1,024
+  held-out grayscale images and constructed the expected UNet. W&B initialized
+  for all four. Tasks 0-2 completed step-0 sampling and entered training; their
+  losses agreed through the first 225 updates. Tasks 4-7 remained pending under
+  the four-task array cap. No commit or push ran.
+
+
+## 2026-09-14T13:36:36+02:00 - Establish the Berzelius run journal
+
+- User requested one durable record of every clean-repository compute launch and
+  each later status check.
+- Added root `RUN_JOURNAL.md` with a current active-runs table, a closed-runs
+  section, append-only chronological checks, fixed status vocabulary, required
+  Slurm/application evidence, failure-reason recording, and links to configs,
+  matrices, batch directories, and W&B.
+- Started the journal with job `17513629`, including its launch configuration,
+  first Slurm/application check, task progress, and W&B links. Historical jobs
+  remain in `old_mem_par/CODING_JOURNAL.md`; the new journal starts on 2026-09-14.
+- Updated `AGENTS.md` so future launch and monitoring work must read and update
+  the journal. Updated `docs/repo_map.md` to define its role beside TODO and the
+  migration journal. Link existence and `git diff --check` passed. No additional
+  job was submitted, cancelled, or changed during this documentation task.
+
+
+## 2026-09-14T16:35:04+02:00 - Make small arrays fully parallel
+
+- User set the standing launch rule: submit all tasks concurrently for arrays
+  of about 80 tasks or fewer. For larger arrays, agree on and record a throttle.
+- Raised live job `17513629` from a four-task throttle to eight. Slurm confirmed
+  all eight tasks running; tasks 4-7 started at 16:33:53 CEST without cancelling
+  or resubmitting tasks 0-3.
+- Changed the epsilon-recovery launcher default from `0-7%4` to unthrottled
+  `0-7`. Recorded the standing rule in `AGENTS.md` and `RUN_JOURNAL.md`.
+- Validation: launcher syntax passed; its dry run selected `0-7` and emitted
+  `--array=0-7`; `git diff --check` passed.
+
+
+## 2026-09-14T17:16:25+02:00 - Align W&B metrics to optimizer updates
+
+- Confirmed that W&B internal `_step` counted `run.log` calls, not gradient
+  updates. Sparse training logs and separate checkpoint-generation logs made
+  that default axis diverge from training progress.
+- Added `optimizer_step` to every training and generation payload. Defined both
+  `train/*` and `generation/*` against that shared W&B step metric. Step zero
+  represents the initial generation panel; later values are completed updates.
+- Retained `train/step` and `generation/step` as descriptive payload fields.
+  Documented the shared axis in `docs/config_reference.md`.
+- Added assertions for train, generation, and projected-f_mem payloads and for
+  the W&B metric definitions. All 24 runner tests passed. The full suite remained
+  at 66/67: the existing config-reference coverage test still lacks unrelated
+  entries for `network.middle_attention`, `sampling.final_pixel_clamp`, and
+  `tracking.wandb.subexperiment`.
+- Job `17513629` was not restarted. Its eight active processes loaded the old
+  logger before this edit, so their histories must still use `train/step` or
+  `generation/step`; new runs will receive `optimizer_step`.
+
+
+## 2026-09-15T12:38:57+02:00 - Add three-point eps/eps configuration evaluation
+
+- Added a small read-only decision evaluation for the six completed `eps/eps`
+  runs from job `17513629`. It checks only steps 100,000, 390,000, and 695,000;
+  step zero, the full checkpoint trajectory, and the `v/v` and `x/x` references
+  are excluded.
+- Each source run uses its as-launched sampler: old via-x/full Heun, direct
+  safe/full Heun, direct safe/final Euler, exact/full Heun, or exact/final
+  Euler. The sixth run repeats direct safe/final Euler with training LR 1e-3.
+- The evaluator reads saved checkpoints, `data_bundle.pt`, and `z_init.pt`
+  without modifying source runs. It records FID from 10,000 generated samples,
+  pixel-space f_mem at rho 0.3/0.5/0.7, held-out losses, and raw range/finite
+  diagnostics. Exact replay noise is persisted and its first 128 samples are
+  verified against the saved training noise.
+- FID uses vendored torch-fidelity 0.4.0-beta with explicit -1_1 normalization.
+  The saved held-out artifact limits its reference to 1,024 images, so absolute
+  values are for comparison within this decision run, not old 10K-reference
+  tables.
+- `submit.sh` launches array `0-5` without a throttle and requests two hours per
+  task. Results are append-safe. The dependent combiner writes one comparison
+  CSV, one FID/f_mem/loss plot, and a summary.
+- Added T018 to `TODO.txt` for the workshop-reviewer-motivated feature-space
+  f_mem follow-up, including a fixed versioned encoder/layer and separate rho
+  calibration rather than silently reusing pixel-space thresholds.
+- Validation: the manifest resolves six tasks and three common nonzero
+  checkpoints; launcher and Slurm shell syntax pass; eight focused evaluator
+  tests pass. The full suite is 74/75 with only the pre-existing config-reference
+  documentation failure for three unrelated fields.
+- No evaluation job was submitted. No commit or push ran.
+
+
+## 2026-09-15T13:17:47+02:00 - Correct FID-10k reference protocol
+
+- Corrected a scientific protocol error identified after job `17522748`: its
+  10,000 generated samples were compared with only 1,024 reference images.
+  Those FID values are not FID-10k and must not drive the epsilon-configuration
+  decision. Its held-out losses, pixel-space f_mem, and raw diagnostics remain
+  valid. Added `FID_INVALID.md` to that output directory.
+- Added a dedicated Berzelius reference-preparation job. It deterministically
+  materializes 10,000 images from the CelebA `valid` split with the exact
+  training preprocessing, saves the tensor and provenance manifest, and
+  verifies that its first 1,024 tensors, labels, source indices, and sample IDs
+  exactly match the training artifact.
+- The evaluator now separates the frozen 10,000-image FID reference from the
+  saved 1,024-image held-out set used for loss and pixel-space f_mem. Every row
+  records the reference artifact path and SHA-256. FID feature caches are keyed
+  by that artifact hash.
+- `fid_10k` is now populated only when both the generated count and reference
+  count are 10,000. The combiner rejects a 10k-generated run with fewer than
+  10k references, and the launcher enforces the same condition before submit.
+- The launch sequence is reference preparation, fully parallel array `0-5`,
+  then combine, all connected by `afterok` dependencies.
+- Validation: all Python and shell files pass syntax checks, the dry run reports
+  `10000/10000/1024`, and all nine focused evaluator tests pass.
+- Submitted replacement chain: reference job `17523389`, evaluation array
+  `17523390`, and combine job `17523391`. Output is
+  `outputs/evals/eps_recovery_1m/20260915T111553Z_3025872_three_point`.
+
+- Completion: reference job `17523389`, all six tasks in array `17523390`, and
+  combine job `17523391` completed with exit `0:0`. The combined summary has
+  18/18 valid rows, `sample_counts=[10000]`, and
+  `fid_reference_counts=[10000]`.
+- Corrected FID-10k confirms direct safe/full-Heun as the next-run choice:
+  20.57/24.43/27.13 at 100k/390k/695k versus old via-x/full-Heun at
+  21.90/25.15/26.65. The old path is slightly better only at 695k and remains
+  the close late-training reference.
+
+
+## 2026-09-15T13:40:55+02:00 - Add v/v and x/x to corrected three-point eval
+
+- Added a two-task manifest and Berzelius launcher for saved sources 6 (`v/v`)
+  and 7 (`x/x`). Both reuse the exact corrected 10,000-image FID reference,
+  deterministic evaluation noise, and FID feature cache, and use their saved
+  sampling configurations at 100k, 390k, and 695k.
+- Added a dependent reference combiner that checks for exactly six 10k/10k
+  rows, writes separate reference artifacts, and also creates one 24-row
+  all-parameterization CSV and plot. Cross-parameterization plots show only FID
+  and pixel f_mem because eps/v/x loss magnitudes are not directly comparable.
+- Validation: Python and shell syntax pass, the preview resolves exactly two
+  tasks at three checkpoints, and all nine focused evaluator tests pass.
+- Array `17523970` and combine job `17523971` completed with exit `0:0`.
+  FID-10k is 25.86/28.72/30.19 for `v/v` and 25.69/27.70/24.97 for `x/x` at
+  100k/390k/695k. All six reference rows are finite and use 10k/10k.
+
+
+## 2026-09-15T13:52:00+02:00 - Prepare epsilon recovery work for publication
+
+- Updated the root and job READMEs to point to the completed one-million-step
+  training and corrected three-point evaluation. The docs now include the
+  10k/10k FID protocol, the v/v and x/x references, and the unthrottled rule
+  for small arrays.
+- Added the three previously missing active settings to
+  `docs/config_reference.md`: `network.middle_attention`,
+  `sampling.final_pixel_clamp`, and `tracking.wandb.subexperiment`.
+- Publication validation in `mem_param_env`: `git diff --check` passed; all
+  relevant Slurm shell files passed `bash -n`; all changed notebooks passed
+  JSON parsing; and the complete test suite passed, 76/76.
+- The publication scope includes the safe-division and direct-sampling API,
+  optimizer-step logging, recovery launchers, three-point evaluator, tests,
+  audit notes, and run journals. It excludes generated outputs, the empty
+  `tea_debug.log`, and unrelated untracked N=16 launcher experiments.
+
+
+## 2026-09-16T13:15:07+02:00 - Implement raw-first feature f_mem and matched three-seed workflow
+
+- Kept three distinct metric contracts. Training monitoring now records
+  `monitor/random_projected_pixels`; post-hoc native pixels record
+  `eval/full_pixels`; learned results record `eval/features/sscd`,
+  `eval/features/lpips`, or `eval/features/dinov2`. Their rho values and absolute
+  f_mem values are not treated as interchangeable.
+- Added public fixed adapters and batched extraction for official SSCD
+  `sscd_disc_mixup`, LPIPS v0.1 AlexNet, and DINOv2 ViT-S/14 final CLS. The
+  LPIPS embedding is constructed so squared Euclidean distance matches package
+  LPIPS. DINOv2 keeps the checkpoint-native 518 positional grid and interpolates
+  it for the primary 224 input. Extended nearest-neighbor output with the second
+  neighbor identity while retaining the existing `nn_idx` key.
+- Added `jobs/berzelius/eps_recovery_1m/feature_f_mem/`. It freezes matched
+  seed-0 or nine-trajectory manifests; replays 100k, 390k, and 695k using one
+  seed-2003 noise bank and 50-step full Heun; saves exact 10,000-image banks;
+  caches every train/validation/generated feature tensor; saves `d1`, `d2`, `r`,
+  and both neighbor IDs; retains pixel rho 0.3/0.5/0.7 and held-out percentile
+  curves; computes FID-10k; and rejects cache reuse when hashes or preprocessing
+  metadata differ.
+- Added the seed-0 checkpoint-390k sensitivity matrix: SSCD 288/320, LPIPS
+  32/64, and DINOv2 224/518. Primary multi-seed resolutions remain 320, 32, and
+  224. The combiner enforces expected record counts and writes seed values,
+  mean/sample standard deviation, paired differences, per-image Spearman
+  correlations, memorized-set Jaccard overlap, parameterization ordering, raw
+  tables, and plots.
+- Added `jobs/berzelius/eps_recovery_multiseed/`: one unthrottled six-task array
+  for seeds 1 and 2 crossed with matched `eps/eps`, `v/v`, and `x/x`. It reuses
+  the one-million-update config, N=batch=256, Adam `1e-4`, unit weighting, and
+  the fixed sampler settings. Feature evaluation stays outside training.
+- Staged and verified all encoder assets under the ignored
+  `outputs/model_assets/feature_f_mem/` cache (594 MiB). The manifest pins
+  DINOv2 source commit `7764ea0f912e53c92e82eb78a2a1631e92725fc8` and hashes
+  SSCD, LPIPS calibration, AlexNet, DINOv2, and FID Inception weights. Compute
+  workers use explicit local paths and cannot silently download another model.
+- Validation: seed-0 manifest creation resolves exactly eps/v/x at the three
+  checkpoints; both launchers pass `bash -n` and non-mutating dry-run; all 84
+  repository tests pass; and offline real-weight smoke outputs are SSCD
+  512-D at 320/288, LPIPS 5,760-D at 32 and 31,872-D at 64, DINOv2 384-D at
+  224/518, and Inception 2,048-D. No Slurm job was submitted, so
+  `RUN_JOURNAL.md` was not changed.
+
+
+## 2026-09-16T14:05:31+02:00 - Add interactive learned-feature sanity notebook
+
+- Added `notebooks/sanity/feature_f_mem_encoder_sanity.ipynb` for joint
+  researcher and implementation review. It uses the staged offline assets,
+  one saved seed-zero training artifact, and the frozen CelebA validation
+  artifact.
+- The notebook verifies file hashes, the pinned DINOv2 commit, feature
+  dimensions, finite outputs, batch-size determinism, normalized SSCD/DINOv2
+  descriptors, exact-copy neighbor identities, both neighbor indices, and
+  held-out threshold mechanics. It plots controlled perturbations beside each
+  space's nearest training images.
+- Added an explicit LPIPS checkpoint-layout check. Every calibration tensor
+  must match the loaded model state. The notebook also compares direct official
+  LPIPS scores with squared Euclidean distances from the cached embedding.
+- Corrected two notebook assumptions during execution. CelebA indices are
+  split-local, so the data check now uses recorded source and split fields.
+  CPU is the safe default because a visible CUDA runtime does not prove that
+  the process owns an allocated GPU. An allocated session can set
+  `FEATURE_F_MEM_DEVICE=cuda`.
+- Full default execution passed in the Berzelius `mem_param_env` environment
+  on CPU. Outputs were SSCD 512-D, LPIPS 5,760-D, and DINOv2 384-D. Exact-copy
+  distances were zero with training index zero. The maximum direct-versus-
+  embedding LPIPS error was `1.49e-8`.
+- A second full CPU execution enabled the optional 288/64/518 resolution cell.
+  Nearest-neighbor identity agreement on the six diagnostic queries was 1.000
+  for SSCD 320/288, 0.833 for LPIPS 32/64, and 0.833 for DINOv2 224/518.
+  These small-query values test the path and do not estimate experiment-level
+  resolution sensitivity.
+- Final checks passed for JSON parsing, unique cell IDs, empty saved outputs,
+  required code-cell purpose comments, notebook sentence lengths, nbformat
+  validation, and `git diff --check`. The environment did not contain
+  `pytest`; the built-in unittest runner passed all 17 image-metric tests and
+  all three feature-workflow tests.
+- Linked the notebook from the feature workflow README, repository map, and
+  T018 status. No Slurm job was submitted, so `RUN_JOURNAL.md` was not
+  changed.
+
+## 2026-09-16T16:42:53+02:00 - Replace encoder audit with visual feature-space study
+
+- Replaced the prior assertion-led encoder notebook with a visual-first
+  feature-space `f_mem` study. The committed `quick` profile uses saved CelebA
+  tensors on CPU: A=32, calibration=128, validation=128, B=32, eight pairs,
+  a 32-image query bank, primary resolutions, and staged local weights.
+- The notebook displays A/B galleries, held-out ratio calibration, one complete
+  interpolation/noise grid, SSCD/LPIPS/DINOv2 heatmaps for d1/d2/ratio/f_mem,
+  nearest-A examples, known noisy-copy recovery curves, a compact audit, and a
+  direct LPIPS parity scatter. It uses public feature and nearest-neighbor APIs
+  directly and has no notebook-local helper functions.
+- Full quick execution passed in `mem_param_env` and rendered nine
+  primary-resolution figures in a disposable `/tmp` notebook. The audit passed:
+  SSCD=512-D, LPIPS=5,760-D, DINOv2=384-D; each exact copy recovered A index
+  zero; and LPIPS parity maximum error was `1.49e-08`. Pixel-exact DINO queries
+  showed a separately-batched numerical d1 of `5.18e-04`, so the audit requires
+  the recovered identity and d1 below `1e-3`, rather than bitwise-zero ratios.
+- Focused validation passed: 17 image-metric tests, three feature-workflow
+  tests, notebook JSON/schema and unique-ID validation, empty committed outputs,
+  required code-cell purpose comments, no notebook-local functions, and
+  `git diff --check`.
+- The full GPU profile and its SSCD 288/320, LPIPS 32/64, and DINOv2 224/518
+  resolution comparisons remain researcher-run checks. No Slurm job was
+  submitted, so `RUN_JOURNAL.md` remains unchanged.
+
+
+## 2026-09-18 - Repair feature notebook audit and add controlled A/B mixture diagnostic
+
+- Reviewed the saved full-profile notebook audit without rerunning it. SSCD and LPIPS failed only the batch-size repeat limit.
+- The recorded repeat errors were 6.03e-5 for SSCD and 6.16e-5 for LPIPS. The prior limit was 1e-5.
+- Dimensions, finite features, exact-copy neighbor identities, exact-copy distances, and LPIPS parity all passed in the saved output.
+- Set the explicit repeat tolerance to 1e-4. The new limit covers the recorded GPU numerical variation without weakening identity or distance checks.
+- Added a tutorial definition of d1, d2, r, rho, and f_mem. Added line comments for artifact loading, source encoding, calibration, interpolation, the new mixture, and the audit.
+- Added a controlled A/B mixture section. It replaces a known fraction of held-out B queries with noisy A copies. Each feature space plots mean and variance of r and of the binary f_mem decision.
+- Restored the notebook default to quick CPU. The full GPU and resolution paths remain explicit researcher-run options.
+- Validation only: notebook JSON parse, unique cell IDs, Python AST parse for every nonempty code cell, and git whitespace check passed. No notebook cell, feature extraction, model inference, test suite, or Slurm job ran.
+
+
+## 2026-09-18 - Launch recoverable 3x3 and data/image-format gates
+
+- Added complete process-boundary recovery for image and synthetic training.
+  Two rotating states retain model, optimizer, Python/NumPy/Torch CPU and CUDA
+  RNGs, the exact shuffled-batch cursor, history, elapsed time, and W&B run ID.
+  A run lock prevents concurrent resumes; USR1 and TERM stop after an optimizer
+  boundary; resumes verify saved config and data hashes and reuse the W&B run.
+- Added physical/effective batch separation with exact gradient accumulation.
+  The CelebA32 prediction/loss grid uses physical/effective batch 256 on thin
+  A100s. The data/image-format study uses physical batch 128 and effective batch
+  256 on fat A100s, including a fresh CelebA32 gray control and a deeper Flowers
+  capacity probe.
+- Added an opt-in deterministic CUDA mode and enabled it for both studies.
+  Fresh processes now seed Python, NumPy, and Torch; monitoring and W&B preserve
+  those streams. CUDA smoke `17549382` proved bitwise equality for model, Adam,
+  all RNGs, sampler, and history across a planned stop and new process.
+- Both study configs target one million updates but stop first at the scientific
+  200k checkpoint. Resume wrappers default to the 200k gate and accept an
+  explicit `1000000` target only after manual review. Source, config, and matrix
+  snapshots are frozen per submission.
+- Submitted unthrottled arrays `17549419` for all nine CelebA32 gray
+  prediction/loss cells and `17549408` for seven EPS/EPS dataset, resolution,
+  color, and capacity rows. The data/image-format array passed startup for all
+  seven rows; the 3x3 array is waiting for thin GPUs.
+- The 200k review is specified in both job READMEs: fixed 10k noise, full Heun,
+  direct and legacy epsilon conversion where applicable, safe and exact
+  division, FID, full-pixel f_mem, and SSCD/LPIPS/DINOv2 f_mem. Its generalized
+  evaluator launcher still needs to be implemented before the gate completes.
+- Validation passed: 87/87 local tests, all launch/resume shell syntax, config
+  and real-loader shape checks, finite loss for all nine 3x3 cells, and clean
+  whitespace checks. Operational attempts and immutable batch paths are in
+  `RUN_JOURNAL.md`.
+
+
+## 2026-09-19 - Complete and review both 200k training gates
+
+- All 16 Slurm tasks completed with exit `0:0` and the applications paused at
+  the planned step 200,000 boundary. Every run has a valid rotating recovery
+  state and explicit step-200k checkpoint, so selected cells can resume in a
+  new process without replaying the first 200k updates. All W&B finishes report
+  success and all step-200k sample tensors and comparison grids are present.
+- The online 128-sample projected-pixel monitor separates the data/image-format
+  rows sharply at 200k: CelebA32 gray and MNIST32 are 0.977, CelebA32 RGB is
+  0.727, CelebA64 gray is 0.117, CelebA64 RGB and Flowers64 base are 0.000, and
+  Flowers64 deep is 0.031. Visual inspection agrees on the failure modes:
+  CelebA64 RGB and both Flowers64 rows are poor or collapsed, and the deeper
+  Flowers network does not solve that problem at this gate. CelebA64 gray is
+  visibly more coherent than its projected-pixel score alone suggests.
+- All nine prediction/loss cells produce recognizable CelebA32-gray faces.
+  Their projected-pixel f_mem values span 0.469-1.000; `eps/x` is visibly the
+  noisiest cell. Raw loss magnitudes are not ranked across different target
+  parameterizations because their scales differ.
+- The online monitor is only `monitor/random_projected_pixels` with 128 samples,
+  resize 16, projection dimension 256, and rho 0.3. It is a triage gate, not a
+  substitute for fixed-10k FID, full-pixel f_mem, or learned SSCD/LPIPS/DINOv2
+  f_mem. The generalized evaluator named in the study READMEs remains the next
+  implementation dependency before a defensible continuation ranking.
+- No run was resumed toward one million and no evaluator job was submitted in
+  this review. Exact process-boundary restart support was already accepted by
+  CUDA smoke `17549382`; the remaining decision is scientific cell selection,
+  not recovery feasibility.
+
+
+## 2026-09-19 - Stage the EPS/EPS 64x64 N=512 capacity gate
+
+- Added a deterministic 24-row matrix: four data/color formats crossed with
+  small, deep, and wide-deep UNets and complete attention on/off controls.
+  Small/deep rows route to 16 thin tasks; wide-deep rows route to eight fat
+  tasks. The shared config keeps N=512, seed 0, effective batch 256, a one-
+  million-update ceiling, and a hard 400k review gate.
+- Added six real-GPU capacity probes. Each profile measures physical batches
+  512/256/128/64 in a fresh process on CelebA64 RGB. Selection uses finite loss
+  and peak-reserved limits of 32 GiB on A100-40GB or 64 GiB on A100-80GB.
+  Every GPU job requests the full named GRES, so fat jobs cannot receive a
+  10GB MIG slice.
+- Added six online-W&B integration smokes and an online wide-deep attention
+  exact-resume comparison. The resume check requires exact model, Adam, RNG,
+  shuffled-batch, history, and monitoring artifacts, plus reuse of the saved
+  W&B run ID.
+- Added four fixed-noise sampling profiles at every requested checkpoint:
+  direct-safe, via-x-safe, direct-exact, and via-x-exact. Each saves raw
+  diagnostics, tensors, grids when finite, projected-pixel f_mem, and W&B
+  visuals. Direct-safe remains required; nonfinite alternates remain recorded
+  diagnostics during full training.
+- Added guarded direct/split launchers. The runtime plan combines measured
+  optimizer throughput and complete smoke-monitor walltime with a 30 percent
+  margin. It runs directly below 40 hours and otherwise uses exact 200k
+  `aftercorr` segments only when both segments stay below 40 hours with their
+  actual 11/3 monitor counts. Submission IDs are recorded incrementally so
+  partial failures cannot cause blind duplicate arrays.
+- Isolated every worker and finalizer from the live checkout. Processes change
+  into the frozen batch directory and assert the exact imported
+  `mem_param_src/__init__.py` path before training, probing, or verification.
+- Added a dependent 400k verifier for all 24 runs. It checks paused state,
+  all 14 checkpoints, latest recovery, W&B success, and all four sampling-
+  profile records at every monitor step before writing `GATE_400K_COMPLETE`.
+  Manual recovery IDs are append-only, and a separate replacement-gate
+  launcher can verify repaired jobs without depending on a stale failed gate.
+- Validation passed in `mem_param_env`: all shell files pass `bash -n`; Python
+  files compile; the static validator confirms 24 rows, six profiles, exact
+  profile references, 16 thin routes, and eight fat routes; direct and split
+  dry-run handoffs pass; `git diff --check` passes; and the combined repository
+  suite passes 93/93 tests. No Slurm job was submitted in this implementation
+  step, so `RUN_JOURNAL.md` was not changed.
+
+
+## 2026-09-21 - Complete EPS/EPS 64x64 N=512 capacity gate
+
+- All 24 seed-zero rows completed exact 0-200k and 200k-400k process segments.
+  The dependent verifier passed every run, checkpoint, recovery state, W&B
+  finish, and four-profile monitoring record before writing
+  `GATE_400K_COMPLETE`.
+- GPU probes selected physical/effective batch 256 without accumulation for all
+  profiles. Actual small/deep segment runtimes were 10.3-11.5 hours. Actual
+  wide-deep segment runtimes were 18.9-20.3 hours, below the 48-hour limit.
+- The 128-sample direct-safe projected-pixel monitor identifies capacity as the
+  dominant factor. At 400k, attention-averaged wide-deep f_mem is 0.930 for
+  CelebA gray, 0.551 for CelebA RGB, 0.992 for MNIST gray, and 0.156 for
+  Flowers RGB. Small/deep CelebA RGB and Flowers remain near zero or zero.
+- Visual review shows the same transition. Wide-deep models are the first rows
+  with recognizable RGB faces and flowers. Attention has mixed, secondary
+  effects and does not rescue a low-capacity model.
+- Both safe samplers remain finite and visually usable. Exact division creates
+  large endpoint excursions and saturated grids for most small/deep face and
+  flower rows. Direct-exact and via-x-exact remain numerically close, while the
+  safe denominator floor makes direct and via-x distinct sampling paths.
+- Added the complete preliminary report at
+  `outputs/job_sets/eps_eps_64_n512/20260919T155341Z_3213634/RESULTS_400K.md`.
+  It explicitly limits these findings to seed zero and the online projected-
+  pixel monitor. No fixed-10k, full-pixel, learned-feature, or multi-seed claim
+  is made, and no training continued beyond 400k.
+
+
+## 2026-09-21 - Consolidate evidence and prepare the full-run paper decision
+
+- Added a detailed 200k report for the seven-row EPS/EPS data/image-format
+  study at
+  `outputs/job_sets/eps_eps_data_image_format/20260918T164620Z_3539380/RESULTS_200K.md`.
+  All seven runs completed with finite final tensors, step-200k checkpoints,
+  rotating recovery states, and successful W&B finishes.
+- The data/image-format trajectory is now recorded in full. Projected-pixel
+  f_mem at 25k/50k/100k/200k is `0.672/0.805/0.906/0.977` for CelebA32 gray,
+  `0.891/0.945/0.961/0.977` for MNIST32 gray,
+  `0.031/0.328/0.609/0.727` for CelebA32 RGB,
+  `0.000/0.023/0.102/0.117` for CelebA64 gray,
+  `0.000/0.000/0.000/0.000` for CelebA64 RGB,
+  `0.000/0.000/0.000/0.000` for Flowers64 base, and
+  `0.000/0.000/0.008/0.031` for Flowers64 deep.
+- Visual review separates quality from memorization. CelebA64 gray contains
+  coherent faces despite f_mem 0.117. CelebA64 RGB mixes faces with saturated
+  color blocks. Both Flowers rows are dominated by color blocks. Adding a
+  fourth depth level does not recover Flowers at 200k.
+- The seven-row matrix is not a full factorial design. Only four comparisons
+  isolate one declared change: CelebA32 gray versus RGB, CelebA32 gray versus
+  CelebA64 gray, CelebA64 gray versus RGB, and Flowers base versus deep. The
+  result identifies failure regimes but does not estimate independent dataset,
+  resolution, and color main effects.
+- Consolidated all completed evidence in `PAPER_NOTES.txt`. The corrected
+  one-million CelebA32 evaluation shows that direct-safe full-Heun EPS/EPS has
+  FID-10k `20.57/24.43/27.13` and pixel f_mem
+  `0.9059/0.9589/0.9709` at 100k/390k/695k. The x/x and v/v references already
+  reach pixel f_mem about one at 100k, but their saved sampler uses final Euler.
+  A common no-final-Euler replay is required before a paper-level FID ordering.
+- Recorded the complete 3x3 result and its trajectory. The 200k matrix is
+  `[[1.000, 0.469, 0.977], [0.961, 0.961, 0.875], [1.000, 0.961, 1.000]]`.
+  x/x, v/x, and v/v are near saturation by 25k. x/v rises late. x/eps remains
+  lower at 200k. eps/x and eps/v are non-monotonic at the displayed monitor
+  points. All cells generate recognizable faces, so the timing differences are
+  not explained by complete generation failure.
+- Recorded the cross-study interpretation. Parameterization changes the route
+  to memorization. Quality and memorization are distinct axes. A valid
+  parameterization comparison first requires a useful-generation regime.
+  Capacity dominates the difficult 64x64 RGB cases, while optional attention
+  has only mixed seed-zero effects. Safe division is required for robust
+  EPS/EPS sampling in `[0.001,0.999]`; exact division remains a diagnostic.
+- Recorded the evidence limits. The 3x3, data/image-format, and 64x64 capacity
+  summaries use seed-zero, 128-sample random-projected-pixel monitoring. They
+  do not establish fixed-10k, full-pixel, learned-feature, or multi-seed
+  rankings. The 1M endpoints also lack the corrected fixed-10k evaluation.
+- Added T019 and T020 to `TODO.txt`. The next session must choose between a
+  full multi-seed 3x3, a three-seed diagonal study, or a predeclared selected
+  matrix. It must then freeze the common sampler, checkpoint and quality-
+  matching rules, feature/FID artifact contract, compute budget, and AISTATS
+  figure/table plan before submission.
+- Added a provisional figure plan to `PAPER_NOTES.txt`: a main quality-
+  memorization trajectory, prediction/loss heatmaps, qualitative nearest-
+  neighbor panels, a 64x64 operating-regime control, a sampler-stability
+  appendix, metric-agreement analysis, and a final multi-seed result table.
+  These are candidates, not final paper selections.
+- No compute was submitted. Existing runs remain unchanged and recoverable:
+  nine 3x3 rows at 200k, seven data/image rows at 200k, and 24 capacity rows at
+  400k. `squeue -u x_moalj` was empty at the final check.
+- Added the current conservative abstract to `PAPER_NOTES.txt`. It removes the
+  unsupported claim of a consistent parameterization ordering. The revised
+  prose follows a research-paper question, evidence, and implication structure
+  instead of listing the protocol like a report. Dense technical noun phrases
+  are now replaced by short descriptions of what the model or measurement does.
+  The abstract states only that the experiments indicate different
+  memorization trajectories, separation between quality and memorization, and a
+  capacity requirement for interpretable results. Multi-seed and learned-
+  feature results remain future validation rather than completed claims.
+
+## 2026-09-25 - Add Small DiT as a plug-and-play backbone
+
+- Added `SmallDiT` with the shared unconditional `forward(z, t)` contract and
+  raw image-shaped output.
+- Adapted official `willisma/SiT` commit
+  `cbde832a40b153ccc79603412409da9c9b0c568c`. Retained its MIT license beside
+  the implementation and included that license in package data.
+- Extended the existing factory and base config with `network.arch="dit"` and
+  the Small defaults. Image size and channels still come from `cfg.data`.
+- Kept GDFM prediction, loss, conversion, sampling, checkpoint, and evaluation
+  semantics unchanged.
+- Added a thin sanity notebook for factory construction, shape and parameter
+  inspection, loss, and existing sampling calls.
+- Verified reduced 8x8 depth-1 models across supported config layouts, all nine
+  prediction/loss cells, Heun sampling, state-dict reload, continuous times,
+  zero initialization, and invalid dimensions.
+- Ran one bounded 32x32 forward with the actual depth-12, width-384, six-head
+  Small configuration. It has 32,563,972 parameters and returned `[1,1,32,32]`.
+- `python -m unittest discover -v tests` passed all 105 tests in
+  `mem_param_env`, including the 12 new DiT tests and existing MLP/UNet tests.
+- Executed `notebooks/sanity/dit_backbone_sanity.ipynb` through nbconvert. It
+  constructed Small DiT through GDFM and returned finite loss and sample APIs.
+- No jobs were submitted and no shared environment was changed.
+
+
+## 2026-09-25 - Launch the requested Small-DiT diagonal pilot
+
+- The researcher explicitly selected a compact follow-up: CelebA32 gray at
+  32x32, N=256, seed 0, 100,000 optimizer updates, and the diagonal `x/x`,
+  `eps/eps`, and `v/v` cells. This operational pilot does not settle T019's
+  later paper-level multi-seed or full-matrix design.
+- Added `configs/runners/celeba32_dit_diagonal_100k_viax.py` and the matching
+  `jobs/berzelius/celeba32_dit_diagonal_100k_viax/` launch and exact-resume
+  wrappers. They reuse GDFM, the image runner, checkpointing, monitoring, and
+  sampling without architecture-specific branches.
+- Fixed the shared controls to unit loss weighting, Adam at 1e-4, physical
+  batch 64, effective batch 256 through accumulation 4, 28 Bonnaire
+  checkpoints, full 50-step Heun, safe denominator floor 0.05, and
+  `sampling.eps_to_v=via_x`. The via-x setting affects epsilon prediction
+  conversion only; native x and v predictions do not traverse that route.
+- Config and dry-run validation constructed the actual 32,563,972-parameter
+  Small DiT. Shell syntax passed, the CelebA cache was present, and the batch
+  snapshot includes frozen source/config/job files plus SHA-256 hashes.
+- Submitted array `17639669` under `berzelius-2026-78`. Task 0 passed CUDA
+  startup and reached step 500 with finite loss and monitoring; tasks 1-2
+  were pending for resources at the recorded check. `RUN_JOURNAL.md` owns all
+  subsequent operational status.
+
+
+## 2026-09-26 - Launch the Small-DiT 3x3 training-size production matrix
+
+- The researcher selected one seed of the complete prediction/loss 3x3 across
+  CelebA32-gray training sizes. Interpreted the typed `1028` as the standard
+  power-of-two size 1024 and froze `N={512,1024,2048,4096}`, seed 0, and all
+  36 Cartesian-product rows.
+- Added `configs/runners/celeba32_dit_3x3_nscale_1m_viax.py` and
+  `jobs/berzelius/celeba32_dit_3x3_nscale_1m_viax/`. Every run declares the
+  full one-million-update target before training. Each allocation lasts 24
+  hours and uses signal-triggered exact recovery for researcher-selected
+  manual resume; no automatic requeue or resume chain is enabled.
+- Fixed Small DiT-S/2, unit loss weighting, Adam at 1e-4, physical/effective
+  batch 64/256, exact training conversions, and the 72-checkpoint
+  `bonnaire-1m` schedule. Sampling uses via-x epsilon conversion, safe
+  denominator floor 0.05, full 50-step Heun, `x_t_max`, and unclipped raw
+  output.
+- Kept W&B strict for this launch. The current non-strict failure path can
+  preserve local training but later overwrite the recovery payload's W&B ID
+  with null, risking a second W&B identity. Strict tracking instead stops the
+  allocation after a valid local recovery point and preserves tested same-ID
+  manual resume behavior.
+- The production validator confirmed exactly 36 rows, the actual
+  32,563,972-parameter model, and all 72 checkpoints. Shell and Python syntax,
+  array validation, data-cache presence, dry-run submission, and all 115
+  frozen snapshot hashes passed.
+- Submitted unthrottled array `17641282` under `berzelius-2026-78`. Each task
+  requests one thin A100-SXM4-40GB, four CPUs, 32 GB, and 24 hours. The
+  completed N=256 pilot implies about four allocations per row and roughly
+  3,100 A100-hours for the whole matrix; this remains an estimate.
+- This seed-zero matrix does not provide seed aggregation. Fixed-10k FID,
+  full-pixel f_mem, learned-feature f_mem, and paper figures remain post-hoc
+  work on saved artifacts. `RUN_JOURNAL.md` owns operational status.
+
+## 2026-09-27 - Add and launch fresh MNIST diagonal production runs
+
+- Added `configs/runners/mnist_diagonal_1m.py` and
+  `jobs/berzelius/mnist_diagonal_1m/` for 36 new trajectories. The matrix
+  covers MNIST32 U-Net-S and MNIST64 U-Net-L, N={512,2048}, seeds 0-2,
+  and the `x/x`, `eps/eps`, and `v/v` diagonals. No prior run is reused.
+- Fixed physical/effective batch 256/256 with accumulation one, Adam at
+  1e-4 with established defaults, exact training conversions, deterministic
+  fp32 tensors with TF32 enabled, and one million optimizer updates.
+- Fixed checkpoint sampling to 50-step full Heun, safe floor 0.05,
+  `eps_to_v=via_x`, `x_t_max`, and no final clamp. Both resolutions use
+  the same 20 checkpoint steps.
+- The launcher freezes source, config, job files, environment packages, and
+  hashes. MNIST32 requests thin A100-40GB nodes for 36 hours. MNIST64 uses
+  five 200k stages on fat A100-80GB nodes with 30 hours per stage.
+- The dedicated W&B project is `mnist-unet-diagonal-1m`. Exact resumes keep
+  one W&B identity per trajectory.
+- Validation passed for the 36-row matrix, parameter counts, paired and
+  nested MNIST IDs, shell and Python syntax, and a write-free submission
+  preview. The real cache produced paired train/test IDs, shapes
+  `[2048,1,32,32]` and `[2048,1,64,64]`, and range `[-1,1]`.
+- All 56 focused model and runner tests passed in `mem_param_env`.
+- Submitted the production arrays and dependent completion verifier.
+  `RUN_JOURNAL.md` records job IDs and live scheduler state.
+
+## 2026-09-27 - Add and launch fresh CelebA32 U-Net-S full 3x3 production runs
+
+- Added `configs/runners/celeba32_unet_3x3_1m.py` and
+  `jobs/berzelius/celeba32_unet_3x3_1m/` for 108 fresh trajectories: the full
+  prediction/loss 3x3 at N={512,1024,2048,4096} and seeds 0-2.
+- Fixed U-Net-S at 3,917,409 parameters, Adam at 1e-4, physical/effective batch
+  256/256, deterministic FP32 with TF32 disabled, unit weighting, exact
+  training conversions, and the 72-point Bonnaire schedule through one million.
+- Fixed monitoring to safe division with floor 0.05, `eps_to_v=via_x`, 50-step
+  full Heun on `[0.001,0.999]`, `x_t_max`, no final Euler, and no final clamp.
+- Added frozen-source enforcement, exact-resume selection validation, strict
+  completion checks, paired target-cell identities, prefix-nested N identities,
+  dedicated W&B project `celeba32-unet-3x3-1m`, and operator documentation.
+- Validation passed for all 108 rows, model size, Adam defaults, 72 checkpoints,
+  batch and arithmetic contracts, shell/Python syntax, dry-run submission, and
+  56 focused model/runner tests.
+- Submitted unthrottled array `17645398` with task IDs 0-107. Each task requests
+  one thin A100-40GB for 24 hours and targets the absolute one-million step.
+  `RUN_JOURNAL.md` owns live status and tomorrow's exact-resume audit.
+
+## 2026-09-27 - Prepare fresh CelebA64 RGB diagonal production runs
+
+- Added `configs/runners/celeba64_rgb_diagonal_1m.py` and
+  `jobs/berzelius/celeba64_rgb_diagonal_1m/` for 18 fresh trajectories.
+  The matrix is CelebA64 RGB, N={512,2048}, seeds 0-2, and diagonal
+  `x/x`, `eps/eps`, and `v/v` targets. Existing gray and prototype runs
+  remain supporting evidence and are not reused.
+- Fixed the successful 24,386,627-parameter U-Net profile: base width 64,
+  multipliers `(1,2,4,4)`, two residual blocks, dropout 0.1, time embedding
+  128, attention at 16 and 8 pixels, and middle attention.
+- Fixed Adam at 1e-4, physical/effective batch 256/256 with accumulation one,
+  exact training conversions, deterministic FP32 with TF32 enabled, one
+  million optimizer updates, and the 72-point Bonnaire checkpoint schedule.
+- Fixed monitoring to one sampler: 50-step full Heun on `[0.001,0.999]`,
+  safe floor 0.05, `eps_to_v=via_x`, `x_t_max`, no final Euler step, and
+  no final clamp. The prototype's three diagnostic sampler profiles are not
+  part of production.
+- Added five unthrottled `aftercorr` arrays on fat A100-80GB nodes. They stop
+  at 200k, 400k, 600k, 800k, and 1M, with 30 hours per stage and exact
+  signal-triggered recovery. The expected total is about 1,800 A100-hours.
+- The completion verifier requires all 72 checkpoints, monitoring artifacts,
+  successful unique W&B identities, contiguous recovery histories, fresh
+  non-hard-linked artifacts, paired target-cell source IDs and fixed noise,
+  and prefix-nested N=512/N=2048 training IDs.
+- Validation passed in `mem_param_env`: the 18-row matrix, architecture,
+  optimizer defaults, batch contract, sampler, 72 checkpoints, stage stops,
+  shell/Python syntax, and write-free submission preview. The real CelebA
+  cache produced train shape `[512,3,64,64]`, reference shape
+  `[1000,3,64,64]`, and range `[-1,1]`.
+- The focused model/sampling suite passed 24 tests. The runner suite passed
+  32 tests. No batch was frozen and no Slurm job was submitted.
+
+
+
+## 2026-09-28 - Add and launch native-v/v loss-weighting controls
+
+- Added `configs/runners/celeba32_unet_vv_weighting_1m.py` and
+  `jobs/berzelius/celeba32_unet_vv_weighting_1m/` for the explicit weighting
+  block from the eight-block training plan.
+- The matrix contains exactly nine fresh trajectories: CelebA32 gray at N=512,
+  seeds 0-2, native `v/v`, and raw `x_equivalent`, `unit`, or
+  `eps_equivalent` loss weighting. No weight is normalized or deduplicated.
+- Fixed the existing 3,917,409-parameter U-Net-S, Adam at 1e-4, batch 256/256,
+  accumulation one, exact training conversions, the 72-point Bonnaire schedule,
+  deterministic FP32 with TF32 disabled, and one million optimizer updates.
+  Monitoring remains safe via-x, 50-step full Heun, and unclamped `x_t_max`.
+- Within each seed, all three weights use the same source IDs, initial model,
+  training order and random stream, and fixed monitoring noise. Each trajectory
+  still owns fresh files, a fresh run directory, and a unique W&B identity.
+- The launcher freezes source, config, job files, environment, and hashes. Thin
+  A100-40GB tasks get 24 hours and a five-minute recovery signal. Continuation
+  is manual after an exact-recovery audit; automatic requeue is disabled.
+- Validation passed for matrix uniqueness, `(1-t)^2`, `1`, and `t^2` formulas,
+  model size, optimizer defaults, batch, 72 checkpoints, sampler, shell/Python
+  syntax, and write-free submission. All 56 focused model/runner tests passed.
+- Ruff was unavailable in `mem_param_env`; that optional lint check did not run.
+  The failed pre-launch command created no batch and submitted no job.
+- Submitted unthrottled array `17655496`, tasks 0-8, under account
+  `berzelius-2026-78`. Frozen batch is
+  `outputs/job_sets/celeba32_unet_vv_weighting_1m/20260928T144550Z_222375`.
+  `RUN_JOURNAL.md` owns live status and later exact-resume audits.
+
+
+## 2026-09-28 - Add and launch the N=2048 weighting extension
+
+- Added `configs/runners/celeba32_unet_vv_weighting_n2048_1m.py` and
+  `jobs/berzelius/celeba32_unet_vv_weighting_n2048_1m/` as a separate sibling
+  to the already-frozen N=512 weighting block.
+- The new matrix contains nine fresh trajectories: N=2048, seeds 0-2, native
+  `v/v`, and raw `x_equivalent`, `unit`, or `eps_equivalent` weighting. No
+  submitted N=512 run or artifact was changed or reused.
+- Kept the same 3,917,409-parameter U-Net-S, optimizer, batch 256/256, exact
+  training, 72 checkpoints, deterministic FP32, safe via-x full-Heun monitor,
+  thin A100-40GB allocation, and manual exact-resume policy.
+- The validator proves that each deterministic N=512 training selection is the
+  prefix of its matching N=2048 selection. Identical seeds also pair model
+  initialization, data order, random streams, and monitor noise across sizes.
+- Validation passed for shell/Python syntax, nine unique rows, all raw weight
+  formulas, model size, batch, checkpoints, sampler, prefix identities, three
+  focused weighting tests, write-free submission, and all frozen hashes.
+- Submitted unthrottled array `17655777`, tasks 0-8, under
+  `berzelius-2026-78`. Frozen batch is
+  `outputs/job_sets/celeba32_unet_vv_weighting_n2048_1m/20260928T151300Z_373224`.
+  It shares W&B project `celeba32-unet-vv-weighting-1m` with a separate group.
+
+
+## 2026-09-29 - Add and launch seed-1 Small-DiT robustness runs
+
+- Added `configs/runners/celeba32_dit_robustness_s1_1m_viax.py` and the
+  isolated `jobs/berzelius/celeba32_dit_robustness_s1_1m_viax/` package.
+- The matrix contains 18 fresh CelebA32-gray trajectories: seed 1, full
+  prediction/loss 3x3, and N={512,2048}. Seed 2 remains unprepared and
+  CelebA64 grayscale is deferred.
+- Exact comparison against the seed-0 config proved that only the study name,
+  output name, seed, and W&B identity metadata differ. Architecture, optimizer,
+  batch 64/256, exact training, deterministic FP32/TF32 runtime, one-million
+  target, 72 checkpoints, and safe via-x full-Heun monitoring are unchanged.
+- Real CelebA selection validated that seed-1 N=512 is the prefix of N=2048
+  and differs from seed 0. All 18 W&B names are unique fresh seed-1 identities.
+- Shell/Python syntax, write-free submission, the 32,563,972-parameter model,
+  matrix factors, frozen recovery workflow, all hashes, and 68 focused
+  DiT/sampler/runner tests passed. Pytest is not installed in `mem_param_env`,
+  so the standard-library unittest runner executed the focused suite.
+- Submitted unthrottled thin-A100 array `17662195`, tasks 0-17, under account
+  `berzelius-2026-78`. Frozen batch:
+  `outputs/job_sets/celeba32_dit_robustness_s1_1m_viax/20260929T124425Z_2240178`.
+
+
+## 2026-10-02 - Package the MNIST metric and add dataset-aware evaluation
+
+- Validated the completed interactive encoder artifacts under
+  `outputs/mnist_jointae32_interactive_v1/`. `TRAINING_COMPLETE` is present.
+  The checkpoint, test-feature bank, and split-index SHA-256 values match the
+  training manifest. All four local raw MNIST files also match its hashes.
+- Confirmed the selected epoch is 10. Validation accuracy is 0.9930 and test
+  accuracy is 0.9935. The saved test features are finite `[10000,128]` values.
+  Recomputed float64 mean and covariance match their saved values exactly.
+- Added `metrics/image/mnist_jointae.py` and bundled the verified checkpoint,
+  provenance manifest, and compact global/per-class test statistics under
+  `metrics/image/assets/`. The public loader uses `importlib.resources`, checks
+  the weight hash, freezes all parameters, and returns the raw linear 128D
+  representation.
+- Froze one MNIST32/MNIST64 preprocessing rule: declared range to `[0,1]`,
+  replicated RGB to grayscale only, clamp, bilinear resize to 32, and antialias
+  on downsampling. No learned alignment is applied.
+- Added raw-feature float64 Fréchet statistics, stable symmetric PSD square
+  roots, global JointAE FD, per-class FD records, and run-training-bank
+  standardization plus row L2 normalization for JointAE-space memorization.
+- Removed the old 0.001 default held-out quantile. The frozen public alpha set
+  is now `{0.005,0.01,0.02,0.05}`.
+- Added `runners/image_protocol.py` and protocol flags to the existing image
+  evaluator. MNIST `fid` resolves to JointAE FD. Natural-image `fid` resolves
+  to Inception FID. Natural-image f_mem accepts pinned SSCD, DINOv2, and LPIPS
+  spaces through the verified schema-v3 asset manifest. Incompatible
+  dataset/encoder requests fail explicitly.
+- The protocol reads and hashes saved run artifacts, selects checkpoints,
+  samples once, caches raw features and float64 Fréchet statistics, retains
+  both neighbor identities, writes per-alpha f_mem and per-space completion
+  markers, and resumes only from matching cache metadata. Manifests record the
+  saved noise seed, encoder hashes, environment, elapsed time, and failures.
+  The legacy all-checkpoint evaluator remains unchanged.
+- Replaced the 1.5 MB exploratory MNIST notebook with an 18 KB output-free
+  qualification notebook. It uses the standalone trainer, restores the
+  validation-selected checkpoint, and demonstrates reconstruction,
+  classification, FD controls, and memorization without owning runtime code.
+- Added `docs/image_evaluation.md`, package-data settings, repository-map and
+  config-reference entries, and focused asset, metric, registry, and
+  restartability tests.
+- Verification used `mem_param_env`. Sixty-five focused and regression tests
+  passed, and a no-build-isolation wheel contained all three metric assets.
+  Fixed-weight CPU evaluation covered all 55,000 training,
+  5,000 validation, and 10,000 test images. Validation/test accuracies exactly
+  matched 0.9930/0.9935; losses differed from the GPU-saved values by less than
+  `2e-7`. All 10,000 CPU test features were finite and differed from the saved
+  GPU features by at most `1.0009e-3`; cross-device output was not bitwise
+  equal. Frozen-weight controls increased monotonically with Gaussian noise,
+  translation, rotation, and progressive class-support collapse. The official
+  test half-split FD floor was 6.8939. The notebook schema validated, all ten
+  code cells compiled, and no notebook outputs or blank cells remain. Full
+  ten-epoch notebook execution and a real production-checkpoint protocol run
+  were not performed.

@@ -1,0 +1,93 @@
+{
+  "architecture": "MNISTJointAE32",
+  "architecture_version": "mnist_jointae32_v1",
+  "feature_dimension": 128,
+  "feature_layer": "raw_linear_128",
+  "metric_names": {
+    "class_aware_frechet": "mnist_cafd_jointae32_v1",
+    "frechet": "mnist_fd_jointae32_v1",
+    "memorization": "f_mem_mnist_jointae32_v1"
+  },
+  "preprocessing": {
+    "align_corners": false,
+    "canonical_resolution": 32,
+    "channels": 1,
+    "input_range": [
+      0.0,
+      1.0
+    ],
+    "interpolation": "bilinear",
+    "mnist28_to_32_antialias": false,
+    "rgb_policy": "accept replicated grayscale channels only",
+    "value_policy": "convert declared range to [0,1], then clamp",
+    "downsampling_antialias": true
+  },
+  "qualification": {
+    "minimum_validation_accuracy": 0.99,
+    "passed": true,
+    "selected_epoch": 10,
+    "test": {
+      "accuracy": 0.9935,
+      "classification_loss": 0.02082978282283875,
+      "n_samples": 10000,
+      "reconstruction_loss": 0.006561534520983696,
+      "total_loss": 0.00864451282247901
+    },
+    "validation": {
+      "accuracy": 0.993,
+      "classification_loss": 0.022720486509799957,
+      "n_samples": 5000,
+      "reconstruction_loss": 0.0066901826806366445,
+      "total_loss": 0.008962231385707856
+    }
+  },
+  "reference_statistics_asset": {
+    "filename": "mnist_jointae32_v1_reference.pt",
+    "sha256": "1be0810d2eb035189e176e3d1a4b205b1e842ff86954ddbf77401cc37c6b1d3e",
+    "source_count": 10000,
+    "source_split": "torchvision_mnist:test",
+    "stored_values": "global and per-class means, covariances, and counts"
+  },
+  "source_dataset": {
+    "name": "MNIST",
+    "raw_sha256": {
+      "t10k-images-idx3-ubyte": "0fa7898d509279e482958e8ce81c8e77db3f2f8254e26661ceb7762c4d494ce7",
+      "t10k-labels-idx1-ubyte": "ff7bcfd416de33731a308c3f266cc351222c34898ecbeaf847f06e48f7ec33f2",
+      "train-images-idx3-ubyte": "ba891046e6505d7aadcbbe25680a0738ad16aec93bde7f9b65e87a2fc25776db",
+      "train-labels-idx1-ubyte": "65a50cbbf4e906d70832878ad85ccda5333a97f0f4c3dd2ef09a8a9eef7101c5"
+    },
+    "split": {
+      "seed": 2003,
+      "test": "official 10000-image test split; final metrics and reference statistics only",
+      "training": "first 55000 indices of a seeded permutation of the official training split",
+      "validation": "remaining 5000 indices; checkpoint selection only"
+    }
+  },
+  "training": {
+    "batch_size": 256,
+    "classification_weight": 0.1,
+    "epochs": 10,
+    "learning_rate": 0.0003,
+    "optimizer": "AdamW",
+    "seed": 2003,
+    "weight_decay": 0.0001
+  },
+  "training_artifact_provenance": {
+    "completed_at": "2026-10-02T10:25:41+00:00",
+    "original_manifest_sha256": "a54541736eac0699edc87478b6d315271f5acaa5cff29d6bc65121d7a0a582af",
+    "original_reference_features_sha256": "0a794819e23f58f0218a5365ea97646b95a2e36bdc7498dbc3b86ff3c6b286c8",
+    "original_split_indices_sha256": "a6923368e2a73134da3a3f72682e9756b42051fcffdd4a8ad6aa567e2f48a086",
+    "run_directory": "outputs/mnist_jointae32_interactive_v1"
+  },
+  "training_environment": {
+    "cuda": "11.8",
+    "cudnn": 91001,
+    "python": "3.10.20",
+    "torch": "2.5.1.post303",
+    "torchvision": "0.20.1a0+9f8010e"
+  },
+  "weight_asset": {
+    "filename": "mnist_jointae32_v1.pt",
+    "sha256": "f71537091fdd7321d60def0654dd130eb7f4c5727b59aba4131999e500045582"
+  }
+}

@@ -1,6 +1,7 @@
 """Focused tests for the clean image-metric package."""
 
 import sys
+import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -11,13 +12,17 @@ from mem_param_src.config import get_base_config
 from mem_param_src.metrics import nearest_neighbors
 from mem_param_src.metrics.image import (
     RHO_SWEEP,
+    LPIPSFeatureEncoder,
+    SSCDFeatureEncoder,
     collect_image32_metric_record,
     compute_f_mem_by_rho,
+    compute_f_mem_reference_curve,
     compute_image_fid,
     compute_image_memorization_metrics,
     compute_nn_stats,
     compute_projected_image_features,
     compute_projected_image_memorization_metrics,
+    encode_image_features,
     make_random_projection_matrix,
 )
 from mem_param_src.metrics.image.preprocessing import normalize_images, to_uint8_rgb
@@ -265,6 +270,111 @@ class TestImageFid(unittest.TestCase):
         self.assertEqual(kwargs["fid_statistics_file"], "reference_stats.npz")
         self.assertIsNone(metrics["n_reference"])
         self.assertEqual(metrics["reference_source"], "stats:reference_stats.npz")
+
+
+class TestRawFeatureMemorization(unittest.TestCase):
+    def test_chunked_neighbors_keep_both_reference_indices(self):
+        reference = torch.tensor([[0.0], [0.3], [0.8], [1.0]])
+        samples = torch.tensor([[0.05], [0.95]])
+
+        direct = compute_nn_stats(samples, reference, query_batch_size=2)
+        chunked = compute_nn_stats(
+            samples,
+            reference,
+            query_batch_size=1,
+            reference_batch_size=2,
+        )
+
+        for key in ("d1", "d2", "r", "nn_idx", "second_nn_idx"):
+            self.assertTrue(torch.equal(direct[key], chunked[key]))
+        self.assertEqual(direct["nn_idx"].tolist(), [0, 3])
+        self.assertEqual(direct["second_nn_idx"].tolist(), [1, 2])
+
+    def test_exact_training_copies_have_zero_ratio_and_correct_identity(self):
+        reference = torch.tensor([[0.0, 0.0], [0.2, 0.1], [0.9, 1.0]])
+        samples = reference[torch.tensor([2, 0])]
+
+        stats = compute_nn_stats(samples, reference, query_batch_size=1)
+
+        self.assertTrue(torch.equal(stats["d1"], torch.zeros(2)))
+        self.assertTrue(torch.equal(stats["r"], torch.zeros(2)))
+        self.assertEqual(stats["nn_idx"].tolist(), [2, 0])
+        self.assertNotEqual(stats["nn_idx"].tolist(), stats["second_nn_idx"].tolist())
+
+    def test_heldout_curve_keeps_thresholds_as_derived_values(self):
+        calibration = torch.arange(1, 101, dtype=torch.float32) / 100.0
+        validation = calibration.clone()
+        generated = torch.tensor([0.001, 0.2, 0.8])
+
+        records = compute_f_mem_reference_curve(
+            generated,
+            calibration,
+            validation,
+            quantiles=[0.01, 0.05],
+        )
+
+        self.assertEqual([row["heldout_quantile"] for row in records], [0.01, 0.05])
+        self.assertLess(records[0]["rho"], records[1]["rho"])
+        self.assertAlmostEqual(records[0]["generated_f_mem"], 1.0 / 3.0)
+        self.assertIn("validation_rate", records[0])
+
+    def test_lpips_embedding_matches_the_package_distance(self):
+        try:
+            import lpips
+        except ModuleNotFoundError:
+            self.skipTest("lpips is not installed in this environment")
+
+        torch.manual_seed(31)
+        model = lpips.LPIPS(
+            net="alex",
+            version="0.1",
+            pnet_rand=True,
+            verbose=False,
+        )
+        encoder = LPIPSFeatureEncoder(model=model, input_size=32)
+        images = torch.rand(2, 1, 32, 32)
+        features = encode_image_features(
+            images,
+            encoder=encoder,
+            batch_size=2,
+            image_range="0_1",
+        )
+        rgb = images.repeat(1, 3, 1, 1)
+        expected = model(rgb[:1] * 2.0 - 1.0, rgb[1:] * 2.0 - 1.0)
+        squared_distance = (features[0] - features[1]).square().sum()
+
+        self.assertEqual(tuple(features.shape), (2, 5760))
+        self.assertAlmostEqual(
+            float(squared_distance),
+            float(expected.flatten()[0]),
+            places=5,
+        )
+
+    def test_sscd_adapter_is_deterministic_finite_and_512_dimensional(self):
+        class FakeSSCD(torch.nn.Module):
+            def forward(self, images):
+                means = images.mean(dim=(1, 2, 3), keepdim=False).unsqueeze(1)
+                return means.repeat(1, 512) + 1.0
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = f"{directory}/sscd.pt"
+            example = torch.rand(1, 3, 16, 16)
+            torch.jit.trace(FakeSSCD(), example).save(path)
+            encoder = SSCDFeatureEncoder(path, input_size=16)
+            images = torch.rand(3, 1, 32, 32)
+            first = encode_image_features(
+                images, encoder=encoder, batch_size=2, image_range="0_1"
+            )
+            second = encode_image_features(
+                images, encoder=encoder, batch_size=1, image_range="0_1"
+            )
+
+        self.assertEqual(tuple(first.shape), (3, 512))
+        self.assertTrue(torch.isfinite(first).all())
+        self.assertTrue(torch.equal(first, second))
+        self.assertTrue(
+            torch.allclose(first.norm(dim=1), torch.ones(3), atol=1.0e-6)
+        )
 
 
 if __name__ == "__main__":
