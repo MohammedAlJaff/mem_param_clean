@@ -2897,3 +2897,25 @@ terminal states or only some tasks completed.
   accepted evaluations. Rerunning the deterministic exporter after this array
   finishes will add only the 18 seed-1 DiT runs to its experiment directory.
 - No scheduler or evaluation state was changed during this status check.
+
+
+### 2026-11-19 - Rebuttal access check
+
+- Attempted a read-only SSH check of the checkout and job queue.
+- Berzelius rejected authentication with publickey,keyboard-interactive.
+  No remote command ran. Current job status is unknown.
+- No scheduler job was submitted, resumed, cancelled, or changed.
+- The researcher must establish SSH login before cluster preparation can
+  continue. Local preservation and GitHub work can proceed independently.
+
+
+### 2026-11-19 - Authenticated rebuttal preparation check
+
+- SSH access works after the researcher established the shared connection.
+- squeue reports no running or pending jobs for x_moalj at the check.
+- Created the separate mem_param_rebuttal checkout on codex/rebuttal.
+  Preserved and backed up the old checkout's 71 pending source files.
+- Validated the transferred data and paper hashes. The isolated local test
+  environment passed 28 plotting tests in 4.97 seconds. Notebook tooling
+  and source imports use the new checkout. No experiment was run.
+- No scheduler job was submitted, resumed, cancelled, or changed.

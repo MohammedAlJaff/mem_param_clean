@@ -3985,3 +3985,1683 @@ Validation and publication scope:
   whitespace checks passed. Two consecutive exports of all 38 generated files
   were byte-identical. The still-running DiT seed-1 evaluation is intentionally
   absent until those runs reach accepted state and the exporter is rerun.
+
+
+## 2026-10-05 - Reproduce the portable CelebA32 U-Net figure locally
+
+- Switched directly to `codex/portable-plot-data` at `6341680` and completed
+  the requested fast-forward-only pull. No merge or cherry-pick was performed.
+- Read the local plotting handoff, bundle index, and experiment records.
+  All 24 exported CSVs matched their manifest SHA-256 hashes and byte sizes.
+- In local `memcompgen` (Python 3.10, Matplotlib 3.10.8), ran
+  `MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl conda run --no-capture-output -n memcompgen python plotting/celeba32_3x3/plot_f_mem_grid.py`.
+  Matplotlib was already installed. Numerical inputs came only from `plot_data/`.
+- Produced the PNG and compact CSV under
+  `outputs/figures/celeba32_unet_prediction_loss_3x3/`, with basename
+  `all_n_train__fmem_raw_pixels__rho_0p3__seed_mean_sd`.
+  The table has 2,592 rows: four training sizes, nine target pairs, and
+  72 checkpoints. Each row preserves three seeds, their mean, and sample SD.
+- Visually checked the nine panels, labels, legend, and uncertainty bands.
+  Confirmed both outputs are Git-ignored and tracked files were unchanged
+  before this journal entry. No training, evaluation, or cluster operation ran.
+
+
+## 2026-10-05 - Overlay FID on the portable CelebA32 U-Net grid
+
+- Extended `plotting/celeba32_3x3/plot_f_mem_grid.py` to show Inception FID
+  as dotted curves on the left axis and raw-pixel `f_mem` at rho=0.3 as
+  solid curves on the right. Both metrics retain the training-size colors,
+  three-seed means, and sample-SD bands. Each metric uses a common linear
+  scale across all nine panels.
+- Read only `plot_data/celeba32_unet_3x3/runs.csv` and
+  `evaluation_metrics.csv` for plotting inputs. Added an explicit metric
+  column to the scratch table; FID rows have no rho threshold.
+- Updated the local plotting handoff. The existing command now writes the
+  combined PNG and CSV with basename
+  `all_n_train__fid__fmem_raw_pixels__rho_0p3__seed_mean_sd` under
+  `outputs/figures/celeba32_unet_prediction_loss_3x3/`.
+- Runtime validation in local `memcompgen` produced 5,184 aggregate rows
+  in 1.69 seconds. All 2,592 prior f_mem rows were preserved exactly.
+  All 7,776 FID seed values matched the exported run/checkpoint records;
+  their means and sample SDs passed direct checks. Visually inspected axes,
+  line styles, colors, bands, and legends. Ruff and whitespace checks passed.
+- All 24 exported CSV hashes and sizes remained unchanged. No metrics,
+  cluster provenance, checkpoints, or evaluation records were modified.
+
+
+## 2026-10-05 - Summarize memorization at each seed's best FID
+
+- The researcher selected the lowest-FID checkpoint separately for each seed,
+  followed by the mean and sample SD of the paired f_mem values across seeds.
+  Used all 72 exported checkpoints and raw-pixel f_mem at rho=0.3. Exact FID
+  ties select the earlier step. Different conditions can reach different FIDs.
+- Added `plotting/celeba32_3x3/summarize_f_mem_at_best_fid.py`, reusing the
+  existing plot-data readers. The script reads only the committed CelebA32
+  U-Net tables and retains source run IDs and selected steps for every seed.
+- Ran `MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl conda run --no-capture-output -n memcompgen python plotting/celeba32_3x3/summarize_f_mem_at_best_fid.py`.
+  Wrote `fmem_at_best_fid__rho_0p3__per_seed.csv` (108 rows) and
+  `fmem_at_best_fid__rho_0p3__mean_sd.csv` (36 rows) under
+  `outputs/figures/celeba32_unet_prediction_loss_3x3/`. The summary contains
+  mean and sample SD for f_mem and the selected FIDs. Updated the local
+  plotting handoff and repository map with the command and selection rule.
+- Validation in local `memcompgen`: independently sorted source FID records
+  to verify all 108 selected minima, checked same-checkpoint f_mem values,
+  and recomputed all 36 means and sample SDs with denominator two. Selected
+  steps span 2,750 to 1,000,000; selected FIDs span 6.6373 to 70.4362.
+  All 24 exported CSV hashes and sizes remained unchanged. Ruff and Git
+  whitespace checks passed. No training or evaluation was rerun.
+
+
+## 2026-10-05 - Audit similar FID trajectories across training sizes
+
+- The researcher questioned the similar FID paths across training sizes in
+  the combined grid. Independently joined the exported FID rows to runs.csv
+  and checked all 2,592 plotted FID rows, including all three seed values.
+  Every plotted value and seed mean matched the corresponding source record.
+- All 108 complete FID trajectories are distinct. The run index contains
+  108 distinct result paths and config hashes, plus 12 data-bundle hashes
+  for four training sizes and three seeds shared across the nine target cells.
+  For each target pair and seed, N=512 and N=4096 have equal FID only at
+  step zero; all 71 later checkpoint values differ.
+- The broad trajectory similarity is present in the export. The combined
+  plot's linear FID range, approximately 0-459, compresses late differences.
+  At one million updates, mean v/v FID is 14.264, 7.497, 8.168, and 13.584
+  for N=512,1024,2048,4096. Mean eps/x FID is 46.911, 53.110, 87.699, 96.619.
+- Created and visually inspected `fid_trajectory_audit__log_scale.png` from
+  plot_data/ using a local memcompgen Python/Matplotlib CSV analysis. It shows
+  separate seed curves and their means on a common logarithmic FID scale.
+  Saved all 2,592 plotted records and 36 final-checkpoint summaries as CSVs
+  with basenames `fid_trajectory_audit__log_scale` and
+  `fid_trajectory_audit__step_1000000` in the existing figure directory.
+- Inspected exporter source: each run reads its own accepted result's
+  combined/checkpoint_metrics.csv. This checks the export-to-plot mapping;
+  the portable bundle cannot establish that upstream checkpoint loading,
+  generated features, reference statistics, or cache identities were correct.
+  The cluster evaluation artifacts were not accessed. No causal claim was made.
+- All 24 exported CSV hashes and byte sizes remain unchanged. No plotting
+  implementation, metric, evaluation record, or original figure was changed.
+
+
+## 2026-10-05 - Display best FID beside the memorization summary
+
+- Updated the summary command and local plotting handoff to display each
+  cell as `f_mem mean ± SD (best FID mean ± SD)`. Both metrics use each
+  seed's previously selected lowest-FID checkpoint.
+- Reran the summary command in local memcompgen. All 36 cells include FID
+  to two decimal places. Both numerical CSVs remain byte-identical by SHA-256;
+  this change affects display only. Git whitespace checks passed.
+
+
+## 2026-10-05 - Render the best-FID summary as a 3x3 grid
+
+- Added `plotting/celeba32_3x3/plot_f_mem_at_best_fid.py`. It calls the existing
+  summary function using only plot_data/ numerical inputs. Prediction targets
+  define rows and loss targets define columns. Each cell stacks the four
+  training sizes and retains their existing colors.
+- Each entry displays `f_mem mean ± SD (best FID mean ± SD)`, retaining
+  per-seed best-FID checkpoint selection, raw pixels, rho=0.3, and sample SD.
+  Wrote PNG, vector SVG, and standalone LaTeX with basename
+  `fmem_at_best_fid__rho_0p3__grid` in the existing figure directory. Compiled
+  the LaTeX to a one-page PDF using pdfTeX from TeX Live 2026.
+- Ran the Python renderer in local memcompgen, checked its PNG, and inspected
+  the PDF rendered by pdftoppm. No clipped text or overlapping cells were found.
+  LaTeX compiled without overflow or LaTeX warnings. Ruff passed.
+- Verified that all 108 seed selections and 36 summaries match the existing
+  CSVs exactly. All 36 formatted entries appear in both SVG and LaTeX.
+  All 24 source CSV hashes and sizes remained unchanged. Updated the handoff
+  and repository map with the renderer and reproducible commands.
+
+
+## 2026-10-05 - Compare diagonal targets and equivalent velocity weights
+
+- Audited the requested comparison between x/x, eps/eps, v/v, and native
+  v/v with x_equivalent and eps_equivalent weights. The portable bundle has
+  all five conditions at N=512 and N=2048 with seeds 0, 1, and 2. Each run
+  has 72 accepted checkpoints through one million updates and 10,000
+  generated samples per evaluation.
+- Matching N/seed records share the saved data-bundle SHA-256. Exported
+  architecture, learning rate, batch size, training length, and evaluation
+  coverage match. Compared declared data, network, training, sampling,
+  runtime, and evaluation assignments in the matrix and weighting runners;
+  only the intended training-size assignment differs between size blocks.
+  Complete frozen evaluation manifests are absent from the portable bundle;
+  upstream feature caches and checkpoint loading were not independently audited.
+- All six unit-weight v/v repeats exactly match matrix v/v training losses,
+  monitoring records, FID, and raw-pixel f_mem. Retained one v/v baseline per
+  seed, yielding 30 runs rather than counting repeats as independent seeds.
+- Verified the implemented raw weights `(1-t)^2` and `t^2`. They equal x
+  and eps MSE for predictions implied by a velocity output, corresponding
+  to the matrix's v/x and v/eps objectives. They do not assert identical
+  networks or training dynamics for direct x and eps outputs. Weighted runs
+  are close to, but not bitwise identical to, the corresponding off-diagonal
+  runs: maximum absolute FID/f_mem differences are 1.39124/0.00690001 for
+  x_equivalent and 0.333299/0.00610000 for eps_equivalent across matched
+  sizes, seeds, and checkpoints. No cause for these differences was established.
+- Added `plotting/celeba32_3x3/compare_weighted_velocity.py`. Numerical inputs
+  come only from plot_data/. It checks matching records, excludes repeated
+  unit controls, and plots three-seed means with sample-SD bands. FID uses
+  a log scale; f_mem uses raw pixels and rho=0.3. Separate columns show the
+  two sizes. Dotted curves identify equivalent velocity weights.
+- Ran `MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl conda run --no-capture-output -n memcompgen python plotting/celeba32_3x3/compare_weighted_velocity.py`.
+  Outputs under `outputs/figures/celeba32_weighting_comparison/` include PNG,
+  SVG, 2,160 paired checkpoint records, 30 per-seed best-FID records, and
+  ten mean/sample-SD summaries. Best FID is selected separately per seed;
+  exact ties select the earlier step. Both metrics use the same checkpoint.
+- Runtime validation in memcompgen independently matched all 4,320 plotted
+  metric values to their source records, verified all 30 minima and ten
+  summaries, and confirmed that diagonal summaries match the prior table.
+  Visually checked the PNG layout. Ruff passed. All 24 source CSV hashes and
+  sizes remained unchanged. Updated the local handoff and repository map.
+  No training, evaluation, commit, push, merge, or cherry-pick was performed.
+
+
+## 2026-10-05 - Plot quality trajectories by training size for the other families
+
+- Added `plotting/plot_fid_by_training_size.py` for CelebA32 Small-DiT,
+  MNIST32, MNIST64, and CelebA64 RGB. It joins run conditions to accepted
+  quality records from plot_data/ and checks size, target, seed, model,
+  image-format, sample-count, and checkpoint coverage before plotting.
+- DiT has 36 seed-zero runs: four training sizes and the full 3x3 matrix,
+  each with 72 checkpoints. MNIST32 and MNIST64 each have 18 diagonal runs
+  at N=512/2048, three seeds, and 20 checkpoints. CelebA64 RGB has the same
+  18-run design with 75 checkpoints. All use 10,000 generated samples and
+  reach one million training steps.
+- Used Inception FID for CelebA. MNIST exports contain the primary JointAE
+  FD metric `mnist_fd_jointae32_v1`, not Inception FID, so the labels and
+  filenames name that representation. CelebA64 retains the legacy dataset
+  key celeba32_grey; the image-size/channel fields confirm 64x64 RGB inputs.
+- Figures overlay training sizes using the existing colors and share a
+  logarithmic quality axis within each figure. DiT is a 3x3 grid with rows
+  for prediction and columns for loss. Other figures have three diagonal
+  panels. Three-seed curves show arithmetic means, sample SD, and faint
+  seed trajectories. DiT shows seed 0 only, without an uncertainty band;
+  its summary CSV leaves SD blank. No smoothing or checkpoint resampling ran.
+- Executed `MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl conda run --no-capture-output -n memcompgen python plotting/plot_fid_by_training_size.py`.
+  Runtime was 2.44 seconds. Each experiment's outputs/figures/ directory
+  contains PNG, SVG, individual-seed CSV, and mean/sample-SD CSV with basename
+  `all_n_train__<metric>__log_scale`.
+- Validation in local memcompgen: all 4,662 seed values across 90 runs
+  matched the source records exactly. Independently checked 3,282 summary
+  means and sample SDs, blank single-seed SDs, metric labels, and seed labels.
+  Visually inspected all four PNGs; no overlapping or clipped labels were
+  found. Ruff passed. All 24 exported CSV hashes and byte sizes remained
+  unchanged. Updated the handoff and repository map. No training or
+  evaluation ran, and no source metric or provenance record was modified.
+
+
+## 2026-10-05 - Unify prediction-target colors across portable figures
+
+- Applied the researcher's convention: eps/eps is blue (#1F77B4), x/x is
+  red (#D62728), and v/v is green (#2CA02C). Color follows the prediction
+  target in off-diagonal cells as well. All native v/v weighting controls
+  remain green, using solid/unit, dashed/x_equivalent, and dotted/eps_equivalent.
+- Centralized TARGET_COLORS, N_TRAIN_LINESTYLES, and N_TRAIN_MARKERS in
+  `plotting/celeba32_3x3/plot_f_mem_grid.py`. The other portable plotting
+  entrypoints import these definitions. Single-metric figures distinguish
+  training sizes by line style. The dual-axis grid preserves dotted FID and
+  solid f_mem, with circle/square/triangle/diamond markers for increasing N.
+- Updated the best-FID grid and LaTeX to color values by prediction target;
+  training-size labels are neutral. Updated the local handoff with the
+  convention, exact colors, size encodings, and shared definition location.
+  Updated the repository map. The rule supersedes the earlier size palette.
+- Reran all four affected entrypoints in local memcompgen with the temporary
+  MPLCONFIGDIR: plot_f_mem_grid.py, plot_f_mem_at_best_fid.py,
+  compare_weighted_velocity.py, and plot_fid_by_training_size.py. Re-rendered
+  the earlier U-Net FID audit through the shared quality-trajectory renderer.
+  Recompiled the standalone LaTeX PDF with pdfTeX from TeX Live 2026.
+- Visually inspected all eight updated PNG figures and the PDF rendered by
+  pdftoppm. Adjusted caption spacing in the dual-axis figure to avoid overlap.
+  Checked the trajectory SVG palettes. Ruff and Git whitespace checks passed.
+  All 41 pre-existing source and derived CSVs remained byte-identical by
+  SHA-256. No metrics, evaluation records, or provenance were changed.
+
+
+## 2026-10-05 - Distinguish two training sizes with shades and markers
+
+- Refined the shared palette as requested. In two-size comparisons, the
+  smaller N uses a lighter shade and the larger N uses the canonical darker
+  color. N=512 uses circles; N=2048 uses triangles. Single-size figures keep
+  the canonical target color. Four-size figures retain their line-style rule.
+- Added `target_color` beside the existing shared palette. Lighter shades
+  mix 35% white with the canonical target color, giving red #E47373, blue
+  #6DA7CE, and green #76C176. The target meaning remains x red, eps blue,
+  and v green. The dual-axis plot also uses this rule when selecting two sizes.
+- Regenerated MNIST32, MNIST64, CelebA64 RGB, and the weighted-velocity
+  comparison through the two existing entrypoints in local memcompgen.
+  The diagonal size overlays use solid lines with distinct shades/markers.
+  Weighted velocity controls retain their solid/dashed/dotted weight encoding.
+  DiT's four-size figure was regenerated without a style change.
+- Visually inspected all four changed PNGs and their legends. Checked
+  single-size, two-size, and four-size color selection; Ruff and Git whitespace
+  checks passed. All 41 source and derived CSVs remained byte-identical by
+  SHA-256. Updated the shared convention and repository map. No numerical
+  values, metric definitions, or evaluation records changed.
+
+
+## 2026-10-05 - Distinguish velocity weights and export vector PDFs
+
+- The researcher requested different colors for the three native velocity
+  variants in the CelebA32 weighting comparison. Kept unit v/v green and
+  assigned x_equivalent purple (#9467BD) and eps_equivalent orange (#FF7F0E).
+  The diagonal x/x and eps/eps controls remain red and blue. Preserved
+  lighter/circle N=512 and darker/triangle N=2048, plus the weight line styles.
+  Updated legends and documented this extension to the canonical palette.
+- Extracted the existing shade calculation into `size_color`, reused by
+  target_color and the weighting renderer. No numerical selection or
+  aggregation changed.
+- The researcher also requested PDF instead of PNG. Changed the four current
+  plotting entrypoints to default to vector PDF; the existing SVG exports
+  remain. Matplotlib embeds TrueType fonts with pdf.fonttype=42. The dual-axis
+  entrypoint still accepts an explicit output suffix. Retained figure sizes.
+- The Python best-FID table now writes `fmem_at_best_fid__rho_0p3__grid.pdf`.
+  Its standalone LaTeX source and compiled alternative use the `__latex`
+  suffix to keep the two PDFs separate. Updated the handoff and repository map.
+- Reran plot_f_mem_grid.py, plot_f_mem_at_best_fid.py,
+  compare_weighted_velocity.py, and plot_fid_by_training_size.py in local
+  memcompgen with MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl. Exported
+  the prior U-Net FID audit through the shared trajectory renderer and
+  compiled the alternative table with pdfTeX from TeX Live 2026.
+- Nine PDFs are available: eight Matplotlib figures and the LaTeX table.
+  pdfinfo confirmed one page per artifact; pdffonts confirmed embedded fonts
+  without Type 3 fonts; pdfimages found no embedded raster images. Rendered
+  all nine with pdftoppm and visually checked colors, labels, and layout.
+  All 41 source and derived CSVs remain byte-identical by SHA-256. Ruff and
+  Git whitespace checks passed. No training or evaluation was performed.
+
+
+## 2026-10-05 - Set all figure panels to three inches wide
+
+- The researcher clarified that "size 3" means three inches wide per
+  subplot, with height allowed to vary. Added PANEL_WIDTH_INCHES=3.0 and
+  set_panel_width beside the shared plotting style. All four rendering
+  entrypoints use the helper after defining subplot spacing. It adjusts
+  canvas width using the axes position and preserves the chosen height.
+- Reflowed the weighting title and legend for its narrower canvas. Kept
+  panel heights between 1.76 and 2.91 inches according to the figure family.
+  The best-FID table now places FID in parentheses below f_mem in every
+  entry; increased its panel height to about 2.42 inches to retain legibility.
+  The LaTeX alternative uses nine 3-inch-wide, 2.4-inch-high minipages.
+- Regenerated all eight Matplotlib PDFs/SVGs where supported in local
+  memcompgen, including the prior U-Net FID audit. Executed the four
+  entrypoints through an instrumented runtime that measured each axes box
+  before closing the figure. All axes, including the dual-axis twins, were
+  three inches wide to numerical precision. Figure-level text fit the canvas.
+- Recompiled the LaTeX alternative with pdfTeX from TeX Live 2026. All nine
+  PDFs contain one page and embedded fonts without Type 3 fonts. Rendered
+  all nine using pdftoppm and visually checked the panel layouts, legends,
+  and wrapped table entries. The LaTeX build reported no overflow warnings.
+  All 41 source and derived CSVs remained byte-identical by SHA-256.
+- Updated the plotting handoff and repository map with the shared width,
+  variable heights, and table layout. Ruff and Git whitespace checks passed.
+  Color conventions, selected checkpoints, means, and sample SDs are unchanged.
+
+
+## 2026-10-05 - Two-inch panels and a stable figure catalog
+
+- The researcher reduced the requested subplot width from three to two
+  inches and requested short codes for figures and reusable figure types.
+  Set PANEL_WIDTH_INCHES=2.0. Both Matplotlib and LaTeX now use that constant.
+  Heights vary by template. Adjusted common typography, matrix margins,
+  legends, and two-line table headers to fit the narrower panels.
+- Added `plotting/figures.py` with stable IDs F01-F09 and type codes QM
+  (quality matrix), QD (quality diagonal), DM (dual metric), WV (velocity
+  weighting), and BT (best-FID table). It calls the existing renderers and
+  supports individual IDs, several IDs, one or more types, --all, and --list.
+  F01 makes the previously one-off U-Net FID audit directly reproducible.
+- Each catalog build retains the descriptive filename and writes a
+  byte-identical short PDF copy such as `outputs/figures/F07.pdf`. The output
+  INDEX.md links the available PDFs. The catalog never writes numerical CSVs.
+  F09 writes the LaTeX source and compiles its PDF with temporary build files.
+  Updated the local plotting handoff with the ID/type map, template owners,
+  shared settings, and concrete commands. Updated the repository map.
+- Executed `figures.main(['--all'])` in local memcompgen with
+  MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl and instrumented figure
+  closure. All eight Matplotlib figures, including twin axes, have axes
+  boxes exactly two inches wide. Titles, legends, axis labels, and table
+  text fit the canvas; matrix prediction labels clear the overall metric
+  label. The LaTeX source contains nine two-inch minipages and compiles
+  without overflow warnings using pdfTeX from TeX Live 2026.
+- All nine PDFs have one page, embedded fonts without Type 3 fonts, and no
+  raster images. Rendered every final PDF with pdftoppm and visually checked
+  labels, legends, table precision, colors, and spacing. Confirmed all short
+  PDF copies match their descriptive counterparts byte for byte. All 41
+  pre-existing source and derived CSV hashes remain unchanged.
+- Checked argument selection with mocked rendering: individual IDs,
+  deduplication, mixed type groups, case normalization, and read-only listing.
+  Also ran the real `python plotting/figures.py F07` command in memcompgen
+  and confirmed that only F07 changed among the nine catalog PDFs. Ruff and
+  Git whitespace checks passed. Work remains on codex/portable-plot-data;
+  main is unchanged. No training or evaluation ran.
+
+
+## 2026-10-05 - Copy the plotting data into a portable agent handoff
+
+- The researcher requested a new folder to give to agents elsewhere. Created
+  `outputs/handoffs/mem_param_plotting_handoff_2026-10-05/` and its matching
+  ZIP. Preserved relative paths for all 24 source CSVs and 17 derived CSVs,
+  six experiment manifests and source descriptions, nine current figure
+  designs with short and descriptive PDF names, current SVGs, and F09 LaTeX.
+  Included the six local plotting scripts and two relevant documentation files.
+- Added a standalone README, bundle-specific AGENTS.md, a Matplotlib 3.10.8
+  requirement, SOURCE_STATE.json, and CHECKSUMS.sha256. The source-state file
+  records codex/portable-plot-data, the full source commit, the local Python
+  version, copied paths, and the presence of uncommitted plotting changes.
+  The guide explains figure IDs, metric boundaries, seed aggregation, colors,
+  setup commands, and how to verify the transferred files. It records that
+  tau_gen and tau_mem definitions were not finalized in this session.
+- The bundle contains 95 files, totaling 172,075,519 bytes. The ZIP contains
+  21,820,658 bytes. Its SHA-256 is
+  `89008f00566142119bc93f43b277f588cdd2eab096ba9e568cdf38c9d196079d`.
+  Current plotting inputs, source provenance, and original outputs are unchanged.
+- Verified all copied files byte for byte against the originals, checked the
+  source manifest hashes and byte counts, and tested ZIP integrity. Extracted
+  the archive into an independent temporary directory and executed
+  `python plotting/figures.py --all` there with PYTHONPATH removed, using
+  local memcompgen Python 3.10.19, Matplotlib 3.10.8, and installed pdflatex.
+  All nine figures rebuilt successfully, including the LaTeX alternative;
+  all 41 extracted CSV hashes remained unchanged. This checks a transferred
+  bundle in the existing local environment, not a fresh dependency installation.
+- Updated the repository map. The handoff and ZIP are ignored generated
+  outputs. No training, evaluation, Git commit, or push was performed.
+
+
+## 2026-10-06 - Audit the proposed paper figure plan and its evaluation
+
+- Read the two supplied texts and independently recomputed their quoted
+  numerical claims from all 216 portable runs. Saved the audit script,
+  per-seed and summary CSVs, onset sensitivities, quality jumps, calibration
+  rates, weighting comparisons, and review in
+  `outputs/figure_plan_sanity_2026-10-06/`. All 24 source CSV hashes remain
+  unchanged. Existing figures and the shared handoff archive were not changed.
+- Reproduced the evaluation's DINOv2 counterexamples, SSCD onset table,
+  FID-jump corrections, best-quality values/times, grid example, weighting
+  example, and calibration-rate range. The audit adds a within-SSCD x/v
+  ranking reversal across N and quantifies onset-cutoff sensitivity. The eps/eps
+  point estimate is lowest in all 14 exported settings under the proposed
+  primary representations, with no claim of pairwise significance.
+- Verified that unit-v repeated controls have distinct source paths/config
+  hashes and identical exported FID/SSCD trajectories. They remain three seeds.
+  The explicit weighted-v trajectories closely match the grid's v/x and v/eps
+  trajectories. Recorded a descriptive row/column/interaction decomposition;
+  it is not a significance test or a causal conclusion.
+- Flagged SSCD versus raw-pixel rho=0.3 and SE versus SD as convention changes.
+  Checked the local conversion formulas, exporter calibration fields, original
+  SSCD paper, and official AISTATS template dimensions. Newly named plotting
+  scripts and original theory figures are absent, so their implementations
+  and completion claims remain unverified. Ran the audit in local memcompgen
+  and passed Ruff. No training, evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Recreate the paired diagonal trajectory figure as F10
+
+- The researcher supplied a historical 2x3 figure and requested a new version
+  from current records, retaining its coloring. They explicitly selected
+  raw-pixel f_mem at rho=0.3. Added F10 and the DT paired-diagonal template in
+  `plotting/plot_diagonal_trajectories.py`, registered in the figure catalog.
+- Reused the existing strict quality loader and seed-summary function. Joined
+  raw-pixel memorization to the same 36 diagonal CelebA32 U-Net runs, checking
+  sample counts, finite values, duplicates, and matching checkpoint schedules.
+  Source inputs are only runs.csv and evaluation_metrics.csv under plot_data.
+- Matched the reference's eps/eps, v/v, x/x column order; canonical blue,
+  green, red curves; increasingly lighter shades at larger N; and pale blue
+  FID / warm memorization backgrounds. The upper row uses log FID; the lower
+  row shows f_mem. Both use log tau=step/1e6. Four styles preserve the current
+  N=512/1024/2048/4096 mapping. The historical N=8192 is absent from the export.
+- Lines show three-seed means and bands show sample SD. All 71 positive
+  checkpoints are shown without smoothing. Step zero remains in the saved
+  CSVs, marked as not displayed on the log axis. Saved PDF/SVG, a scientific
+  caption, 5,184 per-seed values, and 1,728 mean/SD rows. F10.pdf is an exact
+  short copy of the descriptive PDF. The canvas is 7.111 by 3.65 inches;
+  each axes box is two inches wide and about 1.05 inches high.
+- Executed the direct renderer and an instrumented F10 catalog build in local
+  memcompgen with MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl. Verified
+  every seed value and summary mean/SD against the existing F06 table exactly.
+  Checked all six axes, 24 curves, 71 positive points per curve, physical
+  dimensions, and text/legend bounds. Catalog builds preserve the new CSVs.
+  All prior source and figure-file hashes are unchanged except the updated
+  figure index. pdftoppm visual inspection passed. pdfinfo/pdffonts/pdfimages
+  confirm a one-page vector PDF with embedded TrueType fonts and no raster
+  images. Ruff and Git whitespace checks passed.
+- Updated the plotting handoff and repository map with the new ID, template,
+  style exception, commands, and artifact roles. Work remains on
+  codex/portable-plot-data; main is unchanged. No training or evaluation ran.
+
+
+## 2026-10-06 - Add the summary row as F11
+
+- The researcher requested the bottom summary row from the supplied backbone
+  figure. Added F11, type DS, with F10's two trajectory rows above best FID,
+  raw-pixel f_mem at best FID, and memorization onset versus training size.
+  Retained raw pixels at rho=0.3, canonical target colors, four training sizes,
+  three seeds, and sample SD. The best checkpoint is selected within each seed;
+  exact FID ties use the earlier checkpoint. Reference SSCD values are not used.
+- Extracted F10's trajectory drawing into a shared function. The new
+  `plotting/plot_diagonal_summary.py` reads the same portable records, computes
+  per-seed summaries, and renders the new figure. Registered F11 and DS in the
+  catalog. Saved separate PDF/SVG, caption, 36 per-seed records, and 12 condition
+  summaries. F10 remains unchanged as a compact option.
+- Asked the researcher about onset and used a stated provisional definition
+  for the draft: first saved checkpoint with f_mem>=0.05 at every remaining
+  saved checkpoint through one million steps. This cutoff is distinct from
+  rho=0.3 and has no calibrated false-positive interpretation. All three
+  seeds are censored for eps/eps at N=2048/4096 and v/v at N=4096. Open markers
+  and arrows show those limits. No censored times enter onset means or SD.
+- Executed the direct renderer and F11 catalog build in local memcompgen
+  with MPLCONFIGDIR=/private/tmp/mem_param_plotting_mpl. All 36 best-checkpoint
+  records and 12 best-FID/f_mem means and sample SD match the prior tables
+  exactly. Independently checked onset with a forward search over all future
+  saved values; confirmed nine censored runs and blank corresponding summaries.
+- Inspected the rendered PDF with pdftoppm. All nine axes are exactly two
+  inches wide; the canvas is 7.6066 by 5.8 inches. Checked 71 positive points
+  per trajectory and text bounds. pdfinfo/pdffonts/pdfimages confirm one page,
+  embedded TrueType fonts, and no raster images. F10 rendered through the
+  extracted drawing function is pixel-identical to its previous PDF rendering.
+- Catalog rendering preserves all numerical CSVs. All pre-existing source
+  and figure hashes remain unchanged except the figure index. Ruff and Git
+  whitespace checks passed. Updated the handoff and repository map. Work stays
+  on codex/portable-plot-data; main is unchanged. No training, evaluation,
+  commit, or push was performed.
+
+
+## 2026-10-06 - Clarify the timescales and widen F11
+
+- The researcher recalled existing tau_gen/tau_mem definitions and requested
+  a wider figure. Re-read the supplied figure plan and its evaluation.
+  The plan defines tau_gen as the first saved FID within 10% of the run's
+  minimum, and tau_mem as the first sustained f_mem>=0.05 checkpoint.
+  F11 already implements that sustained-crossing rule. Corrected the earlier
+  description of it as a newly proposed definition. The distinction is the
+  metric: the plan used calibrated SSCD at alpha=0.01, while this figure uses
+  the explicitly requested raw pixels at rho=0.3. Kept the existing numerical
+  cutoff, raw-pixel inputs, and censoring. tau_gen is not plotted in F11 and
+  need not coincide with the actual best-FID checkpoint.
+- Widened all nine F11 axes from 2 to 2.5 inches, holding height fixed.
+  The canvas is now 9.5082 by 5.8 inches. The shared width helper accepts an
+  explicit width and retains its two-inch default. F11 owns its width in
+  plotting/plot_diagonal_summary.py. Updated its caption, footer, catalog
+  note, plotting handoff, and repository map.
+- Executed the F11 catalog build in local memcompgen and inspected its PDF
+  rendering with pdftoppm. Verified all nine axes widths and the unchanged
+  height, checked the shared helper's default, and confirmed the short PDF
+  matches the descriptive PDF. All source files, numerical CSVs, and F01-F10
+  artifacts retain their hashes. Ruff and Git whitespace checks passed.
+  Work remains on codex/portable-plot-data; main is unchanged. No training,
+  evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Moderate the F11 size reduction
+
+- The researcher found the 6.75-inch reduction too strong. Increased the
+  export width to 8.3 inches, roughly halfway back to the original 9.9239.
+  Preserved the aspect ratio, giving a 4.09818-inch height. Kept the revised
+  panel labels, typography, colors, and layout settings. Updated the catalog
+  and dimension notes; at 6.75-inch manuscript width, eight-point export
+  labels scale to about 6.5 points.
+- Rebuilt F11 in local memcompgen and inspected its pdftoppm render. Checked
+  dimensions, aspect ratio, matching short/descriptive PDFs, and unchanged
+  source-data, numerical-CSV, and other-figure hashes. Git whitespace check
+  passed. Work remains on codex/portable-plot-data; main is unchanged.
+
+
+## 2026-10-06 - Tighten F11 and move its visual keys into the caption
+
+- The researcher requested a tighter, wider layout with the N and parameter
+  indications in the caption. Increased F11's axes width from 2.5 to 2.75
+  inches, reduced horizontal gutters, and shortened the canvas from 5.8 to
+  4.9 inches. Its full width is now 9.9239 inches.
+- Removed the separate top metadata header and N legend. Grouped the four
+  N line-style keys with the three parameter color/marker keys in one row
+  inside the caption area below the panels. Dataset, metric, sample-SD
+  convention, and onset definition also remain visible there. Retained
+  panel headings, all numerical values, and the gaps at censored onsets.
+- Adjusted row spacing after inspecting the rendered labels. Extended the
+  display arrows above the unchanged one-million-step censoring markers so
+  the arrows remain legible at the shorter panel height. Updated the full
+  caption, plotting handoff, and repository map.
+- Executed the F11 catalog renderer in local memcompgen. Checked the nine
+  2.75-inch axes, 4.9-inch canvas height, seven caption keys, and clearance
+  between row labels, titles, and caption elements. Inspected the final PDF
+  through pdftoppm. All source and numerical CSV hashes are unchanged;
+  F01-F10 artifacts are unchanged. The short and descriptive F11 PDFs match.
+  Ruff and Git whitespace checks passed. Work remains on codex/portable-plot-data;
+  main is unchanged. No training, evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Move F11's title to the bottom
+
+- Moved the dataset/metric/uncertainty title below the caption legend and
+  onset note, as requested. Plot panels, dimensions, and numerical values
+  are unchanged. Rebuilt F11 in local memcompgen and visually checked the
+  PDF with pdftoppm; all three caption rows fit without overlap.
+
+
+## 2026-10-06 - Separate the timescales from the main trajectory figure
+
+- The researcher requested moving F11's onset panel and the generation
+  window into a separate figure, with the two best-FID panels sharing the
+  main figure's bottom row. F11 now has a 3+3+2 layout: six 2.75-inch
+  trajectory panels and two 4.3476-inch summary panels on its existing
+  9.9239-by-4.9-inch canvas. Removed the onset-specific threshold lines and
+  caption note from F11. Preserved its title at the bottom and its CSV files.
+- Added F12 and the TS template in plotting/plot_diagonal_timescales.py.
+  Its three panels show tau_gen, tau_mem, and delta_tau=tau_mem-tau_gen.
+  tau_gen is the first saved FID within 10% of each seed's minimum;
+  tau_mem reuses the existing sustained 5% raw-pixel onset at rho=0.3.
+  The window is computed within each seed before mean and sample SD.
+  Negative values remain visible with a zero line. These are signed milestone
+  differences; the quality criterion does not require remaining in the band.
+- Nine seeds remain censored. Their onset/window estimates and SD are blank.
+  For each censored seed, tau_mem>T and delta_tau>T-tau_gen. F12 explicitly
+  shows the average of those lower bounds as a bound on the seed mean, using
+  open markers and upward arrows without SD or connecting lines. Among the
+  27 observed seed gaps, 25 are negative and two positive.
+- Saved new F12 PDF/SVG, caption, 36 per-seed records, and 12 condition
+  summaries. Both timescale CSVs use raw training steps; the figure divides
+  all y values by one million. F12 has three 2.75-inch panels on a
+  9.9239-by-3.1-inch canvas. Catalog builds preserve all numerical CSVs.
+- Ran the direct F12 renderer and the F11/F12 catalog commands in local
+  memcompgen. Independently checked all 36 first-quality crossings, sustained
+  onsets, paired differences, sample SD, and lower bounds against saved values.
+  Onsets match the previous F11 per-seed table. Verified panel counts/widths,
+  caption and label clearances, and matching short/descriptive PDFs. Inspected
+  both PDFs using pdftoppm. F12 has embedded TrueType fonts and no raster images.
+- All pre-existing source and numerical CSV hashes are unchanged. F01-F10
+  artifacts are unchanged. Updated the catalog, plotting handoff, and repo map.
+  Ruff and Git whitespace checks passed. Work remains on codex/portable-plot-data;
+  main is unchanged. No training, evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Use bold math parameter labels in F11 and F12
+
+- The researcher requested LaTeX math for epsilon, x, and v, preferably bold.
+  Added shared bold parameter-pair labels using MathText boldsymbol and the
+  serif STIX math font. Applied them to F11's column headings and the F11/F12
+  legends. Preserved the canonical colors, layout, and numerical inputs.
+- Rebuilt both catalog PDFs in local memcompgen and visually inspected their
+  pdftoppm renders. The labels render correctly without overlap. Updated the
+  plotting handoff with their style owner. No numerical CSVs were rewritten.
+
+
+## 2026-10-06 - Stack F12 and reduce empty space
+
+- Changed F12 from a wide 1x3 strip to a compact 3x1 stack at the researcher's
+  request. The canvas is 3.2484 by 4.8 inches, with 2.55-inch-wide axes,
+  one shared N axis, and one units label. Observed/legend markers increased
+  from four to five points; censored markers increased from 4.5 to 5.5 points.
+  Adjusted censoring offsets and arrows to keep the larger markers distinct.
+- Tightened the quality-time y range without clipping any displayed mean
+  or sample-SD bar. Shortened the on-figure note and retained all scientific
+  definitions in the caption file. Bold parameter labels and the bottommost
+  title remain. Updated the TS catalog description, handoff, and repository map.
+- Rebuilt F12 in local memcompgen and inspected the PDF using pdftoppm.
+  Checked stacked axes, dimensions, shared x labels, marker sizes, caption
+  bounds/clearances, and all observed error-bar limits. Source files, numerical
+  CSVs, and F01-F11 retain their hashes. Short/descriptive PDFs match.
+  Ruff and Git whitespace checks passed. Work remains on codex/portable-plot-data;
+  main is unchanged. No training, evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Add the DiT counterpart of F12 as F13
+
+- The researcher requested the same timescale figure for DiT. Registered
+  F13 under the existing stacked TS template. Read only the portable
+  CelebA32 DiT scalar tables: 12 diagonal runs, four sizes, seed 0, and
+  72 matched FID/raw-pixel checkpoints per run. Kept rho=0.3, the 10% best-FID
+  tolerance, sustained 5% onset, and paired delta_tau=tau_mem-tau_gen.
+- Parameterized the paired-metric loader by experiment and extracted the
+  existing per-seed checkpoint selector from the U-Net aggregation function.
+  The shared timescale summary leaves SD blank for one seed; the renderer
+  draws no error bars and explicitly labels seed 0. All 12 DiT onsets are
+  observed and all signed gaps are negative. F13 fits y limits to these
+  values while retaining log time axes and a linear gap axis including zero.
+- F13 preserves F12's 3.2484-by-4.8-inch layout, five-point markers, canonical
+  colors, bold math labels, and bottommost title. Saved PDF/SVG, caption,
+  12 per-seed rows, and 12 summary rows under outputs/figures/celeba32_dit_3x3.
+  Added the direct --experiment option and documented both build commands.
+- Executed the direct DiT renderer and F13 catalog build in local memcompgen.
+  Independently recomputed all 12 times/gaps directly from the CSVs and
+  checked blank SD, matching checkpoint coverage, and absence of error bars.
+  Inspected the PDF with pdftoppm and checked dimensions, data limits, and
+  caption clearances. All previous U-Net selected checkpoints and timescale
+  summaries match exactly; a temporary F12 rendering is pixel-identical to
+  its previous rendering. All pre-existing source, CSV, and figure hashes
+  remain unchanged except the catalog index. Catalog rendering preserves
+  the new CSVs, and F13's short/descriptive PDFs match.
+- Updated the plotting handoff and repo map. Ruff and Git whitespace checks
+  passed. Work remains on codex/portable-plot-data; main is unchanged.
+  No training, evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Fit F11 to the AISTATS paper width
+
+- The researcher requested a smaller F11 with its aspect ratio preserved and
+  the reviewed AISTATS figure guidance applied. Set its canvas to 6.75 by
+  3.33286 inches, preserving the earlier 9.923913-by-4.9-inch aspect ratio.
+  The renderer now owns full-canvas width and aspect ratio directly. Kept
+  the 3+3+2 arrangement, parameter colors, shade progression, and bottom title.
+- Kept tick labels, panel letters, legend, and footer at eight points instead
+  of shrinking the existing PDF. Standardized bold (a)-(h) labels above the
+  upper-left corner of each panel. Reduced y-tick density, shortened legend
+  spacing, and adjusted row spacing to prevent collisions. These typography
+  choices support legibility; the official template does not mandate them.
+- Rebuilt the catalog F11 PDF/SVG in local memcompgen and visually inspected
+  a pdftoppm rendering. Verified exact width and preserved aspect ratio,
+  all eight labels, page bounds and text clearances, embedded TrueType fonts,
+  and absence of raster images. Compared every plotted line and band/error-bar
+  path against the prior renderer: coordinates, colors, and line styles match.
+  Recomputed summaries match both existing numerical CSVs exactly.
+- Hash checks confirm all plot_data files, numerical tables, and other
+  figures are unchanged. Only F11's graphic/caption artifacts and the output
+  index changed. The short PDF matches the descriptive PDF. Ruff and Git
+  whitespace checks passed. Updated the handoff and repository map, including
+  a LaTeX figure* inclusion example; that manuscript snippet was not compiled.
+  Work remains on codex/portable-plot-data; main is unchanged. No training,
+  evaluation, commit, or push was performed.
+
+
+## 2026-10-06 - Give F11's trajectory rows more height and tighten the footer
+
+- The researcher clarified that both trajectory rows should have equal height
+  and be taller than the bottom summaries. Set FID/f_mem/summary height ratios
+  to 1.25/1.25/1, reclaiming part of the footer margin while retaining the
+  8.3-by-4.0982-inch canvas and aspect ratio. Moved the N/parameter legend
+  closer to the bottom panels, then restored a small gap at the researcher's
+  request. Kept the title below the legend. Updated the plotting handoff.
+- Rebuilt F11 in local memcompgen and inspected the PDF through pdftoppm.
+  Checked equal trajectory heights and their ratio to the summaries,
+  unchanged canvas, clear legend/title
+  spacing, identical short/descriptive PDFs, and unchanged input-data,
+  numerical-table, and other-figure hashes. Git whitespace check passed.
+  Work remains on codex/portable-plot-data; main is unchanged.
+
+
+## 2026-10-06 - Widen F11 slightly and enlarge both trajectory rows
+
+- Increased canvas width from 8.3 to 8.8 inches while retaining its aspect
+  ratio; height is now 4.3451 inches. Increased the equal FID/f_mem row weights
+  from 1.25 to 1.4 relative to the bottom summary row. Together these changes
+  make the figure about 6% wider and the two trajectory rows about 10% taller.
+  Kept typography and the legend/footer positions. Updated dimension notes.
+- Rebuilt F11 in local memcompgen, inspected its pdftoppm render, and checked
+  equal top-row heights, the 1.4:1 trajectory/summary height ratio, legend/title
+  clearance, and matching short/descriptive PDFs. Hash checks confirm unchanged
+  input data, numerical tables, and other figures. Git whitespace check passed.
+  Work remains on codex/portable-plot-data; main is unchanged.
+
+
+## 2026-10-06 - Add vertical guides to F13
+
+- Added faint dotted vertical gridlines at N=512/1024/2048/4096 in all three
+  F13 panels. The Small-DiT-only style condition leaves F12 unchanged.
+- Rebuilt F13 in local memcompgen and visually checked the pdftoppm render.
+  Hash checks show only F13's PDF/SVG artifacts changed; all numerical tables,
+  input data, and other figures are unchanged. Short/descriptive PDFs match.
+  Updated the handoff. Git whitespace check passed.
+
+
+## 2026-10-06 - Keep F12/F13 styling paired and supply paper captions
+
+- The researcher requested that F13 style edits also apply to F12. Removed
+  the DiT-only condition from the vertical guides. Both figures now use the
+  same dotted x-grid styling. Recorded the paired-style convention in the
+  plotting handoff; seed uncertainty, censoring, and data-fitted y limits
+  retain their existing meanings.
+- Added reproducible manuscript-ready `.caption.tex` outputs alongside the
+  existing detailed text captions. Both define the per-run 10% FID criterion,
+  sustained 5% raw-pixel onset at rho=0.3, signed gap, axes, colors, and sample
+  counts. Captions distinguish three-seed U-Net SD and lower bounds from
+  single-seed DiT values. They do not equate the signed gap with a continuous
+  interval of near-best quality without memorization.
+- Checked the readout against portable records. DiT has 12 negative gaps;
+  U-Net has 25 negative and two positive observed seed gaps, plus nine censored
+  onsets. Recorded the DiT N=4096 times and memorization fractions at tau_gen
+  in the handoff. U-Net's v/v best-FID target changes with N, so its sharp
+  quality-time drop does not compare equal absolute FID. Seed-zero data-bundle
+  hashes match across architectures; microbatch sizes differ. The plots do
+  not isolate capacity or architectural causes.
+- Rebuilt both figures with `python plotting/figures.py --type TS` in local
+  memcompgen. Visually inspected both PDFs and a one-page caption compilation
+  using the official AISTATS 2027 style. LaTeX produced no overfull-box or
+  float warnings. Verified all 12 vertical guides per figure, exact numerical
+  agreement with existing CSVs, and matching short/descriptive PDFs. Hashes
+  confirm unchanged source data, numerical tables, and other figures. Ruff
+  and Git whitespace checks passed. Updated the repository map. Work remains
+  on codex/portable-plot-data; main is unchanged. No training or evaluation ran.
+
+
+## 2026-10-06 - Name the equivalent weights directly in F07
+
+- Added x-equivalent and epsilon-equivalent to F07's weighted-velocity legend
+  labels, alongside w=(1-t)^2 and w=t^2. Retained purple/orange styling.
+- Rebuilt F07 in local memcompgen and visually checked label fit in the PDF.
+  Hash checks confirm that only its PDF/SVG artifacts changed; numerical
+  tables, input data, and other figures are unchanged. Short/descriptive PDFs
+  match. Updated the handoff and passed the Git whitespace check.
+
+
+## 2026-10-06 - Centralize figure identity, review, and the supplied matrix design
+
+- The researcher requested a shared plotting workflow for multiple agents and
+  chose type-based IDs. Moved the registry to plotting/figure_catalog.json.
+  Existing figures now use QM01/QM02, QD01-QD03, DM01, WV01, BT01/BT02, DT01,
+  DS01, and TS01/TS02. F01-F13 remain aliases, with byte-identical PDFs under
+  both names. Existing artifacts are marked legacy until a recorded rebuild.
+- Added explicit variant, data-source, metric, rho, seed/training-size,
+  checkpoint-selection, uncertainty, placement, and review fields. All entries
+  start draft/unassigned; prior style discussions are not paper approval.
+  Added --show and composable list/build filters for type, placement, status,
+  and metric. Catalog validation rejects duplicate identities/paths and
+  scientific metadata unsupported by the selected renderer.
+- Each catalog build preserves a PDF and available companion artifacts,
+  source archive, and receipt under outputs/figures/versions/<ID>/<build-id>.
+  Identity hashes cover the selected inputs, all plotting Python code,
+  specification, and Python/NumPy/Matplotlib environment. The conservative
+  code scope can invalidate unrelated approvals. Changed data/code/artifacts
+  make an existing approval need review; archives are retained. Repeating the
+  same identity reuses its first PDF, including creation metadata. No actual
+  approval was recorded. Build records and PDFs remain ignored local artifacts.
+- Added BT03 using the supplied two-matrix design for N=512 and 2048. Its
+  tracked renderer reuses existing per-seed best-FID calculations from
+  plot_data, with diagonal tints and paired FID. The supplied external CSV
+  was not needed. The researcher was unsure about SE; used the existing
+  sample-SD convention and explained the difference. The plot and caption
+  explicitly label SD; the renderer supports a separately registered SE variant.
+- Added plotting/AGENTS.md for shared agent conventions and updated the
+  handoff/repository map. Ran BT03 and the registry CLI in local memcompgen;
+  checked all 54 numerical labels against the existing table and their cell
+  bounds, then inspected the PDF with pdftoppm. A temporary F12 alias build
+  successfully creates TS01 and is pixel-identical to the original F12.
+  Four focused pytest cases passed, plus Ruff and Git whitespace checks.
+  Hashes confirm all pre-existing plots, captions, CSVs, and plot_data are
+  unchanged; only the generated index changed. Work remains uncommitted on
+  codex/portable-plot-data; main is unchanged. No training, evaluation, or push.
+
+
+## 2026-10-06 - Specify paper figures from the accepted PDF layouts
+
+- The researcher retained manuscript Figures 1-4 and Tables 1-2 from
+  AISTATS_2027_Memparam_FM (1).pdf, then explicitly chose to keep the layouts
+  while using raw pixels at rho=0.3 and sample SD. Figure 4 remains in the
+  main set, superseding the earlier suggestion to move it wholly to appendix.
+- Wrote docs/paper_figure_plan.txt with the reference PDF path/hash, six
+  retained layouts, metric/checkpoint/seed rules, caption corrections, a
+  proposed theory addition, and five supporting appendix groups. Preserved
+  the PDF's existing panel order. Kept content decisions distinct from
+  approval of catalog artifacts; no catalog review status was changed.
+- The PDF's Figure 3 reports SSCD and SE. Figure 4's old caption disagrees
+  with its plotted onset threshold, uncertainty, and stacked arrangement.
+  Recorded those corrections for implementation within the retained layouts.
+- Read the PDF with pdftotext and inspected pdftoppm renders of pages 2, 3,
+  6, 7, and 8. Checked portable experiment/seed and metric-setting inventories
+  in local memcompgen. This establishes planning context, not a full numerical
+  audit. Updated the repository map. No plots or numerical inputs were edited,
+  and no training, evaluation, commit, or push was performed for this plan.
+
+
+## 2026-10-06 - Start a separate paper figure workspace with Figure 2 only
+
+- The researcher requested a fresh output folder and focused generation of
+  one item or a selected small group. Set the catalog and shared entrypoint
+  to outputs/paper_figures/. Preserved the earlier outputs/figures/ collection.
+  Made the weighting renderer accept the catalog destination as well.
+- Added a short paper-item review list in the new folder. Its generated index
+  lists only built items. Recorded the focused workflow in the plotting agent
+  guide, paper specification, handoff, and repository map. Existing F-number
+  aliases remain compatibility names, separate from manuscript numbering.
+- Confirmed that DS01 already implements Figure 2's eight-panel template and
+  TS01 implements Figure 4's stacked timescales, both with raw pixels at
+  rho=0.3 and sample SD. Generated only DS01 in the new folder as the first
+  review draft, build dfe885cd99aa; retained the existing layout. Its caption
+  now refers to manuscript Figure 4 rather than the old F12 alias.
+- In local memcompgen, ran the DS01 catalog command, inspected a pdftoppm
+  render, and checked all 48 best-FID summary means/SDs against the existing
+  raw-pixel summary CSV. Four catalog tests and Ruff passed. Verified that all
+  catalog stems use the new folder and that only DS01 has a new build receipt.
+  SHA256 checks confirmed all 285 prior output/input files remained unchanged.
+  No figures were copied in bulk, no scientific records were edited, and no
+  training or evaluation ran. Work remains local on codex/portable-plot-data;
+  main is unchanged, with no commit or push.
+
+
+## 2026-10-06 - Adopt the supplied M1-M5 and A1-A5 names
+
+- The researcher explicitly required the names from the supplied paper plan.
+  Replaced primary type-based catalog IDs with M/A names and descriptive
+  suffixes for variants. M4 is the robustness table, M5 is theory, and A3 is
+  the timescale group using reference Figure 4's accepted layout. Table 1 is
+  the companion M1_CONVERSIONS. Planned items without renderers remain listed
+  in the specification and review list rather than being declared complete.
+- Updated the entrypoint, catalog, index, paper specification, agent guide,
+  handoff, and repository map. Older commands remain compatibility aliases,
+  but no alias PDFs are created. Current output files use M/A names directly.
+- Generated only M2 under its correct name, build 43d9a790863d. A pdftoppm
+  pixel comparison confirms the figure is identical to the preceding draft.
+  Its caption now refers to A3. Removed the superseded working copies after
+  checking their hashes; preserved the earlier archived build and source.
+- In memcompgen, four updated catalog tests and Ruff passed. SHA256 checks
+  confirm all 285 earlier output/input files remain unchanged. No numerical
+  records or scientific calculations changed. Work remains local on
+  codex/portable-plot-data; main is unchanged. No commit or push.
+
+
+## 2026-10-06 - Mark M1 complete and approve M2
+
+- The researcher confirmed that M1 is handmade by the authors and complete.
+  Checked it off in the paper specification and workspace review list.
+- The researcher accepted the current M2. Confirmed the receipt is current
+  and recorded approval of exact build 43d9a790863d in the catalog. M2 covers
+  the three diagonal objectives at N=512/1024/2048/4096, with FID and raw-pixel
+  memorization trajectories, best FID, and paired memorization at each seed's
+  best-FID checkpoint. It uses rho=0.3 and three-seed means/sample SD.
+- Updated the review list and handoff and refreshed the generated index.
+  No figure was rebuilt and no numerical input or plotted value was changed.
+
+
+## 2026-10-06 - Adapt the supplied paper's M3 design to raw pixels and M2 width
+
+- The researcher preferred the M3 design already in the supplied paper PDF
+  and requested raw-pixel memorization and M2's width. Read the supplied Python
+  reference and inspected PDF page 7. Attributed the layout to those supplied
+  references. The PDF has wide cells and inline mean/uncertainty, unlike the
+  earlier square-cell local adaptation.
+- Updated only the M3 renderer: 8.8-inch width from M2's width constant,
+  2.5-inch height, labels above/left, colored diagonal borders, gray FID, and
+  neutral off-diagonals. Extracted PDF vector colors to match its 8% target
+  tints and canonical palette. Retained shared bold STIX parameter symbols.
+- Used the existing per-seed best-FID selection from plot_data, paired raw
+  pixels at rho=0.3, and sample SD for both displayed metrics. Generated M3
+  build 9ad16db1854a with PDF/SVG and corrected text caption. It remains draft.
+- In local memcompgen, independently joined source CSVs and checked all 18
+  cells (72 displayed means/SDs), label containment, and exact equal PDF
+  widths of 633.6 points. Inspected the pdftoppm preview and passed Ruff and
+  whitespace checks. All pre-existing files except the generated index are
+  byte-identical, including approved M2, its archived build, and all inputs.
+  The conservative all-plot-code fingerprint makes M2's source-state badge
+  stale; its approved build ID and artifact were not changed or reapproved.
+  Updated the specification and review list. No training, evaluation, commit,
+  or push; work remains on codex/portable-plot-data and main is unchanged.
+
+
+## 2026-10-06 - Add requested M3-SSCD and M3-DIT variants
+
+- Reused M3's two-matrix template, paper colors, shared bold STIX labels,
+  N=512/2048, and 8.8-by-2.5-inch canvas. Added the exact requested names
+  M3-SSCD and M3-DIT to the catalog and commands; both remain draft with
+  manuscript placement unassigned. The headline M3 remains raw-pixel U-Net.
+- M3-SSCD uses CelebA32 U-Net SSCD at held-out-calibrated alpha=0.01,
+  with each run's exported calibrated rho. It shows mean +/- sample SD over
+  seeds 0/1/2. Build b31554d75753.
+- M3-DIT uses CelebA32 Small-DiT raw pixels at fixed rho=0.3, seed 0 only.
+  Both f_mem and FID appear without an across-seed uncertainty estimate.
+  Build bce5c65ba5f4. Both variants select each seed's own best FID and pair
+  memorization at that checkpoint; exact FID ties select the earlier step.
+- Extended the existing shared run/metric loader and best-FID summary rather
+  than copying a plotting pipeline. Catalog validation rejects mixed fixed
+  rho/calibrated alpha labels and unsupported seed/uncertainty declarations.
+  Kept absent single-seed SD as None. Wrote PDF/SVG, captions, input/code
+  fingerprints, and source archives under outputs/paper_figures/.
+- Verification in local memcompgen (Python 3.10.19, Matplotlib 3.10.8):
+  11 targeted pytest checks passed for calibration selection, checkpoint ties,
+  per-seed pairing, sample SD, absent single-seed uncertainty, and catalog
+  provenance contracts. Ruff and git diff --check passed. Independently joined
+  the source CSVs and checked 54 U-Net and 18 DiT selected checkpoints and
+  all 36 matrix cells. Checked accepted run protocols and common checkpoint
+  schedules with the existing quality loader. All 36 legacy raw-pixel summaries
+  still match the prior exported summaries. Inspected pdftoppm previews and
+  confirmed both PDFs are 633.6 by 180 points. Current receipts and artifact
+  hashes match. All pre-existing numerical inputs, figure files, and archives
+  are byte-identical; only the existing output README and INDEX were updated.
+- Documented the variants and reproducible selected-pair command in the
+  paper specification, handoff, output README, and repository map. No training,
+  evaluation, commit, or push. Branch remains codex/portable-plot-data;
+  main and the exact approved M2 artifact/build were not changed.
+
+
+## 2026-10-07 - Build M4 / Table 2 with common pixels and a separate feature row
+
+- The researcher requested consistent raw-pixel memorization across datasets
+  plus a separate row for applicable feature metrics. Kept the supplied PDF's
+  Table 2 layout: four dataset/model columns, N=2048, colored x/x, eps/eps,
+  v/v triplets, underlined lowest mean, and a gray quality row.
+- Added plotting/plot_robustness_table.py and catalog M4. It reuses the
+  accepted quality loader, selects the lowest saved FID separately per seed
+  (MNIST uses its primary feature-space FD), and pairs both memorization
+  readouts at that same checkpoint. Exact ties select the earlier step.
+  Raw pixels use fixed rho=0.3 everywhere. Features use SSCD for CelebA and
+  the frozen MNIST digit encoder at held-out-calibrated alpha=0.01.
+- The caption describes SSCD as image-copy-detection descriptors and explains
+  that the MNIST encoder was trained to reconstruct digit images and classify
+  their labels. Verified that definition against the training code and asset
+  manifest; checked the official SSCD source. The caption distinguishes the
+  common pixel threshold from the feature thresholds targeting a 1% held-out
+  flagged rate, and states that both representation and threshold change.
+- All metrics show mean +/- sample SD over three seeds where available.
+  Small-DiT is explicitly seed 0 and has no SD estimate. Printed values come
+  directly from the exports. Two DiT feature percentages round to 98.5 and
+  91.1 rather than the old PDF's 98.6 and 91.2 because their stored floats lie
+  just below the respective one-decimal rounding boundaries; no metric was
+  adjusted to match the old document.
+- Generated draft build 14a15d9cc20d: M4.tex is a manuscript table fragment,
+  M4.pdf previews that exact fragment as Table 2 at 8.8 x 2.4 inches, and
+  separate text/LaTeX captions accompany the receipt and archived source.
+  The fragment scales to the enclosing text width and leaves table numbering
+  to the manuscript. Updated the plan, handoff, repository map, and review list.
+- Verification in local memcompgen: 19 targeted pytest checks passed for
+  selection, calibration filters, missing/duplicate pairs, catalog scientific
+  contracts, and archive semantics. Ruff and git diff --check passed.
+  Independently read source CSVs and checked all 30 selected seed checkpoints,
+  36 displayed means, and 27 sample SDs, including the actual LaTeX numbers.
+  Inspected the pdftoppm preview. pdfTeX 1.40.29 compiled the exact fragment
+  and a separate two-column manuscript wrapper at 6.75-inch text width with
+  automatic numbering and no overfull boxes. Current receipt/artifact hashes
+  match. All pre-existing inputs, figures, and archives remain byte-identical;
+  only the output README and INDEX changed. M2's approved artifact and all
+  M3 versions were preserved. No training, evaluation, commit, or push;
+  branch codex/portable-plot-data and main unchanged.
+
+
+## 2026-10-07 - Restore M4's original four-column manuscript fit
+
+- The researcher preferred the original Table 2's width and supplied both
+  LaTeX versions. Removed the extra metric-label column and the fixed-width
+  resizebox. Four makecells now stack raw-pixel memorization, feature
+  memorization, and gray paired quality within each dataset/model column.
+  The caption specifies that order and retains the metric explanations.
+- Restored pale header/body backgrounds, native small type, and tabular* at
+  the enclosing line width. The supplied PDF's table rules span 486 points
+  (6.75 inches); the new preview uses that text width, with 0.12-inch margins,
+  instead of an 8.8-inch canvas designed for the earlier figures.
+- Generated draft build fc8f3ed80518. Inspected the PDF render and compiled
+  the exact table fragment in a two-column wrapper at 6.75-inch text width.
+  Both compilations passed without overfull boxes. Compared all 36 formatted
+  entries, including every SD and underline, to the preceding M4: identical
+  after accounting for the new column-major ordering. No numerical logic
+  changed. Ruff and git diff --check passed in local memcompgen.
+- Updated the paper specification, handoff, and review list. Prior M4 builds
+  remain archived. Numerical inputs and other figures were preserved; only
+  current M4 outputs and the output README/INDEX changed. No training,
+  evaluation, commit, or push; branch codex/portable-plot-data, main unchanged.
+
+## 2026-10-07 - Remove M4 font and spacing overrides
+
+- Followed the researcher's request to retain the supplied original Table 2
+  styling. M4 now inherits manuscript fonts and tablehead/tablerow/qgray colors.
+  Restored red/blue/green!60!black triplets, text-mode numbers, original small
+  type, arraystretch=1.55, default column padding, and plain makecell breaks.
+  Removed shared font overrides and the custom caption styling. Thin spaces
+  around slashes are needed to fit the added SDs at the original text width.
+- Generated draft fa972b2246c8 with the existing M4 command in memcompgen.
+  pdfTeX compiled one page without overfull boxes; inspected the rendered PDF.
+  Compared against fc8f3ed80518: all 36 means, 27 SDs, and eight underlines
+  are unchanged. Numerical inputs and pre-existing other figures/archives
+  remain byte-identical. Ruff and git diff --check passed; receipt is current.
+- Documented M4's explicit exception to the shared figure typography.
+  No training, evaluation, commit, or push. Branch codex/portable-plot-data;
+  main unchanged.
+
+## 2026-10-07 - Use the original compact M4 numbers and add a metric column
+
+- The supplied original shows means only. Displaying every mean with its SD
+  caused the width pressure in the preceding versions. Restored means-only
+  triplets and ordinary slash spaces, then added a left-hand Metric column
+  for raw pixels, features, and best quality. Kept the original small type,
+  row spacing, default column padding, colors, and manuscript text width.
+- Shortened the caption, stated that displayed values are means, and retained
+  per-seed best-quality selection, metric definitions, thresholds, and seed
+  coverage. Updated the M4 catalog contract to uncertainty=none. The loader
+  still computes sample SD; the previous SD table remains archived.
+- Built 515a0307ff37 in memcompgen. pdfTeX compiled at 6.75-inch text width
+  without overfull boxes; inspected the PDF. All 30 selected checkpoints,
+  computed means/SDs, 36 displayed means, and eight underlines match the
+  prior results. Numerical inputs and all other figures/archives are unchanged.
+  Sixteen targeted robustness/catalog tests, Ruff, and git diff --check passed.
+- No training, evaluation, commit, or push. Branch codex/portable-plot-data;
+  main unchanged.
+
+## 2026-10-07 - Record explicit approval of M4
+
+- The researcher approved the compact robustness table and asked to check it
+  off. Marked exact build 515a0307ff37 approved in the catalog, paper checklist,
+  handoff, and output review list; refreshed the linked index without rendering.
+- In memcompgen, validated the catalog and confirmed approved/current status.
+  All M4 artifact hashes remain unchanged. No plot code, inputs, or other
+  approvals changed. No commit or push; branch codex/portable-plot-data,
+  main unchanged.
+
+## 2026-10-07 - Name main timescales M5 and the theory addition M6
+
+- The researcher explicitly assigned M5 to tau_gen, tau_mem, and their signed
+  gap, and moved the planned theory/computation item to M6. Changed the U-Net
+  timescale catalog entry from A3 to M5 with main-text placement. F12/TS01
+  aliases now resolve to M5. A3 remains the extended appendix group, including
+  A3_DIT. M6 remains planned, with no invented renderer or completion status.
+- Updated the checklist, handoff, repository map, plotting guide, output list,
+  CLI naming, and the future M2 caption reference. Generated only M5 from the
+  existing unchanged timescale renderer: draft build 2f7c2a183a0e, PDF/SVG and
+  captions. No evaluation or CSV export was run.
+- In memcompgen, all eight catalog tests, Ruff, and git diff --check passed.
+  Checked M5's current receipt, main-text placement, aliases, and PDF preview.
+  Hashes confirm that every pre-existing numerical input, figure, and archive
+  remains unchanged, except the output README and index. M2/M4 retain their
+  exact approved-build IDs. The conservative all-code hash marks older source
+  receipts stale after these naming edits; their approved artifacts are intact.
+- No training, evaluation, commit, or push. Branch codex/portable-plot-data;
+  main unchanged.
+
+## 2026-10-07 - Crop workshop Figure 4 and use its horizontal timescale layout
+
+- Extracted page 8 of the supplied workshop PDF and cropped Figure 4's vector
+  artwork, including all labels. Saved PDF/PNG and source hash/crop coordinates
+  under outputs/paper_figures/references/. This reference supplies no numerical
+  inputs to the current plots.
+- Replaced the shared M5/A3_DIT stack with three horizontal panels on a
+  6.75-by-1.95-inch canvas. Used linear time axes with 10^6 multipliers,
+  matching limits for tau_gen/tau_mem, small markers, thin lines, full axes
+  frames, and short mathematical labels. Removed large headings and footer
+  text; the separate captions supply definitions and color/marker keys.
+- Preserved raw pixels at rho=0.3, sustained 5% onset, per-seed pairing,
+  sample SD, negative gaps, and explicit censored lower bounds. The DiT gap
+  panel fits its observed negative range and retains the zero reference.
+- Generated M5 build 1632be7bf6a4 and A3_DIT build 68d2ee0590c5, plus PNG
+  display previews named by build ID. Inspected both rendered PDFs and the
+  workshop crop. The earlier stacked M5 remains archived.
+- In memcompgen, all 48 per-seed times and 24 summaries (including SDs and
+  lower bounds) match the preceding code exactly. All numerical inputs,
+  pre-existing other figures, and archives remain byte-identical. Current
+  receipts/captions, eight catalog tests, Ruff, and git diff --check passed.
+- Updated the current plan, handoff, repository map, and output review list.
+  No training, evaluation, CSV export, commit, or push. Branch remains
+  codex/portable-plot-data; main unchanged.
+
+
+## 2026-10-07 - Retain original workshop M5 and begin A2/A5 comparisons
+
+- The researcher selected the original workshop Figure 4 for M5 and requested
+  a revised caption plus work on representation/threshold agreement. M5 now
+  copies the vector crop exactly. The caption states CelebA32 grayscale U-Net,
+  seven training sizes, raw pixels at rho=0.5, first 1% onset, mean +/- SE,
+  and assignment of unobserved onsets to the final checkpoint. It explains
+  the resulting plateaus and capped gaps without claiming observed onsets or
+  a continuous generation window. Build 686001f79577 remains caption-review
+  draft; selection of the artwork does not approve a new caption silently.
+- Added the portable source crop/provenance under plotting/references/ and
+  a minimal reproduction renderer. Catalog receipts hash/archive both source
+  assets. The previous current-data M5 remains in its original archive and
+  its renderer is registered as A3_UNET, alongside A3_DIT. No historical
+  numerical values were extracted, interpolated, or mixed into current data.
+- Generated initial A2 (16680788af83) and A5 (f9bcf9a596cc) drafts using the
+  same 36 current CelebA32 U-Net diagonal runs at their own best-FID step.
+  A2 compares pixels, SSCD, LPIPS, and DINOv2 calibrated at alpha=0.01.
+  A5 compares fixed raw-pixel rho=0.3/0.5/0.7. Four N panels use mean +/-
+  sample SD, canonical target colors, and shared bold STIX target labels.
+  Both use one shared renderer and write PDFs/SVGs, captions, and receipts.
+- Scientific readout: the fixed-rho mean ordering eps/eps < v/v < x/x
+  persists across all four N, but representation rankings can change.
+  At N=1024 calibrated DINOv2 gives x/x=53.6% versus eps/eps=61.3%.
+  This is an aggregate-rate comparison, not per-image agreement or a
+  significance test. The scalar exports cannot supply per-image overlap.
+  Neither draft tests the first-1% versus sustained-5% onset definition;
+  that belongs to A3. Calibrated-alpha sweeps and other datasets are planned.
+- Verification in local memcompgen: 11 targeted tests passed for checkpoint
+  pairing, earliest ties, missing/duplicate readouts, and catalog archives.
+  Independent CSV joins matched all 36 selected checkpoints and 252 metric
+  readouts; independent arithmetic matched 84 means and sample SDs. Ruff and
+  git diff --check passed. Inspected final PDF renders; the three caption
+  fragments compiled with pdfTeX 1.40.29 without overfull boxes.
+- M5 is byte-identical to the selected source crop. Verified current receipts,
+  archived artifacts, and archived reference assets. All pre-existing input
+  data, other figures, and archives are unchanged; only M5 current aliases,
+  README/INDEX and the reference provenance note were updated. M2/M4 exact
+  approved artifacts and approval IDs remain unchanged. The obsolete current
+  M5 SVG was removed from its alias; its archived copy remains intact.
+- Updated the plan, local handoff, plotting guide, repository map, and output
+  review list. No training, evaluation, CSV export, commit, or push. Branch
+  remains codex/portable-plot-data; main unchanged.
+
+
+## 2026-10-07 - Interpret A2/A5 and draft two caption options for each
+
+- Re-read the current 252 selected memorization readouts and verified the
+  metric definition r=d1/d2 with the strict flag r<rho. Checked held-out
+  quantile calibration in the implementation; alpha targets a held-out
+  flagged rate and does not guarantee agreement on generated-image flags.
+- Summarized the broad decline with training-set size, the stable mean
+  ordering across fixed pixel rho values, and representation-dependent
+  rankings. Pixels, SSCD, and LPIPS give the lowest mean to eps/eps at every
+  displayed N; DINOv2 gives x/x below eps/eps at N=1024 and close v/v and
+  eps/eps means at N=4096. These are descriptive seed means, not claims of
+  universal ordering, per-image agreement, or statistical significance.
+- Added short and fuller appendix caption alternatives for each figure under
+  outputs/paper_figures/, as .caption.short.txt/.tex and
+  .caption.appendix.txt/.tex. They state dataset/model, four N panels,
+  threshold/calibration rule, per-seed best-FID pairing, 10,000 samples,
+  target color/marker key, and three-seed sample SD. Fuller captions include
+  numerical examples and limits of interpretation. Each TeX file identifies
+  its existing figure build in a comment.
+- Checked the printed claims against the selected source values and checked
+  LaTeX delimiters and replacements. No numerical inputs, plot code,
+  generated figures, default captions, catalog entries, or archived builds
+  changed. No training, evaluation, commit, or push; branch remains
+  codex/portable-plot-data and main unchanged.
+
+
+## 2026-10-07 - Add A5 trajectory threshold-sensitivity companion
+
+- The researcher requested both the existing best-FID summary and a version
+  following workshop Appendix A.3 Figure 7. Registered A5_TRAJECTORIES and
+  extended the shared sensitivity renderer with a 3x3 grid: epsilon/epsilon,
+  v/v, x/x rows and rho=0.3/0.5/0.7 columns. Used the current CelebA32 U-Net
+  four-size, three-seed data exclusively from plot_data/.
+- Reused the existing fixed-rho loader and M2's target colors and N shades/
+  line styles. All 72 checkpoints contribute to aggregation, including zeros;
+  the 71 positive steps are displayed on log axes. Zero mean values break
+  lines; no positive values are fabricated. Small markers preserve isolated
+  positive observations. Mean +/- sample SD bands are clipped only for
+  display. The concise caption explains the grid and log-axis handling.
+- Generated draft c4fd8a7b639e: PDF/SVG, text/LaTeX captions, build receipt,
+  source archive, and a preview named by build ID. Inspected the final PDF
+  render. The caption compiled with pdfTeX 1.40.29. Existing A5 best-FID
+  outputs and all other figure artifacts/captions remain unchanged.
+- Verification in local memcompgen: independent CSV joins matched all 7776
+  source values (36 runs x 72 checkpoints x three rho values) and all 2592
+  mean/sample SD summaries. Confirmed rho monotonicity and identical step
+  schedules; the smallest positive plotted mean is 1/30000. Twelve targeted
+  tests passed, including zero-valued seed inclusion before log display.
+  Ruff and git diff --check passed. Current receipt and archive hashes match.
+- Preservation hashes confirm that all pre-existing plot_data inputs, other
+  figures, captions, and version archives remain byte-identical; only the
+  output README and INDEX were updated. Updated the figure plan, handoff,
+  and repository map with the focused reproducible command. No training,
+  evaluation, CSV export, commit, or push. Branch codex/portable-plot-data;
+  main unchanged.
+
+## 2026-10-07 - Shorten the A5 trajectory caption
+
+- Replaced the detailed A5_TRAJECTORIES caption with a concise account of
+  the panel layout, threshold effect, lower late-training eps/eps rates,
+  training-size key, three-seed sample SD, and omitted zeros on log axes.
+  Updated the existing caption generator and saved both plain-text and
+  LaTeX versions through the catalog build, 8a701abbeb2f.
+- The focused memcompgen build succeeded. Checked the late-training claim
+  against every saved step from 100k onward for all four sizes and three
+  thresholds. Caption text matches the generator and receipt; input hashes
+  are unchanged. Previous builds remain archived. No numerical inputs,
+  plot layout, training, or evaluation changed.
+
+## 2026-10-07 - Joint FID/memorization full grids for U-Net and DiT
+
+- Inspected workshop appendix Figure 5 on PDF page 11. Reused its dotted
+  FID/left-axis and solid F_mem/right-axis convention in full prediction/loss
+  3x3 grids. The researcher explicitly chose all four training sizes overlaid
+  in each cell. A1 is CelebA32 grayscale U-Net; added A1_DIT for Small-DiT.
+- Extended the existing grid template and aggregation to support DiT seed 0
+  without estimating sample SD. Both figures use raw pixels at rho=0.3,
+  prediction colors, size shades/markers, identical linear metric ranges,
+  and logarithmic training steps. U-Net retains three-seed mean/sample SD.
+  All 71 positive steps are displayed without smoothing; step zero remains
+  in the source records and the 72-checkpoint aggregation.
+- Executed `python plotting/figures.py A1 A1_DIT` in local memcompgen,
+  producing builds a54071c96364 and 626e51c96721. Saved PDF/SVG, concise
+  text/LaTeX captions, receipts, source archives, and previews named by build.
+  Inspected both Poppler renders. Both captions compiled at manuscript width
+  with pdfTeX, without overfull boxes or undefined commands.
+- Independently joined the original CSV records for all 108 U-Net and 36 DiT
+  runs: checked all 20736 source values, 10368 means/SDs, sample counts, image
+  format, and matching FID/F_mem checkpoint schedules. Artifact receipt hashes
+  match. Sixteen targeted tests passed, including zero-valued seeds, missing
+  single-seed SD, and mismatched checkpoints. Ruff and git diff --check passed.
+- Preservation hashes confirm all 254 pre-existing plot-data and paper-output
+  files remain unchanged except README/INDEX. Updated the figure plan,
+  handoff, map, and review list. No numerical exports, training, evaluation,
+  commit, or push. Branch remains codex/portable-plot-data; main unchanged.
+
+## 2026-10-07 - Increase line distinction in A1 and A1_DIT
+
+- Strengthened the four size shades within each prediction-target hue and
+  increased line width from 1.35 to 1.65 points. Enlarged size markers from
+  3.1 to 4.3 points and staggered their placement across saved checkpoints,
+  so coincident trajectories no longer place every marker on top of another.
+  FID retains dotted lines and hollow markers; F_mem retains solid lines
+  and filled markers with white edges. No data coordinates changed.
+- Rebuilt both through the catalog in memcompgen: A1 651f57677848 and
+  A1_DIT a8e822a66262. Inspected both Poppler previews and saved them beside
+  the outputs. Receipt hashes match. Numerical input hashes, captions, other
+  figures, and all prior archives are unchanged. Ruff and git diff --check
+  passed. This was a visual-only adjustment; no new numerical tests needed.
+
+## 2026-10-07 - Explicit four-shade palettes for the joint grids
+
+- Replaced blended tints with four selected shades within each red, blue,
+  and green family, ordered darkest N=512 to lightest N=4096. Both metrics
+  retain the same shade for a given size. The size legend now shows all
+  three actual target shades instead of gray markers. Larger staggered
+  markers and dotted FID/solid F_mem conventions remain in place.
+- Updated the concise captions to state the dark-to-light size ordering.
+  Rebuilt A1 b97087025b26 and A1_DIT 66d374819b1f in memcompgen and inspected
+  both Poppler previews. Updated the review list and handoff with the palette
+  owner GRID_SIZE_COLORS. Artifact receipts match; numerical input hashes,
+  other figures, and prior archives remain unchanged. Ruff and git diff
+  --check passed. No numerical computation logic or evaluation changed.
+
+## 2026-10-07 - Remove F_mem markers from both joint grids
+
+- Removed markers only from the solid F_mem curves in A1 and A1_DIT;
+  dotted FID retains its larger, staggered markers. Updated both captions
+  to identify markers as FID markers. Rebuilt in memcompgen: A1 05543ae29401
+  and A1_DIT c4c62229008d. Inspected both Poppler previews. Input hashes
+  match the previous builds; the numerical calculations are unchanged.
+
+## 2026-10-07 - Remove remaining FID markers from the joint grids
+
+- Removed FID markers in A1 and A1_DIT, leaving dotted FID and solid F_mem
+  with four size shades. Replaced marker legend keys with color swatches and
+  updated the captions. Rebuilt both in memcompgen: A1 38310d9ad2fa and
+  A1_DIT 47f139447af6. Inspected both Poppler previews. Numerical inputs
+  match the previous builds; artifact receipts verified. Prior builds remain
+  archived. No numerical calculations or evaluation records changed.
+
+## 2026-10-07 - Use clear line samples in the bottom legend
+
+- Lengthened and thinned the three colored legend samples for each training
+  size in both joint grids so they read as lines rather than small blocks.
+  Rebuilt in memcompgen: A1 25d0461836dd and A1_DIT c193bb3f5dcb. Inspected
+  both Poppler previews; the legend fits without overlap. Artifact receipts
+  and unchanged numerical input hashes verified. Captions and curves retain
+  the previous content. Prior builds remain archived.
+
+## 2026-10-07 - Audit theory notebook and draft linear/RFN paper text
+
+- The researcher opened the figure/final-rewrite session and selected the
+  supplied theory notebook and pasted theory draft for review. They fixed the
+  scope to linear prediction plus frozen random-feature networks, with no RMT,
+  and requested the unified predictor B_q*phi(z): identity or nonlinear features.
+- Independently verified the linear velocity equation, initialization effect,
+  gap identity, general-t slopes, midpoint cubic epsilon term, and random-init
+  correction. The linear result measures fitting of sample second moments;
+  at the Gaussian midpoint, zero velocity is already population-optimal.
+- Reconstructed exact linear curves in local memcompgen without running SGD.
+  The 50-dataset epsilon mean retains a quadratic residual: its first five
+  plotted log-log values are nonpositive. The cubic diagnostic needs an
+  explicitly labelled zero-mean correction or a more accurate ensemble mean.
+- Derived and independently reviewed the finite-feature expected initial-gap
+  slope, expressed as the variance of per-example feature--target moments.
+  Deterministic enumeration/Gaussian quadrature agreed within 7e-17 and the
+  Stein identity within 1.2e-16. Nonlinear features can give a linear epsilon
+  term; neither cubic delay nor a shared limiting velocity transfers generally.
+- Added proposed main/appendix TeX snippets and a detailed audit under
+  notebooks/theory/. Both compile in a temporary two-column article wrapper;
+  the main text occupies one page without a figure. No overfull equations or
+  unresolved references remain after reruns. Actual manuscript layout remains
+  unchecked. Updated the repository map and M6 planning status.
+- Existing notebook and figures remain unchanged. Their cleared execution
+  record does not verify saved SGD results. The RFN source has no computed
+  exact-trajectory overlay; numerical moments and final M6 rendering remain
+  outstanding. No training, model evaluation, cluster action, commit, or push.
+  Branch codex/portable-plot-data; main unchanged.
+
+## 2026-10-07 - Combine selected linear and RFN initialization panels
+
+- The researcher requested the rightmost A_init_sweep panel beside one RFN
+  panel. Explained that the RFN panels differ only in zero versus Gaussian
+  random readout initialization. Selected its random-initialization panel to
+  pair the common entry-variance rule 1/p, with p=d for linear features.
+  This rule does not match initial velocity functions or feature variances.
+- Split the two existing simulation/plotting cells in the theory notebook.
+  Named result dictionaries preserve each study's arrays and time grids, so
+  replotting no longer depends on globals overwritten by the other study.
+  Added a separate combined M6 cell with shared axes, canonical paper style,
+  target colors, seed counts, median curves, and 10--90% intervals. Retained
+  the linear panel's exact zero-initialization mean references and labelled
+  them separately. Saves M6.pdf/M6.png to the existing OUT directory.
+- Updated notebook instructions, the theory audit, M6 plan, repository map,
+  and plotting handoff. The user's selected gap-only layout supersedes the
+  earlier proposed four-panel layout. The log-log figure is not in M6.
+- Verification in local memcompgen: all code cells compile; nbformat validates
+  with the supplied notebook's existing missing-cell-ID warning. AST checks
+  confirm both simulation bodies are unchanged. Both original renderers and
+  the new combined renderer execute with synthetic fixtures. Checked selected
+  medians, exact-reference arrays, original time grids, common axes, and the
+  three intervals per panel. Inspected the labelled synthetic layout preview.
+  All six supplied PDF/PNG files remain byte-identical. No training ran and no
+  empirical M6 render is claimed. The researcher runs both simulation cells
+  once to populate the new dictionaries, then reuses the M6 plotting cell.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Match M6 paper styling and place legends inside panels
+
+- The researcher requested the same visual style as the main/appendix figures
+  and explicitly placed legends inside the plots. Inspected current A1/A2
+  previews and the M2/A1/A5 renderers before changing the notebook's M6 cell.
+- Used the common 8.8-inch width, DejaVu Sans/STIX typography, bold target
+  symbols, compact titles with panel letters, thin axes/ticks, light dotted
+  major grid, and lighter uncertainty bands. Removed the large initialization
+  heading and separate seed-count title rows; these belong in the caption.
+  Target legends sit inside both panels. The linear panel also contains the
+  solid/dashed reference and interval key. There is no bottom legend.
+- Only the M6 Markdown and rendering cells changed in the notebook. The
+  simulation code, selected runs, percentiles, references, and time grids are
+  unchanged. Updated the M6 style plan. No training or model evaluation ran.
+- Verification in local memcompgen: notebook code compiles; synthetic-fixture
+  renders pass exact checks of every line coordinate and band vertex against
+  the previous renderer. Font, grid, spine width, and in-axes legend bounds
+  pass. Visually inspected the labelled layout preview. All eight current
+  theory figure files, including the researcher's M6, remain byte-identical;
+  rerunning the M6 cell applies the new style to the live simulation arrays.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Save notebook M6 beside the other paper figures
+
+- The researcher requested the shared M/A figure destination. Changed only
+  the notebook's M6 export path and its instructions to use
+  outputs/paper_figures/M6.pdf and M6.png, resolved from the repository root.
+- Copied the researcher's current M6 PDF/PNG into that folder. Source and
+  destination hashes match. Added M6 to the folder README and index as a
+  notebook draft without a catalog receipt, and updated the destination notes.
+- Local memcompgen checks: every notebook code cell compiles; only the M6
+  Markdown/rendering cells differ. Checked root resolution from both the repo
+  and notebook directory, and checked both save paths with a recording sink.
+  No training or rendering was needed. Existing source figures remain intact.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Stack M6 and remove the empty early RFN time range
+
+- The researcher requested stacked panels and noted the empty start of RFN.
+  M6 now places linear above RFN at 4.4 by 5.4 inches, with the shared paper
+  style and legends inside. The vertical limits remain common; each log-time
+  axis covers its own plotted points with a small margin. No values or times
+  were rescaled, removed, or interpolated.
+- Recomputed only the RFN step-size pilot in local memcompgen. Its largest
+  feature-moment eigenvalue is 3.8656426, so the first recorded time is
+  0.3/lambda_max = 0.0776068. The previous shared axis began near 0.003.
+  That empty interval has no recorded RFN points; it does not show an absence
+  of learning. Resolving earlier times requires smaller updates and a new run.
+- Changed only M6 Markdown/rendering cells in the notebook and corresponding
+  notes. All code cells compile; nbformat validates with the existing missing
+  cell-ID warning. A synthetic-fixture render preserves every curve coordinate
+  and interval vertex, has stacked panels with common y limits and separate
+  x limits, and keeps all legends inside. Inspected the labelled preview.
+- Verification command: MPLCONFIGDIR=/tmp/theory_combined_mpl conda run
+  --no-capture-output -n memcompgen python /tmp/check_theory_stacked.py.
+  All existing empirical figure files remain byte-identical. The researcher
+  must rerun only the M6 cell in the populated kernel to export the new layout
+  to outputs/paper_figures/M6.pdf and M6.png. No training or model evaluation
+  ran. No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Enlarge M6 text relative to the stacked panels
+
+- The researcher found the text too small relative to the panels. Reduced M6
+  from 4.4 by 5.4 to 4.2 by 4.8 inches. Increased labels and titles to 12 pt,
+  ticks to 10.5 pt, and legends to 10.5--11 pt. Preserved the researcher's
+  14-point panel letters. Put target keys in one row inside each panel;
+  the linear reference key sits below them. Both time axes remain labelled.
+- Changed only the two M6 notebook cells and the figure size/style note.
+  Preserved all other cells, simulation code, existing outputs, and figure
+  files. The M6 cell still exports to outputs/paper_figures/M6.pdf and M6.png.
+- Local memcompgen check: /tmp/check_theory_readability.py compiled all code
+  cells and rendered synthetic arrays to /tmp only. Curve coordinates, band
+  vertices, and axis limits match the previous renderer exactly. All legends
+  fit inside the axes. Inspected the preview. No training or evaluation ran;
+  rerun M6 with the live result dictionaries to update empirical exports.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Remove M6 legends and shorten vertical labels
+
+- Removed all legends from both M6 panels at the researcher's request. Both
+  vertical labels now show only Delta G_q(tau). Removed unused legend imports
+  from the M6 cell and moved the color/style key into the caption notes.
+- Preserved the compact stacked layout, enlarged text, curves, intervals,
+  axis limits, and export paths. Only M6 Markdown/rendering cells changed in
+  the notebook; existing saved notebook outputs remain until the next rerun.
+- Local memcompgen runtime check with /tmp/check_theory_no_legends.py:
+  all code compiles; a synthetic render has no legends and the requested
+  vertical labels. Curve/band coordinates and axis limits match the prior
+  renderer. All other cells and existing empirical exports are unchanged.
+  No training ran. Rerun only M6 with live result arrays to update the exports.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Build A4 matched velocity-weighting comparison
+
+- The researcher selected A4 and requested an inspection and paper-style
+  revision. Showed the earlier diagonal-versus-weighted plot. Offered the
+  scientific choice between diagonal and matched-row comparisons; with no
+  reply during the inspection, proceeded with the existing A4 plan and kept
+  the diagonal variant separate. No original figure export was overwritten.
+- Registered A4 as the matched velocity-output comparison in the existing
+  weighting renderer. Explicit native-v/v weights (1-t)^2 and t^2 are paired
+  with matrix v/x and v/eps. One matrix v/v baseline is retained per N/seed;
+  all six repeated unit controls match exactly and are not extra seeds.
+  A4_DIAGONAL retains its original selection and legacy aliases.
+- Verified matched exported protocol fields and saved data-bundle hashes.
+  Across paired checkpoints, maximum absolute FID/raw-pixel f_mem differences
+  are 1.3912404/0.00690001 for x weighting and 0.3332987/0.00610000 for epsilon
+  weighting. This is close numerical agreement, not identical trajectories.
+  No cause for the small differences was established; the portable bundle
+  does not independently audit complete frozen evaluation manifests.
+- Styled the 2x2 figure at 8.8 by 4.1 inches: N=512/2048 columns, log FID
+  above linear f_mem, shared DejaVu Sans/STIX typography, thin axes, light
+  SD bands, no markers, panel letters, and legends inside the lower panels.
+  All 71 positive checkpoints appear on log training-step axes; step zero
+  stays in the source data. Moved explanatory details into TXT/LaTeX captions.
+- Ran `MPLCONFIGDIR=/tmp/theory_combined_mpl conda run --no-capture-output
+  -n memcompgen python plotting/figures.py A4`. Draft build fb007ce22e62:
+  outputs/paper_figures/A4.pdf, A4.svg, captions, receipt and source archive.
+  Inspected the Poppler preview; saved previews/A4__fb007ce22e62.png. The
+  LaTeX caption compiles as a one-page fragment without overfull warnings.
+- Verification in local memcompgen: figure-catalog tests 10 passed; Ruff
+  passes for both changed Python files. /tmp/check_a4.py independently checks
+  30 distinct runs, 4320 source values, 1420 plotted means/SD intervals,
+  exact old diagonal selection/summaries, legend bounds, artifact hashes,
+  and unchanged source CSVs and existing figure exports. No training or
+  model evaluation ran. Updated the plan, handoff, repo map and output README;
+  preserved the manually listed M6 notebook export in the refreshed index.
+  No approval inferred. No commit or push; codex/portable-plot-data, main unchanged.
+
+## 2026-10-07 - Restore the F07 comparison and move A4's legend above the panels
+
+- The researcher requested external legends with x-equivalent and
+  epsilon-equivalent names, then clarified that A4 should resemble old F07.
+  Inspected F07.pdf and restored its five conditions: x/x, eps/eps, v/v,
+  native-v/v with (1-t)^2, and native-v/v with t^2. This replaces the earlier
+  matched-row selection for the current A4, not its archived versions.
+- Used a shared two-column legend above the panels, retaining the weight
+  formulas. The 8.8 by 4.9-inch canvas preserves readable panel sizes and
+  current paper fonts, thin axes, light bands, and panel letters. No large
+  explanatory heading or markers. Log time displays 71 positive checkpoints;
+  raw-pixel rho=0.3 and three-seed sample SD remain unchanged.
+- Current draft is 601dad7c7933 in outputs/paper_figures/A4.pdf/.svg, with
+  updated TXT/LaTeX captions and previews/A4__601dad7c7933.png. Intermediate
+  matched draft c5e7ad733499 and original matched draft fb007ce22e62 remain
+  archived. Old F07 exports and other figures are unchanged.
+- Local memcompgen runtime check /tmp/check_a4_f07.py independently verifies
+  all 4320 source values and 1420 mean/SD intervals for 30 distinct runs.
+  The original diagonal selection and summaries are identical. The single
+  legend fits above the panels; receipt hashes pass and source CSVs are
+  unchanged. Ruff passes. Inspected the Poppler preview; the LaTeX caption
+  compiles without overfull warnings. No training or evaluation ran.
+- Updated the current plan, handoff, repo map, README and index to reflect
+  the clarified comparison. Retained M6's manual notebook-export index row.
+  No commit or push; branch codex/portable-plot-data and main unchanged.
+
+## 2026-10-07 - Package main and appendix figure includes for Overleaf
+
+- The researcher requested two LaTeX files with figure includes and captions,
+  using a figures/ asset folder in Overleaf. Added results_figures.tex and
+  appendix_figures.tex to outputs/paper_figures/. Both are document fragments
+  with descriptive labels and no document class, section, or counter changes.
+- Main results include M2--M6. M4 remains the exact native approved table,
+  with its existing tab:robustness label and non-overriding color fallbacks.
+  M6 uses one column; M2/M3/M5 span the text width. M1 remains the existing
+  setup figure. Captions state metrics, thresholds, seed counts, and visual
+  keys; M6 uses the notebook's FAST=False counts of 40 linear and 20 RFN seeds.
+- Appendix includes A1, A1_DIT, A2, A3_DIT, A4, A5 and A5_TRAJECTORIES.
+  It uses the latest F07-style A4 and current caption fragments, including
+  A2/A5's short options. M3-SSCD and M3-DIT are complete commented optional
+  blocks, preserving their unassigned status. No missing A3_UNET reference
+  or excluded notebook diagnostic/log-log figure was inserted.
+- Created overleaf_figures.zip with both fragments, 13 unchanged PDFs under
+  figures/, and README upload/preamble instructions. The M4 preview PDF is
+  not needed because its table is embedded. Verified all ZIP asset hashes,
+  12 unique active labels, and the exact embedded M4 table body.
+- Validation: pdfTeX 1.40.29 compiled a two-column results wrapper and a
+  one-column appendix at 6.75-inch text width (9 pages), plus both optional
+  matrices (1 page). No missing files, oversized floats, or overfull boxes.
+  Rendered with Poppler and inspected every figure/table page. This checks
+  the fragments, not final placement in the unavailable Overleaf manuscript.
+  Initial compile from the repo root could not resolve fragment paths; the
+  intended project-root layout compiled successfully after setting its cwd.
+- Packaging checks ran in local memcompgen; no data, PDF export, caption
+  source file, plotting code, or experiment was changed. Updated the output
+  README and repo map. No commit or push; codex/portable-plot-data, main unchanged.
+
+## 2026-10-07 - Reconcile the supplied results fragment with current figure exports
+
+- Added outputs/paper_figures/results_figures_reconciled.tex as a separate
+  alternative. Preserved the supplied active float order: M2 trajectories,
+  M3 prediction/loss matrix, M5 timescales, and the native M4 robustness table.
+  Preserved all five supplied active section/figure/table labels and the
+  appendix paragraph. Retained M6 from the complete main-figure fragment at
+  the end, with a note to move it beside the theory discussion as needed.
+- Clarified that repository M identifiers do not specify manuscript figure
+  numbers: the timescale plot previously called Figure 4 is asset M5; M4 is
+  the table. Replaced legacy PDF paths with figures/M2.pdf, M3.pdf and M5.pdf,
+  and removed trim settings intended for earlier exports.
+- Corrected M2's caption to cover all eight panels and M3's caption to specify
+  raw-pixel rho=0.3 and sample SD. Kept M5's distinct historical rho=0.5,
+  first-1% onset, standard errors, and capped unobserved onsets explicit.
+  The M4 table is byte-identical to both the supplied and canonical tables.
+- Validation: local memcompgen checked all six labels are unique and all
+  referenced assets exist. pdfTeX 1.40.29 compiled a two-column wrapper twice
+  at 6.75-inch text width, producing four pages. Poppler rendered all pages;
+  visual inspection found no clipping or overlapping content. No errors,
+  missing assets, oversized floats, or overfull boxes; two underfull caption
+  lines remain. Final float placement depends on the Overleaf manuscript.
+- SHA-256 checks preserved all 75 pre-existing top-level paper-figure files
+  and the supplied attachment, including both earlier LaTeX fragments, the
+  ZIP, PDFs, and caption sources. No plotting, training, or evaluation ran.
+  Updated the repo map. No commit or push; codex/portable-plot-data, main unchanged.
+
+## 2026-11-19 - Make plain technical English the first communication priority
+
+- The researcher requested priority 1 for plain, simple technical English.
+- Added the first communication section to root AGENTS.md. It covers replies,
+  notes, documentation, and code comments. It requires a check before sending.
+- Checked the added text and Git whitespace. No code or experiment changed.
+- This rule applies to this repository. No account settings changed.
+
+
+## 2026-11-19 - Preserve the local paper work for rebuttal
+
+- The researcher approved a GitHub push, a fixed paper-file snapshot, and
+  a separate codex/rebuttal branch for new work.
+- Backed up all 40 changed files and 342 paper files under
+  outputs/handoffs/rebuttal_backup_20261119T115801Z/. Verified ZIP contents
+  against the recorded SHA-256 hashes before staging any files.
+- Reviewed the pending code, notebook, figures, tests, and documentation.
+  Preserved notebook bytes and saved outputs. No experiment or figure ran.
+- Local memcompgen: 28 focused plotting tests passed in 11.36 seconds.
+  Ruff passed for all 19 pending Python files. All 19 files parsed, all ten
+  notebook code cells compiled, and all 24 plot-data CSV hashes and sizes
+  matched their manifests. No credential markers were found in pending text.
+- Notebook schema validation completed with an existing missing-cell-ID
+  warning. No notebook normalization or execution was performed.
+- All 47 current paper artifacts matched their build-record hashes. All
+  13 current build archives exist. This does not validate saved SGD results
+  or change any figure approval.
+- Fetched origin before committing. Prepared the existing plotting handoff
+  and repository map for the fixed snapshot and separate Berzelius checkout.
+- SSH authentication failed before any remote command ran. The cluster
+  checkout, jobs, and environment remain unverified. No compute was launched.
+
+
+## 2026-11-19 - Save the fixed paper-file snapshot
+
+- Created paper_snapshots/2026-11-19/ from the verified local backup.
+  The archive preserves all 342 paper files, including captions,
+  Overleaf fragments and package, previews, references, and build versions.
+- Recorded source code commit 8c43c8662d7ade6468e8df5730f5bae5ad7096a1, the unchanged theory
+  notebook hash, each file size and SHA-256, and the archive hash.
+- Verified every ZIP member against the manifest in local memcompgen.
+  SHA256SUMS covers the ZIP and manifest. The ZIP is 14433932 bytes.
+- The snapshot describes the local workspace, not the submitted manuscript.
+  Existing review states, numerical inputs, and source output files remain
+  unchanged. No notebook, figure, training, or evaluation was rerun.
+
+
+## 2026-11-19 - Prepare the separate Berzelius rebuttal checkout
+
+- Pushed preservation commits 8c43c86 and 35c2d8a to
+  codex/portable-plot-data. Created and pushed codex/rebuttal at 35c2d8a.
+  GitHub confirmed both branches. Main remains at 0cb30dd.
+- After the researcher established SSH login, inspected the cluster checkout,
+  its instructions and latest journals, and the scheduler queue. No jobs were
+  running or pending for x_moalj at the check.
+- The old mem_param_clean checkout remains on codex/reproducible-runners at
+  e5bf94b with additional evaluation work. Backed up all 71 pending files,
+  their hashes, Git status, and the worktree patch without changing them.
+  Backup: mem_param_rebuttal/outputs/rebuttal_setup/legacy_checkout_backup/.
+  Every saved source hash and the old commit were checked again after setup.
+- Cloned GitHub codex/rebuttal into the new sibling directory
+  /proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_rebuttal.
+  It initially matched 35c2d8a exactly. All 24 plot-data CSV hashes and sizes,
+  and all 342 archived paper-file hashes, matched on Berzelius.
+- Loaded Mambaforge and activated mem_param_env. Its research libraries are
+  Python 3.10.20, PyTorch 2.5.1.post303, NumPy 2.2.6, Matplotlib 3.10.8,
+  nbformat 5.10.4, ipykernel 7.2.0, and JupyterLab 4.5.6.
+- Pytest was missing. Created a checkout-local .venv with system site packages
+  and installed pytest 9.1.1, iniconfig 2.3.1, and pluggy 1.7.0 there.
+  The shared Conda environment was not changed. All 28 focused plotting tests
+  passed in 4.97 seconds with PYTHONPATH pointing to the new checkout.
+- Registered the mem_param_rebuttal kernel under .venv/share/jupyter/.
+  Its interpreter and PYTHONPATH point to the new checkout. Environment
+  records are under outputs/rebuttal_setup/. Updated the plotting handoff
+  with activation, imports, tests, paths, and the separate old-code boundary.
+- No training, checkpoint evaluation, paper plot, or experiment was run.
+  No scheduler job was submitted, resumed, cancelled, or changed.
+
+- Copied the old-checkout source backup and environment report to the laptop
+  under outputs/handoffs/berzelius_rebuttal_setup_2026-11-19/. Verified all
+  71 copied source-file hashes. These additional cluster changes remain
+  separate from the GitHub source and the new rebuttal checkout.
+
+- A fresh mem_param_rebuttal notebook kernel started in notebooks/theory/,
+  imported mem_param_src from the new checkout, and used .venv/bin/python.
+  The check passed in 44.78 seconds and the kernel was shut down. An initial
+  30-second import timeout was too short; the repeated check allowed 150
+  seconds. No source change was needed. Kernel evidence is saved in
+  outputs/rebuttal_setup/kernel_check.json on Berzelius.
+
+
+## 2026-11-19 - Combine Berzelius source with local plotting and analysis
+
+- The researcher approved using the full Berzelius source as the base and
+  adding the local plotting and analysis files. This covers the repository,
+  including older studies, not only the 234 accepted production evaluations.
+- Backed up the complete source and Git history before merging. Berzelius
+  has 403 source files, including ten ignored patch backups. The laptop has
+  370 source files. Both backups exist on both machines under
+  consolidation_2026-11-19/, with file hashes and Git-history bundles.
+  Full file restoration and cloned-history fsck checks passed. Transfer
+  checksums passed on both machines. No experiment tensors were archived.
+- Created mem_param_consolidation as a separate source-only test checkout.
+  Commit 5a93b16 preserves all 71 pending Berzelius files. The original
+  mem_param_clean checkout and its artifact directories were left in place.
+- Combined the local branch at 08c07a3. Resolved five conflicts: both journals,
+  the plotting handoff, the repository map, and the plotting grid. Preserved
+  both journal histories and the Berzelius run-status table. Kept the local
+  plotting grid and all other local plotting, theory, and test additions.
+- SHA-256 checks passed for all 290 Berzelius source/config/job files,
+  including ignored source patch copies. All 36 local plotting/analysis/test
+  changes match their original file hashes. Every original source path
+  remains present. All 24 plot-data CSV hashes and sizes also match.
+- Cluster check: Mambaforge mem_param_env with the isolated pytest 9.1.1
+  interpreter, Python 3.10.20, and CPU-only fixtures. All 191 tests and 59
+  subtests passed in 80.72 seconds. Three existing torchvision/LPIPS warnings
+  remain. Tests wrote only new temporary outputs in the test checkout.
+- One existing blank line at the end of tests/test_evaluation_noise.py was
+  reported when preserving the old source. It was left unchanged. The merge
+  introduces no whitespace-check errors relative to that preserved source.
+- Test reports and source checks are under
+  mem_param_consolidation/outputs/consolidation_tests/. Updated the handoff
+  to keep mem_param_clean as the main cluster directory and preserve all
+  existing artifact paths. No model, data, result, or paper export was changed.
+- No scheduler job was submitted, resumed, cancelled, or changed.

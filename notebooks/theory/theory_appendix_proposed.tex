@@ -1,0 +1,345 @@
+% Complete analytical appendix proposal. Requires amsmath, amssymb, natbib.
+% Numerical claims and a final figure caption must follow the audit note.
+% Scope: linear prediction and finite fixed random-feature networks only.
+\section{Target-dependent fitting: derivations and nonlinear features}
+\label{app:target_fitting}
+
+\subsection{Data, targets, and optimization time}
+Draw $n$ clean examples independently from a population $P$ and keep this
+dataset fixed. At a fixed flow time $t\in(0,1)$, form
+\[
+ \mathbf z=t\mathbf x+(1-t)\boldsymbol\epsilon,
+ \qquad \boldsymbol\epsilon\sim\mathcal N(0,I_d),
+ \qquad \boldsymbol\epsilon\perp\mathbf x.
+\]
+The training expectation selects a stored clean example uniformly and
+averages over fresh corruption. The population expectation draws both a
+fresh clean example and fresh corruption. Write these expectations as
+$\mathbb E_{\mathrm{tr}}$ and $\mathbb E_P$.
+The native targets are
+$\mathbf y_x=\mathbf x$, $\mathbf y_\epsilon=\boldsymbol\epsilon$, and
+$\mathbf y_v=\mathbf x-\boldsymbol\epsilon$.
+
+Let $\boldsymbol\phi:\mathbb R^d\to\mathbb R^p$ be fixed and train only
+$B_q\in\mathbb R^{d\times p}$ in
+$f_q(\mathbf z)=B_q\boldsymbol\phi(\mathbf z)$. Define
+\begin{align}
+ U&=\mathbb E_{\mathrm{tr}}[\boldsymbol\phi\boldsymbol\phi^\top],&
+ V_q&=\mathbb E_{\mathrm{tr}}[\boldsymbol\phi\mathbf y_q^\top],\\
+ C&=\mathbb E_P[\boldsymbol\phi\boldsymbol\phi^\top],&
+ V_{P,q}&=\mathbb E_P[\boldsymbol\phi\mathbf y_q^\top].
+\end{align}
+Assume these moments and the displayed risks are finite.
+The feature moments $U,C$ have shape $p\times p$; the feature--target
+moments $V_q,V_{P,q}$ have shape $p\times d$.
+With $c_{q,r}=d^{-1}\mathbb E_r\|\mathbf y_q\|^2$, the losses are
+\begin{align}
+ \mathcal L_{q,\mathrm{tr}}(B)
+ &=c_{q,\mathrm{tr}}+\frac1d\operatorname{tr}(BUB^\top)
+   -\frac2d\operatorname{tr}(BV_q),\\
+ \mathcal L_{q,P}(B)
+ &=c_{q,P}+\frac1d\operatorname{tr}(BCB^\top)
+   -\frac2d\operatorname{tr}(BV_{P,q}).
+\end{align}
+Consequently $\nabla_B\mathcal L_{q,\mathrm{tr}}
+=(2/d)(BU-V_q^\top)$. Throughout this appendix use the rescaled
+gradient-flow time for which
+\begin{equation}
+ \dot B_q=V_q^\top-B_qU.
+ \label{eq:app_readout_flow}
+\end{equation}
+For gradient descent with step size $\eta$ on the stated per-coordinate
+loss, this clock is $\tau=2k\eta/d$. Discrete or stochastic updates
+approximate this flow; the matrix solution below is exact for the flow.
+
+\subsection{Exact solution for any fixed feature map}
+For $U\mathbf u_j=\lambda_j\mathbf u_j$, solve
+$\frac{d}{d\tau}(B_q\mathbf u_j)
+=V_q^\top\mathbf u_j-\lambda_jB_q\mathbf u_j$. This gives
+\begin{equation}
+ B_q(\tau)=B_q(0)e^{-\tau U}+V_q^\top g_\tau(U),\qquad
+ g_\tau(\lambda)=\frac{1-e^{-\lambda\tau}}{\lambda},
+ \label{eq:app_readout_solution}
+\end{equation}
+where $g_\tau(0)=\tau$. The zero-eigenvalue convention makes the formula
+valid for singular $U$. In a training-null direction,
+$V_q^\top\mathbf u_j=0$ because
+$\mathbb E_{\mathrm{tr}}(\mathbf u_j^\top\boldsymbol\phi)^2=0$.
+The corresponding initial component remains unchanged.
+
+An eigenvalue $\lambda_j>0$ gives a response time $1/\lambda_j$.
+These response times are shared across targets. The projection
+$V_q^\top\mathbf u_j$ determines the target-dependent response amplitude.
+Population error also uses $C$ and $V_{P,q}$; eigenvalues of $U$ alone
+do not determine the error curves.
+
+\subsection{Velocity errors and the change in the gap}
+For any feature map, convert predictions to velocities using
+\[
+ \widehat{\mathbf v}_x=\frac{B_x\boldsymbol\phi-\mathbf z}{1-t},\qquad
+ \widehat{\mathbf v}_\epsilon=\frac{\mathbf z-B_\epsilon\boldsymbol\phi}{t},
+ \qquad \widehat{\mathbf v}_v=B_v\boldsymbol\phi.
+\]
+These conversions imply the exact samplewise error identities
+$\widehat{\mathbf v}_x-\mathbf v=(f_x-\mathbf x)/(1-t)$ and
+$\widehat{\mathbf v}_\epsilon-\mathbf v
+=-(f_\epsilon-\boldsymbol\epsilon)/t$.
+Therefore
+\begin{gather*}
+ R^v_{q,r}=\frac1d\mathbb E_r\|\widehat{\mathbf v}_q-\mathbf v\|^2
+ =\delta_q^2\mathcal L_{q,r},\\
+ (\delta_x,\delta_\epsilon,\delta_v)=((1-t)^{-1},t^{-1},1).
+\end{gather*}
+Define $\mathcal G_q=R^v_{q,P}-R^v_{q,\mathrm{tr}}$ and
+$\Delta\mathcal G_q(\tau)=\mathcal G_q(\tau)-\mathcal G_q(0)$.
+A positive change indicates an increasing training advantage.
+Under exact gradient flow, training error cannot increase.
+Population error can decrease or increase; the gap alone does not determine
+that change.
+For $B_q(0)=0$,
+\begin{equation}
+ \Delta\mathcal G_q
+ =\frac{\delta_q^2}{d}\left\{
+ \operatorname{tr}[B_q(C-U)B_q^\top]
+ -2\operatorname{tr}[B_q(V_{P,q}-V_q)]\right\}.
+ \label{eq:app_native_gap}
+\end{equation}
+The target second-moment constants cancel on subtracting the initial gap.
+
+\subsection{Linear predictors share one velocity equation}
+Set $\boldsymbol\phi(\mathbf z)=\mathbf z$, so $p=d$, and write
+$S=n^{-1}\sum_i\mathbf x_i\mathbf x_i^\top$ and
+$\Sigma=\mathbb E_P[\mathbf x\mathbf x^\top]$.
+These are second moments, without subtracting the mean. Noise averaging gives
+\begin{align}
+ U&=t^2S+(1-t)^2I_d,& C&=t^2\Sigma+(1-t)^2I_d,\\
+ V_x&=tS,&V_{P,x}&=t\Sigma,\\
+ V_\epsilon&=(1-t)I_d,&V_{P,\epsilon}&=(1-t)I_d,\\
+ V_v&=tS-(1-t)I_d,&V_{P,v}&=t\Sigma-(1-t)I_d.
+\end{align}
+Since $0<t<1$, $U$ is positive definite even if $S$ is singular.
+The linear conversion matrices are those in
+Eq.~\eqref{eq:main_velocity_conversion}.
+The identities $U=tV_x+(1-t)V_\epsilon$ and $V_v=V_x-V_\epsilon$
+give, for every target,
+\begin{equation}
+ \dot A_q=V_v^\top-A_qU,
+ \qquad
+ A_q(\tau)=A_q(0)e^{-\tau U}+V_v^\top g_\tau(U).
+ \label{eq:app_velocity_solution}
+\end{equation}
+All three converge to $A_\star=V_v^\top U^{-1}$.
+Matching an arbitrary initial velocity matrix $A_0$ requires
+\begin{equation}
+ \begin{aligned}
+ B_x(0)&=I_d+(1-t)A_0,\\
+ B_\epsilon(0)&=I_d-tA_0,\qquad B_v(0)=A_0.
+ \end{aligned}
+ \label{eq:app_matched_initialization}
+\end{equation}
+Their velocity trajectories then coincide. The same statement holds for
+discrete linear updates with the same step size and the same corruption
+draws: the conversion identities hold for each batch.
+
+In velocity coordinates, with $A_{q,0}=A_q(0)$, the gap change is
+\begin{align}
+ \Delta\mathcal G_q
+ ={}&\frac1d\operatorname{tr}\left[
+ A_q(C-U)A_q^\top-A_{q,0}(C-U)A_{q,0}^\top\right]\nonumber\\
+ &-\frac2d\operatorname{tr}[(A_q-A_{q,0})(V_{P,v}-V_v)].
+ \label{eq:app_velocity_gap}
+\end{align}
+Identical limiting velocity maps imply identical limiting risks and raw
+gaps. The gap changes can retain different limits for one realized dataset,
+because the subtracted initial gaps can differ.
+
+\subsection{Early-time coefficients and their assumptions}
+First take any population with finite fourth moment and zero native
+initialization. Define
+\begin{equation}
+ \kappa=\frac{\mathbb E\|\mathbf x\|^4
+                  -\operatorname{tr}(\Sigma^2)}{nd}
+ =\frac1d\mathbb E_{\mathcal D}\operatorname{tr}[(S-\Sigma)^2].
+ \label{eq:app_kappa}
+\end{equation}
+Independence of the clean draws gives
+\[
+ \mathbb E\operatorname{tr}(S^2-S\Sigma)=d\kappa,
+ \qquad \mathbb E(S-\Sigma)=0.
+\]
+Substituting $B_q(\tau)=\tau V_q^\top+O(\tau^2)$ into
+Eq.~\eqref{eq:app_native_gap} yields the initial expected slopes
+\begin{equation}
+ \left.\frac{d}{d\tau}\mathbb E\Delta\mathcal G_q\right|_{\tau=0}
+ =\begin{cases}
+ 2t^2\kappa/(1-t)^2,&q=x,\\
+ 0,&q=\epsilon,\\
+ 2t^2\kappa,&q=v.
+ \end{cases}
+ \label{eq:app_linear_slopes}
+\end{equation}
+The expectation is over datasets. The first derivative for noise prediction
+vanishes for every dataset, since $V_\epsilon=V_{P,\epsilon}$.
+
+For the higher-order calculation, assume $\mathbb E\|\mathbf x\|^6<\infty$.
+Gaussian populations satisfy this sufficient condition for the stated
+expected Taylor remainder.
+The noise readout has the expansion
+\[
+ B_\epsilon=(1-t)\left(\tau I_d-\tfrac12\tau^2U
+                            +\tfrac16\tau^3U^2\right)+O(\tau^4).
+\]
+As $C-U=t^2(\Sigma-S)$, Eq.~\eqref{eq:app_native_gap} becomes
+\begin{align}
+ \Delta\mathcal G_\epsilon(\tau)
+ ={}&\frac{(1-t)^2}{d}\operatorname{tr}(\Sigma-S)\tau^2\nonumber\\
+ &-\frac{(1-t)^2}{d}\operatorname{tr}[U(\Sigma-S)]\tau^3
+ +O(\tau^4).
+ \label{eq:app_noise_expansion}
+\end{align}
+The quadratic term vanishes in dataset expectation, not on each dataset.
+Since $\mathbb E\operatorname{tr}[U(\Sigma-S)]=-t^2d\kappa$,
+\begin{equation}
+ \mathbb E\Delta\mathcal G_\epsilon(\tau)
+ =t^2(1-t)^2\kappa\tau^3+O(\tau^4).
+ \label{eq:app_noise_cubic}
+\end{equation}
+For $P=\mathcal N(0,I_d)$, $\kappa=(d+1)/n$.
+Taking $t=1/2$ gives Eq.~\eqref{eq:main_early_gap}.
+These leading coefficients scale as $1/n$ at fixed $d$; this does not
+establish a copying-onset time proportional to $n$.
+
+\paragraph{Population error at the Gaussian midpoint.}
+For $P=\mathcal N(0,I_d)$ at $t=1/2$, $\mathbf z$ and $\mathbf v$ are
+independent Gaussian vectors.
+Thus $\mathbb E[\mathbf v\mid\mathbf z]=0$ and
+\begin{equation}
+ R^v_P(A)=2+\frac{\|A\|_F^2}{2d}.
+ \label{eq:app_midpoint_population}
+\end{equation}
+The initial errors are $4,4,2$ for $x,\epsilon,v$.
+The nonnegative excess $R^v_P-2$ directly measures deviation from the
+population-optimal predictor. This example does not contain a population
+learning phase for zero-initialized velocity prediction.
+
+\paragraph{Effect of random native initialization.}
+Suppose the entries of $B_q(0)$ are independent, have mean zero and variance
+$\sigma^2$, and are independent of the dataset. Averaging over initialization
+and datasets gives the initial slopes
+\begin{align}
+ a_x&=\frac{2t^2+2t^4d\sigma^2}{(1-t)^2}\kappa,\\
+ a_\epsilon&=2t^2d\sigma^2\kappa,\\
+ a_v&=(2t^2+2t^4d\sigma^2)\kappa.
+ \label{eq:app_random_initialization_slopes}
+\end{align}
+To obtain the additional term, average the quadratic initial-readout
+contribution to the derivative of the gap:
+$-(2\delta_q^2/d)\mathbb E\operatorname{tr}
+[B_q(0)U(C-U)B_q(0)^\top]$.
+Use $\mathbb E[B_q(0)^\top B_q(0)]=d\sigma^2I_d$ and
+$\mathbb E\operatorname{tr}[U(C-U)]=-t^4d\kappa$.
+Noise prediction therefore has a linear expected gap term for nonzero
+$\sigma$. A random-initialization comparison can test finite-time ordering;
+it cannot establish robustness of the zero-initialization cubic law.
+
+\subsection{Fixed nonlinear features: what extends and what changes}
+For the nonlinear model, take
+\begin{gather*}
+ \boldsymbol\phi(\mathbf z)=\tanh(W\mathbf z/\sqrt d),
+ \\ W\in\mathbb R^{p\times d},\qquad W_{ij}\sim\mathcal N(0,1),
+\end{gather*}
+and hold $W$ fixed independently of the dataset. Only $B_q$ is trained.
+Equations~\eqref{eq:app_readout_solution} and
+\eqref{eq:app_native_gap} remain exact, conditional on these features and
+the dataset. Computing the moments by numerical integration introduces
+integration error; it is separate from the exact matrix solution.
+
+\paragraph{An exact expected initial slope.}
+For each clean example define
+\[
+ H_q(\mathbf x)
+ =\mathbb E_{\boldsymbol\epsilon}
+ [\boldsymbol\phi(t\mathbf x+(1-t)\boldsymbol\epsilon)\mathbf y_q^\top
+  \mid\mathbf x].
+\]
+Then $V_q=n^{-1}\sum_iH_q(\mathbf x_i)$ and
+$V_{P,q}=\mathbb E_{\mathbf x}H_q(\mathbf x)$.
+For zero native initialization, differentiation of
+Eq.~\eqref{eq:app_native_gap} gives
+\[
+ \Delta\mathcal G_q'(0)
+ =\frac{2\delta_q^2}{d}
+   \bigl(\|V_q\|_F^2-\langle V_q,V_{P,q}\rangle_F\bigr).
+\]
+Because $\mathbb E_{\mathcal D}V_q=V_{P,q}$, averaging yields
+\begin{equation}
+ \mathbb E_{\mathcal D}\Delta\mathcal G_q'(0)
+ =\frac{2\delta_q^2}{nd}
+   \mathbb E_{\mathbf x}\|H_q(\mathbf x)-V_{P,q}\|_F^2.
+ \label{eq:app_nonlinear_slope}
+\end{equation}
+This identity requires finite second moments of $H_q$ and holds
+conditional on $W$. It shows that the initial expected gap depends on how
+the feature--target relationship varies between clean examples.
+It is nonnegative, but does not imply an ordering across targets.
+
+Gaussian integration by parts gives
+\begin{equation}
+ H_\epsilon(\mathbf x)
+ =(1-t)\mathbb E_{\boldsymbol\epsilon}
+       [J_{\boldsymbol\phi}(\mathbf z)\mid\mathbf x],
+ \label{eq:app_stein_features}
+\end{equation}
+where $J_{\boldsymbol\phi}$ is the $p\times d$ Jacobian.
+For linear features this is the constant $(1-t)I_d$, explaining the zero
+initial noise slope. For tanh features,
+\[
+ J_{\boldsymbol\phi}(\mathbf z)
+ =\operatorname{diag}\!\left[1-\tanh^2(W\mathbf z/\sqrt d)\right]
+   W/\sqrt d.
+\]
+Its conditional average can depend on $\mathbf x$.
+Whenever this dependence has nonzero variance, noise prediction has a
+positive linear expected gap term. The cubic linear-model result is
+therefore not a general property of noise prediction.
+
+\paragraph{The velocity function classes need not coincide.}
+Let $\mathcal F$ be the linear space of functions $B\boldsymbol\phi$.
+The decoded classes are
+$\mathcal F-\mathbf z/(1-t)$,
+$\mathcal F+\mathbf z/t$, and $\mathcal F$.
+They coincide if $\mathbf z$ is representable by the features. A finite
+tanh readout is bounded, so it cannot represent $\mathbf z$ exactly under
+Gaussian corruption. The limiting velocity
+predictors can therefore differ in addition to their initial functions.
+Including the input as explicit linear features restores this property,
+but defines a different model from the tanh model studied here.
+
+For any fixed features, there is nevertheless one velocity function equation:
+\begin{equation}
+ \partial_\tau\widehat{\mathbf v}_q(\mathbf z)
+ =\mathbb E_{\mathrm{tr}}\!\left[
+ (\mathbf v'-\widehat{\mathbf v}_q(\mathbf z'))
+ \boldsymbol\phi(\mathbf z')^\top\right]\boldsymbol\phi(\mathbf z).
+ \label{eq:app_function_flow}
+\end{equation}
+Here $(\mathbf z',\mathbf v')$ is a fresh pair under the training expectation.
+This follows directly by converting Eq.~\eqref{eq:app_readout_flow}.
+If identical initial velocity functions are representable in all three
+models, this common equation preserves their equality.
+
+\paragraph{Computing population error.}
+The eigenvalues of the feature matrix alone do not determine target
+ordering. For example, with zero initialization, the population quadratic
+term contains
+\[
+ \operatorname{tr}\!\left[V_q^\top g_\tau(U)C g_\tau(U)V_q\right],
+\]
+and the linear term contains
+$\operatorname{tr}[V_q^\top g_\tau(U)V_{P,q}]$.
+These expressions depend on the target moments and their relationships
+with the empirical and population feature matrices. They can be evaluated
+for a finite network once its moments are available. This gives an exact
+readout solution conditional on those moments, without a limit in dimension
+or width. Monte Carlo estimates of the moments and finite-step SGD add
+separate numerical errors that must be measured when comparing the curves.

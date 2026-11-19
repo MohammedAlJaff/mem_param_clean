@@ -1,0 +1,165 @@
+THEORY AUDIT AND PAPER PACKAGING -- 2026-10-07
+
+SUBSEQUENT FIGURE SELECTION
+The researcher excluded the log-log figure and selected the rightmost linear
+initialization panel plus one RFN initialization panel. The notebook's new
+M6 cell pairs the random-initialization panels: sigma=1/sqrt(d) for linear
+features and sigma=1/sqrt(p) for RFN. Both use initial entry variance 1/p,
+with p=d in the linear case. This does not match initial velocity functions.
+This selected gap-only layout supersedes the four-panel suggestion below.
+The original studies remain available. Their simulation code is unchanged.
+Separate plotting cells now retain their own result dictionaries and grids.
+Run setup, core definitions, both simulation cells, and then the M6 cell.
+Subsequent M6 edits require only its plotting cell while those arrays remain
+in the kernel. M6.pdf and M6.png are saved in outputs/paper_figures/.
+M6 stacks linear above RFN, with shared vertical limits and separate time
+limits. RFN first records at tau=0.0776068, after one update. Earlier
+positive times are unobserved, not evidence of a flat initial trajectory.
+A new kernel requires
+running the simulation cells again; this edit adds no saved-array loader.
+The added rendering was checked with synthetic fixtures, not a training run.
+
+SESSION SCOPE
+Figure making and final paper rewrite. The researcher explicitly removed
+RMT from scope. Use f_q(z;tau)=B_q(tau) phi(z) throughout: identity features
+for the linear model, frozen tanh random features for the small extension.
+Only the readout is trained. Keep one optimization clock, tau=2*k*eta/d.
+Main text is short, with one figure. The complete derivations go in the
+appendix. No full notebook run, SGD training, or cluster work was performed.
+
+FILES AND DATA FLOW
+- theory_notebook_from_claude.ipynb is the supplied numerical source.
+  Zero-based cell 3 owns linear moments, exact trajectories, gap conversion,
+  and fresh-noise SGD. Cell 7 makes the current main figure. Cell 9 varies
+  initialization. Cell 11 trains frozen tanh readouts and estimates gaps.
+- theory_main_proposed.tex gives one common feature setup, the exact readout
+  dynamics, the linear specialization and early result, and the RFN extension.
+- theory_appendix_proposed.tex contains the complete analytical derivations,
+  moment assumptions, matched-velocity control, random-initialization slopes,
+  and nonlinear first-update identity. It contains no RMT analysis.
+- Existing notebook and PDF/PNG figures were read, not edited or regenerated.
+  Both TeX files are proposed snippets, not changes to the manuscript source.
+
+VERDICT
+The linear calculations and all three stated midpoint coefficients are
+correct. The RFN extension remains exactly tractable in the learned readout,
+conditional on its feature moments. The notebook's nonlinear figure is an
+SGD simulation; it does not compare SGD with a computed exact RFN trajectory.
+That overlay would require evaluating the feature moments first.
+
+SCIENTIFIC QUALIFICATIONS TO KEEP
+1. Delta G measures a change in population-minus-training velocity MSE.
+   It is not f_mem, a probability, or a generated-copying rate.
+2. Linear predictors depend on the clean dataset only through X^T X/n.
+   The mechanism is fitting sample second moments.
+3. Native zero initialization gives initial velocity maps -I/(1-t), I/t, 0.
+   Matching initial velocities makes the linear trajectories identical.
+4. At t=1/2 for N(0,I), zero velocity is population-optimal. Initial velocity
+   MSEs are 4,4,2 for x,epsilon,v. Show population error alongside the gap.
+5. The cubic expected epsilon gap requires zero native initialization and
+   linear features. Nonzero Gaussian initialization adds a linear term.
+   Nonlinear features can also add a linear expected epsilon term.
+6. Pure finite tanh features define different decoded velocity function
+   classes because x/epsilon conversion includes a linear input term.
+   Do not transfer the linear common-limit claim to this RFN.
+7. The model studies one fixed t, not a time-conditioned network or a full
+   generative trajectory. It does not establish a universal target ranking.
+
+CURRENT FIGURE ISSUE: THE EARLY EPSILON CURVE
+The expected quadratic term is zero, but its finite-dataset value is
+    c2(D) = (1-t)^2 tr(Sigma-S)/d.
+Cell 5 subtracts c2(D)*tau^2 when checking the cubic coefficient.
+Cell 7's plotted 50-dataset mean does not subtract it.
+For d=32,n=128,t=0.5,seeds=0,...,49:
+    mean tr(S)/d              = 1.0002543868297207
+    mean c2                  = -6.35967074301691e-05
+    expected cubic coeff.    = 0.01611328125
+    mean gap at tau=10^-2.5   = -1.24902203545e-10
+    ratio to cubic at tau=.01 = 0.604 approximately
+The first five epsilon means in the existing log-log panel are nonpositive
+and cannot appear on its log y axis. This is finite-ensemble variation,
+not an invalid theorem or floating-point artifact.
+For a cubic diagnostic, subtract the known zero-mean quadratic term and
+explicitly label the result as a variance-reduced expected-gap estimate.
+Retain unadjusted gaps for full learning curves. Do not take absolute values,
+clip the means to positive values, or silently rescale each dataset.
+
+ONE-FIGURE RECOMMENDATION
+Preferred M6 layout if both models are shown: two rows (linear, frozen RFN)
+and two columns (population velocity excess MSE, change in the gap).
+At the Gaussian midpoint the population excess is R_P^v - 2 for either
+model. It shows deviation from the optimal population predictor.
+Use exact readout curves and a small number of separately checked SGD
+markers. For RFN curves, say that moments were estimated numerically and
+measure convergence of that estimate. Do not call current RFN bands theory.
+
+The current inputs support reconstructing exact linear curves immediately.
+The RFN exact-curve comparison and a final M6 build are not yet completed.
+If time prevents that check, the defensible reduced M6 has only the linear
+row; retain the RFN derivation in text and label its existing appendix plot
+as a numerical illustration. Do not claim an unperformed comparison.
+
+Move the corrected early-time log-log diagnostic, matched-velocity collapse,
+and random-initialization comparisons to the appendix. A matched-velocity
+control is different from using the same random native readout variance.
+Do not call a crossing of half the final gap a memorization onset.
+
+NOTEBOOK NUMERICAL AND PROVENANCE POINTS
+- All execution counts are None and outputs are empty. Saved images exist,
+  but the notebook does not retain an executed numerical record or raw arrays.
+  The exact linear means were independently reconstructed in this session.
+  The SGD markers and nonlinear trajectories were not independently rerun.
+- Cell 11 uses d=32,n=128,p=256,t=0.5 and 4000 Monte Carlo points per risk.
+  Its full setting has 20 seeds and its fast setting has 8.
+- RFN targets share X, W and B0 but consume different successive portions
+  of one noise RNG. Pair corruption streams when making the final comparison.
+- Linear random-init and RFN figures use medians and 10--90% intervals.
+  Those are neither mean +/- SD nor confidence intervals; label them exactly.
+- Save separate training/population risks, dataset/features/initialization
+  seeds, raw curves, numerical moment settings, and source hashes in the final
+  figure build. Preserve existing figure artifacts during this preparation.
+- Remove pasted claims about completed spectral-solution, surrogate, or RMT
+  checks. They are not supported by this notebook and are outside scope.
+- Remove the extra p/d divisor from the old nonlinear prose unless its clock
+  is explicitly redefined. The supplied notebook uses dot B=V^T-BU throughout.
+
+CHECKS PERFORMED
+Environment: local conda memcompgen, NumPy. No SGD or full notebook execution.
+- Independently derived the common linear velocity equation and midpoint
+  coefficients. Arbitrary initial matrices/non-isotropic second moments at
+  t=.3,.5,.7 agreed under native and velocity solutions to 2.7e-15.
+- Independently evaluated the exact epsilon formula against the notebook's
+  gap calculation; agreement within 2.2e-17.
+- Reconstructed exact cell-7 curves for its 50 datasets and 200 time points.
+  Final mean gaps: x=.273064784, epsilon=.272047202, v=.272301606.
+  Small endpoint differences are due to different subtracted initial gaps,
+  although the limiting velocity predictors coincide.
+- Checked the RFN expected-slope identity by deterministic enumeration of
+  all n=2 samples from {-2,-.5,1}, with 80-point Gaussian quadrature,
+  t=.5, phi(z)=tanh(1.2z). The exact slopes were x=1.38610348597,
+  epsilon=.0340689364564, v=.463642722369. The variance formula agreed
+  within 7e-17; the corresponding Stein identity agreed within 1.2e-16.
+  This checks the algebra in a small example, not the notebook's RFN curves.
+- Both TeX snippets compiled with pdfTeX 1.40.29 in a temporary two-column
+  article wrapper. Main text occupied one page, excluding a figure. This is
+  a syntax and rough-length check, not validation in the manuscript template.
+  No unresolved citations/references or overfull boxes remained after reruns.
+  Underfull text boxes remain in that generic wrapper.
+
+SMALL EXECUTED EXAMPLE
+After loading NumPy and executing only the notebook's core definitions
+(zero-based cell 3), run:
+    X = np.random.default_rng(0).standard_normal((128, 32))
+    deltaG("eps", X, 0.5, np.array([0.01, 0.1, 1.0]))
+Expected output:
+    [1.30687014e-07, 2.58438103e-05, 9.39642893e-03]
+These are exact gap changes for one fixed dataset, not dataset expectations.
+Do not execute the entire notebook merely to obtain this analytical example.
+
+RELATED-WORK REFERENCES
+The existing citation keys are retained in the proposed main text.
+Bonnaire et al. (2025): https://arxiv.org/abs/2505.17638
+George et al., now AISTATS 2026, PMLR 300:1405--1413:
+https://proceedings.mlr.press/v300/george26a.html
+These are references for tractable fixed-feature models. Their other
+asymptotic results are not imported into this proposed section.

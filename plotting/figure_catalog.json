@@ -1,0 +1,790 @@
+{
+  "A1_UNET_FID": {
+    "type": "QM",
+    "title": "CelebA32 U-Net FID",
+    "experiment": "celeba32_unet_3x3",
+    "stem": "outputs/paper_figures/A1_UNET_FID",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "unet-fid",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "QM01",
+      "F01"
+    ]
+  },
+  "A1_DIT_FID": {
+    "type": "QM",
+    "title": "CelebA32 DiT FID",
+    "experiment": "celeba32_dit_3x3",
+    "stem": "outputs/paper_figures/A1_DIT_FID",
+    "datasets": [
+      "celeba32_dit_3x3"
+    ],
+    "metrics": [
+      "inception_fid"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "single_seed",
+    "variant": "dit-fid",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0
+    ],
+    "aliases": [
+      "QM02",
+      "F02"
+    ]
+  },
+  "A1_MNIST32_FD": {
+    "type": "QD",
+    "title": "MNIST32 JointAE FD",
+    "experiment": "mnist32_diagonal",
+    "stem": "outputs/paper_figures/A1_MNIST32_FD",
+    "datasets": [
+      "mnist32_diagonal"
+    ],
+    "metrics": [
+      "mnist_fd_jointae32_v1"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "mnist32-fd",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      2048
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "QD01",
+      "F03"
+    ]
+  },
+  "A1_MNIST64_FD": {
+    "type": "QD",
+    "title": "MNIST64 JointAE FD",
+    "experiment": "mnist64_diagonal",
+    "stem": "outputs/paper_figures/A1_MNIST64_FD",
+    "datasets": [
+      "mnist64_diagonal"
+    ],
+    "metrics": [
+      "mnist_fd_jointae32_v1"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "mnist64-fd",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      2048
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "QD02",
+      "F04"
+    ]
+  },
+  "A1_CELEBA64_FID": {
+    "type": "QD",
+    "title": "CelebA64 RGB FID",
+    "experiment": "celeba64_rgb_diagonal",
+    "stem": "outputs/paper_figures/A1_CELEBA64_FID",
+    "datasets": [
+      "celeba64_rgb_diagonal"
+    ],
+    "metrics": [
+      "inception_fid"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "celeba64-fid",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      2048
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "QD03",
+      "F05"
+    ]
+  },
+  "A1": {
+    "type": "DM",
+    "title": "CelebA32 U-Net FID + f_mem",
+    "stem": "outputs/paper_figures/A1",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "unet-dual-axis",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "DM01",
+      "F06"
+    ],
+    "reference": "Workshop appendix Figures 5-6: dotted FID on the left and solid F_mem on the right. Full prediction/loss grid with four N values overlaid."
+  },
+  "A1_DIT": {
+    "type": "DM",
+    "title": "CelebA32 Small-DiT FID + f_mem",
+    "stem": "outputs/paper_figures/A1_DIT",
+    "datasets": [
+      "celeba32_dit_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "single_seed",
+    "variant": "dit-dual-axis",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0
+    ],
+    "aliases": [],
+    "reference": "Workshop appendix Figures 5-6: dotted FID on the left and solid F_mem on the right. Full prediction/loss grid with four N values overlaid."
+  },
+  "A4": {
+    "type": "WV",
+    "title": "Diagonal targets and equivalent velocity-loss weights",
+    "stem": "outputs/paper_figures/A4",
+    "datasets": [
+      "celeba32_unet_3x3",
+      "celeba32_vv_weighting"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "diagonal-and-weighted-velocity",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      2048
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": []
+  },
+  "A4_DIAGONAL": {
+    "type": "WV",
+    "title": "CelebA32 velocity weighting",
+    "stem": "outputs/paper_figures/A4_DIAGONAL",
+    "datasets": [
+      "celeba32_unet_3x3",
+      "celeba32_vv_weighting"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "unet-five-conditions",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      2048
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "WV01",
+      "F07"
+    ]
+  },
+  "M3_STACKED": {
+    "type": "BT",
+    "title": "f_mem at best FID: Python",
+    "renderer": "python",
+    "stem": "outputs/paper_figures/M3_STACKED",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "variant": "stacked-n-python",
+    "placement": "main",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "BT01",
+      "F08"
+    ]
+  },
+  "M3_LATEX": {
+    "type": "BT",
+    "title": "f_mem at best FID: LaTeX",
+    "renderer": "latex",
+    "stem": "outputs/paper_figures/M3_LATEX",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "variant": "stacked-n-latex",
+    "placement": "main",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "BT02",
+      "F09"
+    ]
+  },
+  "M2_TRAJECTORIES": {
+    "type": "DT",
+    "title": "CelebA32 diagonal FID + raw-pixel f_mem",
+    "stem": "outputs/paper_figures/M2_TRAJECTORIES",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "unet-trajectories",
+    "placement": "main",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "DT01",
+      "F10"
+    ]
+  },
+  "M2": {
+    "type": "DS",
+    "title": "CelebA32 trajectories + two best-FID summaries",
+    "stem": "outputs/paper_figures/M2",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "trajectory_and_per_seed_best_fid",
+    "uncertainty": "sd",
+    "variant": "unet-trajectories-summary",
+    "placement": "main",
+    "status": "approved",
+    "approved_build": "43d9a790863d",
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "DS01",
+      "F11"
+    ]
+  },
+  "M5": {
+    "type": "TS",
+    "title": "Original workshop CelebA32 timescales",
+    "stem": "outputs/paper_figures/M5",
+    "datasets": [],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.5,
+    "selection": "workshop_timescales",
+    "uncertainty": "se",
+    "variant": "workshop-reproduction",
+    "placement": "main",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      256,
+      512,
+      1024,
+      2048,
+      4096,
+      8192,
+      16384
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "TS01",
+      "F12"
+    ],
+    "renderer": "workshop",
+    "onset_fraction": 0.01,
+    "onset_rule": "first_crossing",
+    "censoring": "assign_final_checkpoint",
+    "quality_tolerance": 0.1,
+    "reference_files": [
+      "plotting/references/workshop_figure4.pdf",
+      "plotting/references/workshop_figure4.txt"
+    ],
+    "reference": "User-selected reproduction of workshop Figure 4, PDF page 8; original numerical source unavailable in plot_data. Caption explicitly retains rho=0.5, first 1% onset, SE, and final-checkpoint substitution."
+  },
+  "A3_DIT": {
+    "type": "TS",
+    "title": "CelebA32 DiT timescales and window, seed 0",
+    "experiment": "celeba32_dit_3x3",
+    "stem": "outputs/paper_figures/A3_DIT",
+    "datasets": [
+      "celeba32_dit_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "timescales",
+    "uncertainty": "single_seed",
+    "variant": "dit-timescales",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0
+    ],
+    "aliases": [
+      "TS02",
+      "F13"
+    ]
+  },
+  "M3": {
+    "type": "BT",
+    "title": "CelebA32 best-FID matrices by training size",
+    "renderer": "split_n",
+    "stem": "outputs/paper_figures/M3",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "n_trains": [
+      512,
+      2048
+    ],
+    "variant": "split-n-matrices",
+    "placement": "main",
+    "status": "draft",
+    "approved_build": null,
+    "reference": "Layout and colors adapted from the supplied AISTATS_2027_Memparam_FM (1).pdf, Figure 3 p.7; related user-supplied Python reference. Raw pixels rho=0.3, sample SD, width matched to M2.",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [
+      "BT03"
+    ]
+  },
+  "M3-SSCD": {
+    "type": "BT",
+    "title": "CelebA32 U-Net SSCD at best FID",
+    "renderer": "split_n",
+    "stem": "outputs/paper_figures/M3-SSCD",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_sscd"
+    ],
+    "rho": null,
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "n_trains": [
+      512,
+      2048
+    ],
+    "variant": "split-n-sscd",
+    "placement": "unassigned",
+    "status": "draft",
+    "approved_build": null,
+    "reference": "M3 layout and paper colors; SSCD alpha=0.01, sample SD, width matched to M2.",
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [],
+    "alpha": 0.01
+  },
+  "M3-DIT": {
+    "type": "BT",
+    "title": "CelebA32 Small-DiT raw-pixel memorization at best FID",
+    "renderer": "split_n",
+    "stem": "outputs/paper_figures/M3-DIT",
+    "datasets": [
+      "celeba32_dit_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "per_seed_best_fid",
+    "uncertainty": "single_seed",
+    "n_trains": [
+      512,
+      2048
+    ],
+    "variant": "split-n-dit",
+    "placement": "unassigned",
+    "status": "draft",
+    "approved_build": null,
+    "reference": "M3 layout and paper colors; raw pixels rho=0.3, seed 0 only, width matched to M2.",
+    "seeds": [
+      0
+    ],
+    "aliases": []
+  },
+  "M4": {
+    "type": "BT",
+    "title": "Robustness at best quality: raw-pixel and feature memorization",
+    "renderer": "robustness",
+    "stem": "outputs/paper_figures/M4",
+    "datasets": [
+      "celeba32_unet_3x3",
+      "celeba64_rgb_diagonal",
+      "mnist32_diagonal",
+      "celeba32_dit_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "mnist_fd_jointae32_v1",
+      "f_mem_raw_pixels",
+      "f_mem_sscd",
+      "f_mem_mnist_jointae32_v1"
+    ],
+    "rho": 0.3,
+    "alpha": 0.01,
+    "selection": "per_seed_best_quality",
+    "uncertainty": "none",
+    "n_trains": [
+      2048
+    ],
+    "seeds": {
+      "celeba32_unet_3x3": [
+        0,
+        1,
+        2
+      ],
+      "celeba64_rgb_diagonal": [
+        0,
+        1,
+        2
+      ],
+      "mnist32_diagonal": [
+        0,
+        1,
+        2
+      ],
+      "celeba32_dit_3x3": [
+        0
+      ]
+    },
+    "variant": "pixel-and-feature-rows",
+    "placement": "main",
+    "status": "approved",
+    "approved_build": "515a0307ff37",
+    "reference": "Manuscript Table 2, p.6. Retain the original means-only styling; add a metric-description column beside four dataset/model columns. Raw-pixel and calibrated feature rows use identical per-run best-quality checkpoints.",
+    "aliases": []
+  },
+  "A3_UNET": {
+    "type": "TS",
+    "title": "Current CelebA32 U-Net timescales",
+    "stem": "outputs/paper_figures/A3_UNET",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "rho": 0.3,
+    "selection": "timescales",
+    "uncertainty": "sd",
+    "variant": "unet-timescales",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": []
+  },
+  "A2": {
+    "type": "MS",
+    "title": "Representation comparison at best FID",
+    "renderer": "representation",
+    "stem": "outputs/paper_figures/A2",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels",
+      "f_mem_sscd",
+      "f_mem_lpips",
+      "f_mem_dinov2"
+    ],
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "variant": "unet-representation",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [],
+    "alpha": 0.01,
+    "rhos": null
+  },
+  "A5": {
+    "type": "MS",
+    "title": "Raw-pixel ratio threshold sensitivity at best FID",
+    "renderer": "threshold",
+    "stem": "outputs/paper_figures/A5",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "inception_fid",
+      "f_mem_raw_pixels"
+    ],
+    "selection": "per_seed_best_fid",
+    "uncertainty": "sd",
+    "variant": "unet-threshold",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [],
+    "alpha": null,
+    "rhos": [
+      0.3,
+      0.5,
+      0.7
+    ]
+  },
+  "A5_TRAJECTORIES": {
+    "type": "MS",
+    "title": "Raw-pixel threshold sensitivity over training",
+    "renderer": "trajectories",
+    "stem": "outputs/paper_figures/A5_TRAJECTORIES",
+    "datasets": [
+      "celeba32_unet_3x3"
+    ],
+    "metrics": [
+      "f_mem_raw_pixels"
+    ],
+    "selection": "all_saved_checkpoints",
+    "uncertainty": "sd",
+    "variant": "unet-threshold-trajectories",
+    "placement": "appendix",
+    "status": "draft",
+    "approved_build": null,
+    "n_trains": [
+      512,
+      1024,
+      2048,
+      4096
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "aliases": [],
+    "alpha": null,
+    "rhos": [
+      0.3,
+      0.5,
+      0.7
+    ],
+    "reference": "Workshop Figure 7, Appendix A.3 p.13: parameterization rows and rho columns, logarithmic axes. Current four sizes, three-seed sample SD, canonical target colors and N line styles."
+  }
+}
