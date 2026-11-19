@@ -1,0 +1,4 @@
+task_key	run_path	expected_checkpoints	reference_path
+unet32	outputs/job_sets/celeba32_unet_3x3_1m/20260927T191224Z_2530324/runs/18_n2048_x_x_s0	72	outputs/reference_banks/celeba_test_seed1_clean_n10000.pt
+mnist32	outputs/job_sets/mnist_diagonal_1m/20260927T165106Z_1991997/runs/3_mnist32_unet_s_n2048_x_x_s0	20	-
+dit32	outputs/job_sets/celeba32_dit_3x3_nscale_1m_viax/20260926T104429Z_1787399/runs/18_n2048_x_x_s0	72	outputs/reference_banks/celeba_test_seed1_clean_n10000.pt

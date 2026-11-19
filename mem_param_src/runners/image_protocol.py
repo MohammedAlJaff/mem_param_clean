@@ -45,12 +45,25 @@ from mem_param_src.runners.artifacts import (
     validate_data_manifest,
     write_json,
 )
+from mem_param_src.runners.checkpoint_metrics_benchmark import (
+    _load_reference,
+    _validate_reference_compatibility,
+)
 from mem_param_src.runners.evaluation import (
     _sample_checkpoint,
     resolve_evaluation_config,
 )
+from mem_param_src.runners.evaluation_noise import load_canonical_noise
+from mem_param_src.runners.full_suite_retention import (
+    DEFAULT_PROTECTED_SAMPLE_STEPS,
+    ensure_checkpoint_retention,
+)
 
 IMAGE_EVALUATION_SCHEMA_VERSION = 1
+RAW_PIXEL_F_MEM_NAME = "f_mem_raw_pixels"
+DINO_FD_NAME = "dinov2_fd"
+HELDOUT_LOSS_NAME = "heldout_loss"
+RAW_PIXEL_RHOS = (0.3, 0.5, 0.7)
 _PROTOCOL_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 NATURAL_IMAGE_DATASETS = {
     "afhq_v2",
@@ -115,6 +128,60 @@ def resolve_image_metric_protocol(config, metrics, feature_spaces):
     if not feature_spaces:
         feature_spaces = ("dataset_default",)
 
+    if "full" in metrics:
+        if metrics != ("full",):
+            raise ValueError("Use --metrics full without other metric names.")
+        if dataset == "mnist":
+            if int(config.data.image_size) not in (32, 64):
+                raise ValueError(
+                    "MNIST JointAE evaluation supports MNIST32 and MNIST64."
+                )
+            metric_manifest = load_mnist_jointae32_manifest()
+            return {
+                "full_suite": True,
+                "dataset_family": "mnist",
+                "dataset": dataset,
+                "image_size": int(config.data.image_size),
+                "image_channels": int(config.data.image_channels),
+                "metrics": [
+                    MNIST_JOINTAE_FD_NAME,
+                    MNIST_JOINTAE_CLASS_FD_NAME,
+                    MNIST_JOINTAE_F_MEM_NAME,
+                    RAW_PIXEL_F_MEM_NAME,
+                    HELDOUT_LOSS_NAME,
+                ],
+                "feature_spaces": ["mnist_jointae32"],
+                "memorization_spaces": ["raw_pixels", "mnist_jointae32"],
+                "quality_metric": MNIST_JOINTAE_FD_NAME,
+                "encoder_sha256": metric_manifest["weight_asset"]["sha256"],
+                "feature_layer": "raw_linear_128",
+                "feature_dim": 128,
+                "preprocessing": metric_manifest["preprocessing"],
+            }
+        if dataset not in NATURAL_IMAGE_DATASETS:
+            raise ValueError(f"No image metric protocol is registered for {dataset!r}.")
+        spaces = ["inception_v3", "sscd", "dinov2", "lpips"]
+        return {
+            "full_suite": True,
+            "dataset_family": "natural_rgb",
+            "dataset": dataset,
+            "image_size": int(config.data.image_size),
+            "image_channels": int(config.data.image_channels),
+            "metrics": [
+                "inception_fid",
+                DINO_FD_NAME,
+                RAW_PIXEL_F_MEM_NAME,
+                "feature_f_mem",
+                HELDOUT_LOSS_NAME,
+            ],
+            "feature_spaces": spaces,
+            "memorization_spaces": ["sscd", "dinov2", "lpips"],
+            "feature_definitions": {
+                space: NATURAL_SPACE_SPECS[space] for space in spaces
+            },
+            "quality_metric": "inception_fid",
+        }
+
     if dataset == "mnist":
         if int(config.data.image_size) not in (32, 64):
             raise ValueError("MNIST JointAE evaluation supports MNIST32 and MNIST64.")
@@ -142,6 +209,7 @@ def resolve_image_metric_protocol(config, metrics, feature_spaces):
             "dataset_family": "mnist",
             "dataset": dataset,
             "image_size": int(config.data.image_size),
+            "image_channels": int(config.data.image_channels),
             "metrics": resolved_metrics,
             "feature_spaces": ["mnist_jointae32"],
             "quality_metric": (
@@ -169,9 +237,7 @@ def resolve_image_metric_protocol(config, metrics, feature_spaces):
     }
     unknown = [metric for metric in metrics if metric not in aliases]
     if unknown:
-        raise ValueError(
-            f"Unsupported natural-image metrics: {', '.join(unknown)}."
-        )
+        raise ValueError(f"Unsupported natural-image metrics: {', '.join(unknown)}.")
     resolved_metrics = list(dict.fromkeys(aliases[item] for item in metrics))
     requested_spaces = list(
         dict.fromkeys(
@@ -183,9 +249,7 @@ def resolve_image_metric_protocol(config, metrics, feature_spaces):
         item for item in requested_spaces if item in {"sscd", "dinov2", "lpips"}
     ]
     if "inception_fid" in resolved_metrics and "inception_v3" not in requested_spaces:
-        raise ValueError(
-            "Natural-image fid requires dataset_default or inception_v3."
-        )
+        raise ValueError("Natural-image fid requires dataset_default or inception_v3.")
     if "feature_f_mem" in resolved_metrics and not learned_spaces:
         raise ValueError(
             "Natural-image f_mem requires at least one of sscd, dinov2, or lpips."
@@ -203,6 +267,7 @@ def resolve_image_metric_protocol(config, metrics, feature_spaces):
         "dataset_family": "natural_rgb",
         "dataset": dataset,
         "image_size": int(config.data.image_size),
+        "image_channels": int(config.data.image_channels),
         "metrics": resolved_metrics,
         "feature_spaces": active_spaces,
         "memorization_spaces": learned_spaces,
@@ -239,16 +304,32 @@ def _raw_sample_statistics(samples):
         "finite_fraction": float(finite.float().mean()),
         "raw_min": float(values.min()) if values.numel() else None,
         "raw_max": float(values.max()) if values.numel() else None,
-        "raw_rms": (
-            float(values.square().mean().sqrt()) if values.numel() else None
-        ),
+        "raw_rms": (float(values.square().mean().sqrt()) if values.numel() else None),
         "outside_minus1_1_fraction": float(
             (((samples < -1.0) | (samples > 1.0)) & finite).float().mean()
         ),
     }
 
 
-def _load_noise(run_dir, noise_path):
+def _load_noise(
+    run_dir,
+    noise_path,
+    noise_artifact,
+    *,
+    sample_count,
+    expected_shape,
+):
+    if noise_path is not None and noise_artifact is not None:
+        raise ValueError("Use either --noise-path or --noise-artifact, not both.")
+    if noise_artifact is not None:
+        path = Path(noise_artifact).expanduser().resolve()
+        noise, identity = load_canonical_noise(
+            path,
+            sample_count=sample_count,
+            expected_shape=expected_shape,
+        )
+        return noise, path, int(identity["seed"]), identity
+
     path = Path(noise_path) if noise_path else Path(run_dir) / "z_init.pt"
     path = path.expanduser().resolve()
     payload = load_torch(path)
@@ -261,7 +342,17 @@ def _load_noise(run_dir, noise_path):
             seed = int(payload["seed"])
     else:
         raise ValueError("Evaluation noise must be a tensor or contain key 'tensor'.")
-    return noise.contiguous(), path, seed
+    noise = noise.contiguous()
+    identity = {
+        "path": str(path),
+        "file_sha256": file_sha256(path),
+        "tensor_sha256": tensor_sha256(noise),
+        "prefix_sha256": tensor_sha256(noise[:sample_count]),
+        "seed": seed,
+        "sample_count": int(sample_count),
+        "shape": list(noise[:sample_count].shape),
+    }
+    return noise, path, seed, identity
 
 
 def _evaluation_root(run_dir, protocol_id, output_dir):
@@ -288,14 +379,18 @@ def _manifest_identity(
     noise,
     noise_seed,
     encoder_assets=None,
+    noise_identity=None,
+    reference_identity=None,
+    loss_count=None,
+    write_plots=False,
+    publication_evaluation=False,
+    streaming_retention=False,
 ):
     identity = {
         "schema_version": IMAGE_EVALUATION_SCHEMA_VERSION,
         "source_run": str(Path(run_dir).resolve()),
         "source_config_sha256": file_sha256(Path(run_dir) / "config.json"),
-        "source_data_bundle_sha256": file_sha256(
-            Path(run_dir) / "data_bundle.pt"
-        ),
+        "source_data_bundle_sha256": file_sha256(Path(run_dir) / "data_bundle.pt"),
         "protocol": protocol,
         "checkpoint_steps": [step for step, _ in checkpoints],
         "sample_count": int(sample_count),
@@ -314,6 +409,20 @@ def _manifest_identity(
     }
     if encoder_assets is not None:
         identity["encoder_assets"] = encoder_assets
+    if noise_identity is not None:
+        identity["noise"] = noise_identity
+    if reference_identity is not None:
+        identity["reference_artifact"] = reference_identity
+    identity["loss_count"] = None if loss_count is None else int(loss_count)
+    identity["write_plots"] = bool(write_plots)
+    identity["streaming_retention"] = bool(streaming_retention)
+    if publication_evaluation:
+        identity["evaluation_tier"] = "paper"
+        identity["development_only"] = False
+        identity["publication_ready"] = True
+    else:
+        identity["development_only"] = bool(protocol.get("full_suite", False))
+        identity["publication_ready"] = not bool(protocol.get("full_suite", False))
     return identity
 
 
@@ -373,6 +482,7 @@ def _load_or_sample(
         samples = load_torch(sample_path)
         if (
             torch.is_tensor(samples)
+            and tuple(samples.shape) == tuple(noise[:sample_count].shape)
             and {key: manifest.get(key) for key in expected} == expected
             and manifest.get("generated_tensor_sha256") == tensor_sha256(samples)
         ):
@@ -386,6 +496,10 @@ def _load_or_sample(
     started = time.perf_counter()
     samples = _sample_checkpoint(model, noise[:sample_count], config, device)
     samples = samples.detach().cpu().float().contiguous()
+    if tuple(samples.shape) != tuple(noise[:sample_count].shape):
+        raise ValueError(
+            "Generated sample shape differs from the canonical noise prefix."
+        )
     if not bool(torch.isfinite(samples).all()):
         raise FloatingPointError("Generated samples contain non-finite values.")
     manifest = {
@@ -499,17 +613,14 @@ def _load_or_feature_stats(path, features, metadata):
     if path.exists():
         payload = load_torch(path)
         mean = payload.get("mean") if isinstance(payload, dict) else None
-        covariance = (
-            payload.get("covariance") if isinstance(payload, dict) else None
-        )
+        covariance = payload.get("covariance") if isinstance(payload, dict) else None
         if (
             isinstance(payload, dict)
             and payload.get("metadata") == expected
             and torch.is_tensor(mean)
             and payload.get("mean_sha256") == tensor_sha256(mean)
             and torch.is_tensor(covariance)
-            and payload.get("covariance_sha256")
-            == tensor_sha256(covariance)
+            and payload.get("covariance_sha256") == tensor_sha256(covariance)
         ):
             return payload, True
 
@@ -614,15 +725,19 @@ def _load_encoder_assets(manifest_path, spaces):
             raise ValueError("DINOv2 source checkout is missing or unpinned.")
         if _git_head_commit(source_root) != source["commit"]:
             raise ValueError("DINOv2 source checkout does not match its pinned commit.")
-    return root, assets, {
-        "path": str(path),
-        "sha256": file_sha256(path),
-        "schema_version": 3,
-        "encoders": {
-            space: _encoder_asset_hashes(space, assets) for space in spaces
+    return (
+        root,
+        assets,
+        {
+            "path": str(path),
+            "sha256": file_sha256(path),
+            "schema_version": 3,
+            "encoders": {
+                space: _encoder_asset_hashes(space, assets) for space in spaces
+            },
+            "package_versions": assets["package_versions"],
         },
-        "package_versions": assets["package_versions"],
-    }
+    )
 
 
 def _natural_encoder(space, assets_root, assets, device):
@@ -690,13 +805,17 @@ def _load_or_encode_natural(
         {"inception_v3": 64, "sscd": 32, "lpips": 32, "dinov2": 32}[space],
     )
     started = time.perf_counter()
-    features = encode_image_features(
-        images,
-        encoder=encoder,
-        batch_size=safe_batch_size,
-        image_range="-1_1",
-        device=device,
-    ).float().contiguous()
+    features = (
+        encode_image_features(
+            images,
+            encoder=encoder,
+            batch_size=safe_batch_size,
+            image_range="-1_1",
+            device=device,
+        )
+        .float()
+        .contiguous()
+    )
     if (
         features.dim() != 2
         or len(features) != len(images)
@@ -767,6 +886,208 @@ def _calibration_records(calibration_r, validation_r):
     return records
 
 
+def _prepare_raw_pixel_reference(
+    root,
+    training,
+    heldout,
+    *,
+    calibration_count,
+    nn_batch_size,
+    device,
+):
+    if len(training) < 2 or len(heldout) < 2:
+        raise ValueError("Raw-pixel memorization requires two images per bank.")
+    calibration_count = min(int(calibration_count), len(heldout) - 1)
+    raw_root = root / "reference" / "raw_pixels"
+    raw_root.mkdir(parents=True, exist_ok=True)
+    calibration, _ = _load_or_raw_neighbors(
+        raw_root / "calibration_neighbors.pt",
+        heldout[:calibration_count],
+        training,
+        {
+            "space": "raw_pixels",
+            "partition": "heldout_calibration",
+            "count": calibration_count,
+        },
+        nn_batch_size,
+        device,
+    )
+    validation, _ = _load_or_raw_neighbors(
+        raw_root / "validation_neighbors.pt",
+        heldout[calibration_count:],
+        training,
+        {
+            "space": "raw_pixels",
+            "partition": "heldout_validation",
+            "count": len(heldout) - calibration_count,
+        },
+        nn_batch_size,
+        device,
+    )
+    thresholds = _calibration_records(calibration["r"], validation["r"])
+    write_json(
+        raw_root / "calibration.json",
+        {
+            "space": "raw_pixels",
+            "fixed_rhos": list(RAW_PIXEL_RHOS),
+            "alphas": list(MNIST_F_MEM_ALPHAS),
+            "calibration_count": calibration_count,
+            "validation_count": len(heldout) - calibration_count,
+            "records": thresholds,
+        },
+    )
+    return thresholds
+
+
+def _evaluate_raw_pixel_memorization(
+    step_dir,
+    samples,
+    training,
+    thresholds,
+    *,
+    step,
+    checkpoint,
+    sample_count,
+    nn_batch_size,
+    device,
+):
+    neighbor_dir = step_dir / "nearest_neighbors"
+    neighbor_dir.mkdir(parents=True, exist_ok=True)
+    neighbors, reused = _load_or_raw_neighbors(
+        neighbor_dir / "raw_pixels.pt",
+        samples,
+        training,
+        {"space": "raw_pixels", "partition": "generated"},
+        nn_batch_size,
+        device,
+    )
+    fixed = []
+    calibrated = []
+    rows = []
+    for rho in RAW_PIXEL_RHOS:
+        value = compute_f_mem_by_rho(neighbors["r"], rho)[rho]
+        fixed.append({"rho": float(rho), "f_mem": value})
+        rows.append(
+            {
+                "step": step,
+                "checkpoint": checkpoint,
+                "metric": RAW_PIXEL_F_MEM_NAME,
+                "space": "raw_pixels",
+                "value": value,
+                "sample_count": sample_count,
+                "alpha": "",
+                "rho": float(rho),
+            }
+        )
+    for threshold in thresholds:
+        value = compute_f_mem_by_rho(neighbors["r"], threshold["rho"])[threshold["rho"]]
+        calibrated.append({**threshold, "f_mem": value})
+        rows.append(
+            {
+                "step": step,
+                "checkpoint": checkpoint,
+                "metric": RAW_PIXEL_F_MEM_NAME,
+                "space": "raw_pixels",
+                "value": value,
+                "sample_count": sample_count,
+                "alpha": threshold["alpha"],
+                "rho": threshold["rho"],
+            }
+        )
+    return (
+        {
+            "fixed_rho": fixed,
+            "calibrated": calibrated,
+            "neighbors_reused": reused,
+            "neighbor_artifact": "nearest_neighbors/raw_pixels.pt",
+        },
+        rows,
+    )
+
+
+def _load_or_heldout_losses(
+    path,
+    checkpoint_path,
+    model,
+    heldout,
+    *,
+    loss_count,
+    config,
+    device,
+    batch_size,
+):
+    loss_count = int(loss_count)
+    if loss_count < 1 or len(heldout) < loss_count:
+        raise ValueError("Held-out loss bank has fewer rows than loss_count.")
+    heldout = heldout[:loss_count].contiguous()
+    fixed_times = [float(value) for value in config.evaluation.loss_eval_times]
+    identity = {
+        "checkpoint_sha256": file_sha256(checkpoint_path),
+        "heldout_tensor_sha256": tensor_sha256(heldout),
+        "loss_count": loss_count,
+        "fixed_times": fixed_times,
+        "noise_seed": 42003,
+        "random_time_seed": 43003,
+        "training_time_range": [
+            float(config.training.start_time),
+            float(config.training.end_time),
+        ],
+    }
+    if path.exists():
+        payload = read_json(path)
+        values = list(payload.get("values", {}).values())
+        if (
+            payload.get("identity") == identity
+            and values
+            and bool(torch.isfinite(torch.tensor(values)).all())
+        ):
+            return payload, True
+
+    checkpoint = load_torch(checkpoint_path)
+    model.load_state_dict(checkpoint["model"], strict=True)
+    model.eval()
+    noise_generator = torch.Generator(device="cpu").manual_seed(42003)
+    noise = torch.randn(
+        heldout.shape,
+        generator=noise_generator,
+        dtype=heldout.dtype,
+    )
+    time_generator = torch.Generator(device="cpu").manual_seed(43003)
+    random_times = torch.rand(loss_count, generator=time_generator)
+    random_times = random_times * (
+        float(config.training.end_time) - float(config.training.start_time)
+    ) + float(config.training.start_time)
+    probes = [("random_time", random_times)]
+    probes.extend(
+        (f"fixed_t_{value:g}", torch.full((loss_count,), value))
+        for value in fixed_times
+    )
+
+    started = time.perf_counter()
+    values = {}
+    with torch.no_grad():
+        for name, times in probes:
+            total = 0.0
+            for start in range(0, loss_count, int(batch_size)):
+                stop = min(start + int(batch_size), loss_count)
+                value = model.compute_loss(
+                    heldout[start:stop].to(device),
+                    eps=noise[start:stop].to(device),
+                    t=times[start:stop].to(device),
+                )
+                total += float(value.detach().cpu()) * (stop - start)
+            values[name] = total / loss_count
+    if not bool(torch.isfinite(torch.tensor(list(values.values()))).all()):
+        raise FloatingPointError("Held-out loss produced a non-finite value.")
+    payload = {
+        "identity": identity,
+        "values": values,
+        "runtime_seconds": time.perf_counter() - started,
+    }
+    write_json(path, payload)
+    return payload, False
+
+
 def _write_combined(root, records):
     combined = root / "combined"
     combined.mkdir(parents=True, exist_ok=True)
@@ -777,8 +1098,11 @@ def _write_combined(root, records):
         "step",
         "checkpoint",
         "metric",
+        "space",
         "value",
         "sample_count",
+        "reference_count",
+        "loss_count",
         "alpha",
         "rho",
     ]
@@ -787,7 +1111,7 @@ def _write_combined(root, records):
         writer.writeheader()
         for record in records:
             for row in record["table_rows"]:
-                writer.writerow(row)
+                writer.writerow({field: row.get(field, "") for field in fieldnames})
     os.replace(temporary, path)
 
 
@@ -803,10 +1127,16 @@ def _evaluate_mnist(
     feature_batch_size,
     nn_batch_size,
     noise_seed,
+    loss_count,
+    streaming_retention,
+    protected_sample_steps,
 ):
     encoder = load_mnist_jointae32(device=device)
+    training = bundle["train"].contiguous()
+    heldout = bundle["reference"].contiguous()
     training_features = None
     thresholds = None
+    raw_thresholds = None
     if MNIST_JOINTAE_F_MEM_NAME in protocol["metrics"]:
         reference_root = root / "reference"
         reference_root.mkdir(parents=True, exist_ok=True)
@@ -862,11 +1192,29 @@ def _evaluate_mnist(
             },
         )
 
+    if RAW_PIXEL_F_MEM_NAME in protocol["metrics"]:
+        raw_thresholds = _prepare_raw_pixel_reference(
+            root,
+            training,
+            heldout,
+            calibration_count=min(500, max(1, len(heldout) // 2)),
+            nn_batch_size=nn_batch_size,
+            device=device,
+        )
+
     model = GDFM(config).to(device)
     records = []
     for step, checkpoint_path in checkpoints:
+        step_started = time.perf_counter()
         step_dir = root / "checkpoints" / f"step_{step:06d}"
         step_dir.mkdir(parents=True, exist_ok=True)
+        if streaming_retention and (step_dir / "COMPLETE.json").is_file():
+            ensure_checkpoint_retention(
+                step_dir,
+                retain_samples=step in protected_sample_steps,
+            )
+            records.append(read_json(step_dir / "metrics.json"))
+            continue
         samples, sample_manifest, reused_samples = _load_or_sample(
             step_dir,
             checkpoint_path,
@@ -903,9 +1251,7 @@ def _evaluate_mnist(
                 features,
                 {
                     "encoder": "mnist_jointae32_v1",
-                    "source_tensor_sha256": sample_manifest[
-                        "generated_tensor_sha256"
-                    ],
+                    "source_tensor_sha256": sample_manifest["generated_tensor_sha256"],
                 },
             )
             reference_stats = load_mnist_jointae32_reference_stats()["global"]
@@ -954,6 +1300,9 @@ def _evaluate_mnist(
             )
             confidence = logits.softmax(1).amax(1)
             class_record["mean_classifier_confidence"] = float(confidence.mean())
+            class_record["generated_class_counts"] = torch.bincount(
+                logits.argmax(1), minlength=10
+            ).tolist()
             metrics[MNIST_JOINTAE_CLASS_FD_NAME] = class_record
             table_rows.append(
                 {
@@ -982,9 +1331,9 @@ def _evaluate_mnist(
             )
             curve = []
             for threshold in thresholds:
-                value = compute_f_mem_by_rho(
-                    neighbors["r"], threshold["rho"]
-                )[threshold["rho"]]
+                value = compute_f_mem_by_rho(neighbors["r"], threshold["rho"])[
+                    threshold["rho"]
+                ]
                 row = {**threshold, "f_mem": value}
                 curve.append(row)
                 table_rows.append(
@@ -1004,6 +1353,57 @@ def _evaluate_mnist(
                 "neighbor_artifact": "nearest_neighbors/mnist_jointae.pt",
             }
 
+        if RAW_PIXEL_F_MEM_NAME in protocol["metrics"]:
+            if raw_thresholds is None:
+                raise RuntimeError("Raw-pixel thresholds were not prepared.")
+            raw_record, raw_rows = _evaluate_raw_pixel_memorization(
+                step_dir,
+                samples,
+                training,
+                raw_thresholds,
+                step=step,
+                checkpoint=checkpoint_path.name,
+                sample_count=sample_count,
+                nn_batch_size=nn_batch_size,
+                device=device,
+            )
+            metrics[RAW_PIXEL_F_MEM_NAME] = raw_record
+            table_rows.extend(raw_rows)
+
+        if HELDOUT_LOSS_NAME in protocol["metrics"]:
+            loss_payload, loss_reused = _load_or_heldout_losses(
+                step_dir / "heldout_loss.json",
+                checkpoint_path,
+                model,
+                heldout,
+                loss_count=loss_count,
+                config=config,
+                device=device,
+                batch_size=max(
+                    1,
+                    int(config.evaluation.loss_eval_batch_size)
+                    or min(int(feature_batch_size), 64),
+                ),
+            )
+            metrics[HELDOUT_LOSS_NAME] = {
+                **loss_payload,
+                "reused": loss_reused,
+            }
+            for probe, value in loss_payload["values"].items():
+                table_rows.append(
+                    {
+                        "step": step,
+                        "checkpoint": checkpoint_path.name,
+                        "metric": f"{HELDOUT_LOSS_NAME}_{probe}",
+                        "space": "loss",
+                        "value": value,
+                        "sample_count": sample_count,
+                        "loss_count": loss_count,
+                        "alpha": "",
+                        "rho": "",
+                    }
+                )
+
         write_json(
             feature_dir / "mnist_jointae.COMPLETE.json",
             {
@@ -1012,23 +1412,29 @@ def _evaluate_mnist(
                     feature_dir / "mnist_jointae.pt"
                 ),
                 "metrics": protocol["metrics"],
-                "source_tensor_sha256": sample_manifest[
-                    "generated_tensor_sha256"
-                ],
+                "source_tensor_sha256": sample_manifest["generated_tensor_sha256"],
             },
         )
+        metrics["elapsed_seconds"] = time.perf_counter() - step_started
+        metrics["stage_runtimes"] = {
+            "sampling_seconds": sample_manifest["runtime_seconds"],
+            "checkpoint_total_seconds": metrics["elapsed_seconds"],
+        }
         metrics["table_rows"] = table_rows
         write_json(step_dir / "metrics.json", metrics)
         write_json(
             step_dir / "COMPLETE.json",
             {
                 "completed_at": _utc_now(),
-                "generated_tensor_sha256": sample_manifest[
-                    "generated_tensor_sha256"
-                ],
+                "generated_tensor_sha256": sample_manifest["generated_tensor_sha256"],
                 "metrics_sha256": file_sha256(step_dir / "metrics.json"),
             },
         )
+        if streaming_retention:
+            ensure_checkpoint_retention(
+                step_dir,
+                retain_samples=step in protected_sample_steps,
+            )
         records.append(metrics)
     return records
 
@@ -1045,6 +1451,9 @@ def _evaluate_natural(
     feature_batch_size,
     nn_batch_size,
     noise_seed,
+    loss_count,
+    streaming_retention,
+    protected_sample_steps,
     assets_root,
     assets,
 ):
@@ -1069,11 +1478,12 @@ def _evaluate_natural(
     reference_root = root / "reference"
     reference_root.mkdir(parents=True, exist_ok=True)
     fid_reference_stats = None
+    dinov2_reference_stats = None
     if "inception_fid" in protocol["metrics"]:
         fid_reference_features, _ = _load_or_encode_natural(
             reference_root / "inception_v3_features.pt",
-            reference[:sample_count],
-            tensor_sha256(reference[:sample_count]),
+            reference,
+            tensor_sha256(reference),
             space="inception_v3",
             encoder=encoders["inception_v3"],
             assets=assets,
@@ -1086,10 +1496,8 @@ def _evaluate_natural(
             {
                 "space": "inception_v3",
                 "partition": "heldout_reference",
-                "count": sample_count,
-                "encoder_asset_sha256": _encoder_asset_hashes(
-                    "inception_v3", assets
-                ),
+                "count": len(reference),
+                "encoder_asset_sha256": _encoder_asset_hashes("inception_v3", assets),
             },
         )
 
@@ -1118,6 +1526,17 @@ def _evaluate_natural(
             batch_size=feature_batch_size,
             device=device,
         )
+        if space == "dinov2" and DINO_FD_NAME in protocol["metrics"]:
+            dinov2_reference_stats, _ = _load_or_feature_stats(
+                space_root / "heldout_stats.pt",
+                heldout_features,
+                {
+                    "space": "dinov2",
+                    "partition": "heldout_reference",
+                    "count": len(heldout_features),
+                    "encoder_asset_sha256": _encoder_asset_hashes("dinov2", assets),
+                },
+            )
         calibration_count = min(1024, max(1, len(heldout_features) // 2))
         calibration, _ = _load_or_raw_neighbors(
             space_root / "calibration_neighbors.pt",
@@ -1135,9 +1554,7 @@ def _evaluate_natural(
             nn_batch_size,
             device,
         )
-        thresholds[space] = _calibration_records(
-            calibration["r"], validation["r"]
-        )
+        thresholds[space] = _calibration_records(calibration["r"], validation["r"])
         write_json(
             space_root / "calibration.json",
             {
@@ -1149,12 +1566,30 @@ def _evaluate_natural(
             },
         )
 
+    raw_thresholds = None
+    if RAW_PIXEL_F_MEM_NAME in protocol["metrics"]:
+        raw_thresholds = _prepare_raw_pixel_reference(
+            root,
+            training,
+            reference,
+            calibration_count=min(1024, max(1, len(reference) // 2)),
+            nn_batch_size=nn_batch_size,
+            device=device,
+        )
+
     model = GDFM(config).to(device)
     records = []
     for step, checkpoint_path in checkpoints:
         step_started = time.perf_counter()
         step_dir = root / "checkpoints" / f"step_{step:06d}"
         step_dir.mkdir(parents=True, exist_ok=True)
+        if streaming_retention and (step_dir / "COMPLETE.json").is_file():
+            ensure_checkpoint_retention(
+                step_dir,
+                retain_samples=step in protected_sample_steps,
+            )
+            records.append(read_json(step_dir / "metrics.json"))
+            continue
         samples, sample_manifest, reused = _load_or_sample(
             step_dir,
             checkpoint_path,
@@ -1179,17 +1614,15 @@ def _evaluate_natural(
         reused_features = {}
 
         for space in protocol["feature_spaces"]:
-            generated_features[space], reused_features[space] = (
-                _load_or_encode_natural(
-                    feature_dir / f"{space}.pt",
-                    samples,
-                    sample_manifest["generated_tensor_sha256"],
-                    space=space,
-                    encoder=encoders[space],
-                    assets=assets,
-                    batch_size=feature_batch_size,
-                    device=device,
-                )
+            generated_features[space], reused_features[space] = _load_or_encode_natural(
+                feature_dir / f"{space}.pt",
+                samples,
+                sample_manifest["generated_tensor_sha256"],
+                space=space,
+                encoder=encoders[space],
+                assets=assets,
+                batch_size=feature_batch_size,
+                device=device,
             )
 
         if "inception_fid" in protocol["metrics"]:
@@ -1212,9 +1645,7 @@ def _evaluate_natural(
                 fid_reference_stats,
                 {
                     "metric": "inception_fid",
-                    "encoder_sha256": assets["encoders"]["fid_inception_v3"][
-                        "sha256"
-                    ],
+                    "encoder_sha256": assets["encoders"]["fid_inception_v3"]["sha256"],
                 },
             )
             fid = {
@@ -1226,12 +1657,8 @@ def _evaluate_natural(
                 "feature_dim": int(generated_stats["feature_dim"]),
                 "feature_extractor": "inception-v3-compat",
                 "feature_layer": "2048",
-                "encoder_sha256": assets["encoders"]["fid_inception_v3"][
-                    "sha256"
-                ],
-                "preprocessing": NATURAL_SPACE_SPECS["inception_v3"][
-                    "preprocessing"
-                ],
+                "encoder_sha256": assets["encoders"]["fid_inception_v3"]["sha256"],
+                "preprocessing": NATURAL_SPACE_SPECS["inception_v3"]["preprocessing"],
                 "features_reused": reused_features["inception_v3"],
                 "statistics_reused": reused_stats,
                 "distance_reused": reused_distance,
@@ -1250,6 +1677,55 @@ def _evaluate_natural(
             )
             write_json(step_dir / "fd.json", fid)
 
+        if DINO_FD_NAME in protocol["metrics"]:
+            generated_stats, reused_stats = _load_or_feature_stats(
+                feature_dir / "dinov2_stats.pt",
+                generated_features["dinov2"],
+                {
+                    "space": "dinov2",
+                    "partition": "generated",
+                    "encoder_asset_sha256": _encoder_asset_hashes("dinov2", assets),
+                },
+            )
+            if dinov2_reference_stats is None:
+                raise RuntimeError("DINOv2 reference statistics were not prepared.")
+            distance, reused_distance = _load_or_frechet_distance(
+                step_dir / "dinov2_fd_cache.json",
+                generated_stats,
+                dinov2_reference_stats,
+                {
+                    "metric": DINO_FD_NAME,
+                    "encoder_sha256": assets["encoders"]["dinov2_weights"]["sha256"],
+                },
+            )
+            dino_record = {
+                "metric": DINO_FD_NAME,
+                "distance": distance,
+                "n_samples": int(generated_stats["count"]),
+                "n_reference": int(dinov2_reference_stats["count"]),
+                "feature_dim": int(generated_stats["feature_dim"]),
+                "encoder_sha256": assets["encoders"]["dinov2_weights"]["sha256"],
+                "preprocessing": NATURAL_SPACE_SPECS["dinov2"]["preprocessing"],
+                "features_reused": reused_features["dinov2"],
+                "statistics_reused": reused_stats,
+                "distance_reused": reused_distance,
+            }
+            record[DINO_FD_NAME] = dino_record
+            record["table_rows"].append(
+                {
+                    "step": step,
+                    "checkpoint": checkpoint_path.name,
+                    "metric": DINO_FD_NAME,
+                    "space": "dinov2",
+                    "value": distance,
+                    "sample_count": sample_count,
+                    "reference_count": int(dinov2_reference_stats["count"]),
+                    "alpha": "",
+                    "rho": "",
+                }
+            )
+            write_json(step_dir / "dinov2_fd.json", dino_record)
+
         for space in protocol["memorization_spaces"]:
             neighbor_dir = step_dir / "nearest_neighbors"
             neighbor_dir.mkdir(parents=True, exist_ok=True)
@@ -1263,9 +1739,9 @@ def _evaluate_natural(
             )
             curve = []
             for threshold in thresholds[space]:
-                value = compute_f_mem_by_rho(
-                    neighbors["r"], threshold["rho"]
-                )[threshold["rho"]]
+                value = compute_f_mem_by_rho(neighbors["r"], threshold["rho"])[
+                    threshold["rho"]
+                ]
                 curve.append({**threshold, "f_mem": value})
                 record["table_rows"].append(
                     {
@@ -1287,16 +1763,62 @@ def _evaluate_natural(
                 "preprocessing": NATURAL_SPACE_SPECS[space]["preprocessing"],
                 "feature_dim": NATURAL_SPACE_SPECS[space]["dimension"],
             }
+        if RAW_PIXEL_F_MEM_NAME in protocol["metrics"]:
+            if raw_thresholds is None:
+                raise RuntimeError("Raw-pixel thresholds were not prepared.")
+            raw_record, raw_rows = _evaluate_raw_pixel_memorization(
+                step_dir,
+                samples,
+                training,
+                raw_thresholds,
+                step=step,
+                checkpoint=checkpoint_path.name,
+                sample_count=sample_count,
+                nn_batch_size=nn_batch_size,
+                device=device,
+            )
+            record[RAW_PIXEL_F_MEM_NAME] = raw_record
+            record["table_rows"].extend(raw_rows)
+
+        if HELDOUT_LOSS_NAME in protocol["metrics"]:
+            loss_payload, loss_reused = _load_or_heldout_losses(
+                step_dir / "heldout_loss.json",
+                checkpoint_path,
+                model,
+                reference,
+                loss_count=loss_count,
+                config=config,
+                device=device,
+                batch_size=max(
+                    1,
+                    int(config.evaluation.loss_eval_batch_size)
+                    or min(int(feature_batch_size), 64),
+                ),
+            )
+            record[HELDOUT_LOSS_NAME] = {
+                **loss_payload,
+                "reused": loss_reused,
+            }
+            for probe, value in loss_payload["values"].items():
+                record["table_rows"].append(
+                    {
+                        "step": step,
+                        "checkpoint": checkpoint_path.name,
+                        "metric": f"{HELDOUT_LOSS_NAME}_{probe}",
+                        "space": "loss",
+                        "value": value,
+                        "sample_count": sample_count,
+                        "loss_count": loss_count,
+                        "alpha": "",
+                        "rho": "",
+                    }
+                )
 
         for space in protocol["feature_spaces"]:
             completion = {
                 "completed_at": _utc_now(),
-                "feature_artifact_sha256": file_sha256(
-                    feature_dir / f"{space}.pt"
-                ),
-                "source_tensor_sha256": sample_manifest[
-                    "generated_tensor_sha256"
-                ],
+                "feature_artifact_sha256": file_sha256(feature_dir / f"{space}.pt"),
+                "source_tensor_sha256": sample_manifest["generated_tensor_sha256"],
                 "space": space,
             }
             stats_path = feature_dir / f"{space}_stats.pt"
@@ -1308,17 +1830,24 @@ def _evaluate_natural(
             write_json(feature_dir / f"{space}.COMPLETE.json", completion)
 
         record["elapsed_seconds"] = time.perf_counter() - step_started
+        record["stage_runtimes"] = {
+            "sampling_seconds": sample_manifest["runtime_seconds"],
+            "checkpoint_total_seconds": record["elapsed_seconds"],
+        }
         write_json(step_dir / "metrics.json", record)
         write_json(
             step_dir / "COMPLETE.json",
             {
                 "completed_at": _utc_now(),
-                "generated_tensor_sha256": sample_manifest[
-                    "generated_tensor_sha256"
-                ],
+                "generated_tensor_sha256": sample_manifest["generated_tensor_sha256"],
                 "metrics_sha256": file_sha256(step_dir / "metrics.json"),
             },
         )
+        if streaming_retention:
+            ensure_checkpoint_retention(
+                step_dir,
+                retain_samples=step in protected_sample_steps,
+            )
         records.append(record)
     return records
 
@@ -1328,11 +1857,17 @@ def evaluate_image_protocol(
     *,
     checkpoints="all",
     metrics=("fid",),
+    streaming_retention=False,
     feature_spaces=("dataset_default",),
     sample_count=10000,
     protocol_id="dataset-default-v1",
     output_dir=None,
     noise_path=None,
+    noise_artifact=None,
+    reference_artifact=None,
+    loss_count=None,
+    write_plots=False,
+    publication_evaluation=False,
     assets_manifest=None,
     eval_config=None,
     override_items=(),
@@ -1362,15 +1897,48 @@ def evaluate_image_protocol(
             assets_manifest, protocol["feature_spaces"]
         )
     selected = resolve_checkpoint_selection(run_dir, checkpoints)
+    selected_steps = {step for step, _ in selected}
+    protected_sample_steps = {
+        int(step)
+        for step in DEFAULT_PROTECTED_SAMPLE_STEPS
+        if int(step) in selected_steps
+    }
+    protected_sample_steps.add(max(selected_steps))
     sample_count = int(sample_count)
+    loss_count = sample_count if loss_count is None else int(loss_count)
     if sample_count < 2:
         raise ValueError("sample_count must be at least 2 for Fréchet statistics.")
-    noise, resolved_noise_path, embedded_noise_seed = _load_noise(
-        run_dir, noise_path
+    if loss_count < 1:
+        raise ValueError("loss_count must be positive.")
+    if publication_evaluation and not protocol.get("full_suite"):
+        raise ValueError("Publication evaluation requires --metrics full.")
+    if streaming_retention and not protocol.get("full_suite"):
+        raise ValueError("Streaming retention requires --metrics full.")
+    if publication_evaluation and sample_count != 10000:
+        raise ValueError("Publication evaluation requires sample_count=10000.")
+    if publication_evaluation and not write_plots:
+        raise ValueError("Publication evaluation requires --write-plots.")
+    if protocol.get("full_suite") and noise_artifact is None:
+        raise ValueError("The full metric suite requires --noise-artifact.")
+    if protocol.get("full_suite") and output_dir is None:
+        raise ValueError("The full metric suite requires an isolated --output-dir.")
+
+    expected_shape = (
+        int(config.data.image_channels),
+        int(config.data.image_size),
+        int(config.data.image_size),
+    )
+    noise, resolved_noise_path, embedded_noise_seed, noise_identity = _load_noise(
+        run_dir,
+        noise_path,
+        noise_artifact,
+        sample_count=sample_count,
+        expected_shape=expected_shape,
     )
     noise_seed = embedded_noise_seed
-    if noise_seed is None and noise_path is None:
+    if noise_seed is None and noise_path is None and noise_artifact is None:
         noise_seed = run_record.get("z_init_seed")
+        noise_identity["seed"] = noise_seed
     if len(noise) < sample_count:
         raise ValueError(
             f"Evaluation noise has {len(noise)} rows, fewer than {sample_count}."
@@ -1378,6 +1946,32 @@ def evaluate_image_protocol(
 
     bundle = load_torch(run_dir / "data_bundle.pt")
     validate_data_manifest(run_dir, bundle, run_kind="image", verify_hashes=True)
+    reference_identity = None
+    if reference_artifact is not None:
+        if protocol["dataset_family"] != "natural_rgb":
+            raise ValueError("MNIST uses its saved official-test reference bank.")
+        reference, payload, reference_manifest, reference_path = _load_reference(
+            reference_artifact
+        )
+        _validate_reference_compatibility(
+            bundle,
+            read_json(run_dir / "data_manifest.json"),
+            reference,
+            payload,
+            reference_manifest,
+        )
+        bundle = {**bundle, "reference": reference}
+        reference_identity = {
+            "path": str(reference_path),
+            "artifact_sha256": reference_manifest["artifact_sha256"],
+            "tensor_sha256": reference_manifest["reference_tensor_sha256"],
+            "count": len(reference),
+            "calibration_count": 1024,
+            "validation_count": len(reference) - 1024,
+        }
+    elif protocol.get("full_suite") and protocol["dataset_family"] == "natural_rgb":
+        raise ValueError("The natural-image full suite requires --reference-artifact.")
+
     root = _evaluation_root(run_dir, protocol_id, output_dir)
     identity = _manifest_identity(
         run_dir,
@@ -1389,6 +1983,12 @@ def evaluate_image_protocol(
         noise,
         noise_seed,
         assets_identity,
+        noise_identity=noise_identity,
+        reference_identity=reference_identity,
+        loss_count=loss_count,
+        write_plots=write_plots,
+        publication_evaluation=publication_evaluation,
+        streaming_retention=streaming_retention,
     )
     manifest = _prepare_manifest(root, identity)
 
@@ -1409,6 +2009,9 @@ def evaluate_image_protocol(
                 int(feature_batch_size),
                 int(nn_batch_size),
                 noise_seed,
+                loss_count,
+                streaming_retention,
+                protected_sample_steps,
             )
         else:
             if assets_root is None or assets is None:
@@ -1425,10 +2028,20 @@ def evaluate_image_protocol(
                 int(feature_batch_size),
                 int(nn_batch_size),
                 noise_seed,
+                loss_count,
+                streaming_retention,
+                protected_sample_steps,
                 assets_root,
                 assets,
             )
         _write_combined(root, records)
+        if write_plots:
+            from mem_param_src.runners.full_suite_plots import (
+                write_full_suite_plots,
+            )
+
+            write_full_suite_plots(root, bundle, protocol, selected)
+
     except Exception as error:
         manifest.update(
             {

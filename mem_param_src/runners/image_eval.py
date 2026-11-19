@@ -46,11 +46,42 @@ def build_parser():
         help="Optional saved noise bank when run_dir/z_init.pt is too small.",
     )
     parser.add_argument(
+        "--noise-artifact",
+        help="Verified canonical evaluation-noise artifact.",
+    )
+    parser.add_argument(
+        "--reference-artifact",
+        help="Frozen external held-out reference artifact.",
+    )
+    parser.add_argument(
+        "--loss-count",
+        type=int,
+        help="Held-out images used for each loss estimate.",
+    )
+    parser.add_argument(
+        "--write-plots",
+        action="store_true",
+        help="Write full-suite trajectories, grids, and neighbor panels.",
+    )
+    parser.add_argument(
+        "--publication-evaluation",
+        action="store_true",
+        help=(
+            "Require the 10,000-sample full-suite publication contract and "
+            "mark its manifest as paper-tier."
+        ),
+    )
+    parser.add_argument(
         "--assets-manifest",
         help="Pinned encoder asset manifest required by natural-image protocols.",
     )
     parser.add_argument("--feature-batch-size", type=int, default=256)
     parser.add_argument("--nn-batch-size", type=int, default=512)
+    parser.add_argument(
+        "--streaming-retention",
+        action="store_true",
+        help="Compact dense tensors immediately after each checkpoint completes.",
+    )
     parser.add_argument("--device", default="auto", help="auto, cpu, mps, or cuda.")
     parser.add_argument(
         "--set",
@@ -66,7 +97,7 @@ def build_parser():
 def main(argv=None):
     """Evaluate one saved image run without rebuilding its dataset."""
     args = build_parser().parse_args(argv)
-    protocol_mode = any(
+    protocol_mode = args.streaming_retention or any(
         value is not None
         for value in (
             args.checkpoints,
@@ -75,6 +106,10 @@ def main(argv=None):
             args.protocol_id,
             args.output_dir,
             args.noise_path,
+            args.noise_artifact,
+            args.reference_artifact,
+            args.loss_count,
+            args.write_plots,
             args.assets_manifest,
         )
     )
@@ -92,6 +127,12 @@ def main(argv=None):
             protocol_id=args.protocol_id or "dataset-default-v1",
             output_dir=args.output_dir,
             noise_path=args.noise_path,
+            noise_artifact=args.noise_artifact,
+            reference_artifact=args.reference_artifact,
+            loss_count=args.loss_count,
+            write_plots=args.write_plots,
+            publication_evaluation=args.publication_evaluation,
+            streaming_retention=args.streaming_retention,
             assets_manifest=args.assets_manifest,
             eval_config=args.eval_config,
             override_items=args.override_items,

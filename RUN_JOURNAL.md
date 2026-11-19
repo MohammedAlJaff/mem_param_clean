@@ -30,16 +30,20 @@ terminal states or only some tasks completed.
 
 ## Active runs
 
-| Job | Study | Status | Resources | Latest evidence | Batch directory |
-| --- | --- | --- | --- | --- | --- |
-| `17662195` (initial); `17683429` (resume) | CelebA32-gray Small-DiT full 3x3 at N=512/2048; seed 1; target 1M; via-x safe sampling | RUNNING: 18/18 | Per task: one thin A100-40GB, four CPUs, 32 GB, 24 hours; physical/effective batch 64/256 | At 2026-10-01 14:39 CEST, all rows had exact recovery at step 295,000-300,000, `error=null`, finite losses, and clean current logs. | [`20260929T124425Z_2240178`](outputs/job_sets/celeba32_dit_robustness_s1_1m_viax/20260929T124425Z_2240178) |
-| `17645048` (MNIST32); `17645049`-`17645053` (MNIST64 stages); verifier `17645054` | Fresh MNIST32 U-Net-S and MNIST64 U-Net-L diagonals at N=512/2048; seeds 0-2; target 1M | PARTIAL: MNIST32 18/18 complete; MNIST64 18/18 running stage 5 | Thin A100-40GB for MNIST32; fat A100-80GB for MNIST64; physical/effective batch 256/256 | At 2026-10-01 14:39 CEST, MNIST64 was at steps 955,000-960,000 with exact recovery, `error=null`, finite losses, and clean stage-5 logs. | [`20260927T165106Z_1991997`](outputs/job_sets/mnist_diagonal_1m/20260927T165106Z_1991997) |
-| `17654914`-`17654918` (stages); verifier `17654919` | Fresh CelebA64 RGB U-Net-L diagonals at N=512/2048; seeds 0-2; target 1M | RUNNING: 18/18 in stage 4; stage 5 and verifier dependency-pending | Per task: one fat A100-80GB, eight CPUs, 64 GB, 30 hours; physical/effective batch 256/256 | At 2026-10-01 14:39 CEST, all rows had exact recovery at step 620,000, `error=null`, finite losses, and clean stage-4 logs. | [`20260928T131627Z_3579761`](outputs/job_sets/celeba64_rgb_diagonal_1m/20260928T131627Z_3579761) |
+| Job | Study | Status | Resources per task | Batch directory and next action |
+| --- | --- | --- | --- | --- |
+| `17701413`, tasks `0-17` | Seed-1 Small-DiT full paper evaluation, N=512/2048, full 3x3 | 18/18 RUNNING at 2026-10-05 09:07 CEST; all frozen imports verified | One A100-40GB, 8 CPUs, 64 GB, 12 hours; no dependencies or throttle | [`20261005T070254Z_4059124`](outputs/evals/celeba32_dit_seed1_streaming_full_10000/20261005T070254Z_4059124); check 72 checkpoints and paper acceptance per run |
 
 ## Closed runs
 
 | Job | Study | Final status | Finished | Final artifacts | Batch directory |
 | --- | --- | --- | --- | --- | --- |
+| `17662195` (initial); resumes through `17698276` | CelebA32-gray Small-DiT seed-1 full 3x3 at N=512/2048 | COMPLETED, 18/18 at 1M; latest array exit `0:0` for all tasks | 2026-10-05 03:14:49 CEST | All run records trained, final model checkpoints and 1M recovery states present, finite final logged losses, successful W&B finishes; paper eval submitted separately as `17701413` | [`20260929T124425Z_2240178`](outputs/job_sets/celeba32_dit_robustness_s1_1m_viax/20260929T124425Z_2240178) |
+| `17696049`-`17696056`; repair `17699894` | Original all-1M paper batch: MNIST and CelebA64; CelebA32 replaced separately | CLOSED: 54 accepted; 144 cancelled tasks superseded; all 18 CelebA64 repairs completed `0:0` | 2026-10-04 21:05:40 CEST | 720 MNIST and 1,350 CelebA64 checkpoint results; acceptance and run-level retention complete for all 54 runs | [`20261004T005702Z_3271331`](outputs/evals/all_1m_full_10000/20261004T005702Z_3271331) |
+| `17698532`-`17698535`; retries `17699034`, `17699035` | Streaming paper evaluation: 36 seed-0 Small-DiT and 108 CelebA32 U-Net runs | COMPLETED: 144/144 accepted; all replacement attempts completed `0:0` | 2026-10-04 22:00:46 CEST | 10,368/10,368 checkpoints complete and retained; 144 acceptance and final retention records | [`20261004T110904Z_1979099`](outputs/evals/celeba32_streaming_full_10000/20261004T110904Z_1979099) |
+| `17654914`-`17654918` (stages); verifier `17654919` | Fresh CelebA64 RGB U-Net-L diagonals at N=512/2048; seeds 0-2; target 1M | COMPLETED, 18/18 at step 1,000,000; verifier exit `0:0` | 2026-10-03 11:06 CEST | All final checkpoints and recovery states, finite losses, successful W&B finishes, and strict `TRAINING_COMPLETE` marker | [`20260928T131627Z_3579761`](outputs/job_sets/celeba64_rgb_diagonal_1m/20260928T131627Z_3579761) |
+| `17693255` | Real clean-test checkpoint-metrics replay | COMPLETED, exit `0:0`, elapsed 1 minute 4 seconds | 2026-10-03 11:06 CEST | FID-10k, raw-pixel f_mem, and SSCD f_mem reproduced to displayed precision; complete summary and reusable metric evidence | [`20261003T090549Z`](outputs/interactive_checkpoint_metrics/20261003T090549Z) |
+| `17645048` (MNIST32); `17645049`-`17645053` (MNIST64 stages); verifier `17645054` | Fresh MNIST32 U-Net-S and MNIST64 U-Net-L diagonals at N=512/2048; seeds 0-2; target 1M | COMPLETED, 36/36 at step 1,000,000; verifier exit `0:0` | 2026-10-02 10:33 CEST | All final checkpoints and recovery states, finite loss histories, successful W&B finishes, and shared `TRAINING_COMPLETE` marker | [`20260927T165106Z_1991997`](outputs/job_sets/mnist_diagonal_1m/20260927T165106Z_1991997) |
 | `17639669` | CelebA32-gray Small-DiT diagonal `x/x`, `eps/eps`, `v/v` pilot | COMPLETED, 3/3 at step 100,000; exit `0:0` | 2026-09-26 04:24 CEST | Per run: 28 checkpoints, generated tensors, projected-pixel records and grids; exact step-100k recovery; successful W&B finish | [`20260925T172747Z_3410286`](outputs/job_sets/celeba32_dit_diagonal_100k_viax/20260925T172747Z_3410286) |
 | arrays `17556454`, `17556455`, `17556456`, `17556457`; verifier `17556458` | EPS/EPS 64x64 N=512 capacity gate | COMPLETED, 24/24 training tasks and final verifier; applications paused normally at step 400,000 | 2026-09-21 10:42 CEST | Exact two-process training, 24 checkpoints and recovery states, 1,344 valid sampler diagnostics, W&B finishes, and `GATE_400K_COMPLETE` | [`20260919T155341Z_3213634`](outputs/job_sets/eps_eps_64_n512/20260919T155341Z_3213634) |
 | arrays `17556193`, `17556194`; resume smoke `17556449`; finalizer `17556451` | Corrected W&B and exact-resume gate for the 64x64 study | COMPLETED, 6/6 W&B smokes plus strict process-resume comparison | 2026-09-19 18:21 CEST | Four-profile artifacts, successful online W&B finishes, exact model/Adam/RNG/batch/history comparison, and `SMOKE_COMPLETE` | [`20260919T155341Z_3213634`](outputs/job_sets/eps_eps_64_n512/20260919T155341Z_3213634) |
@@ -1103,6 +1107,8 @@ terminal states or only some tasks completed.
   tomorrow. No jobs were changed during this check.
 
 
+
+
 ### 2026-09-28 14:30 CEST - Rigorous early-crash audit passed
 
 - Cross-checked Slurm accounting, all 180 active `run.json` records, all
@@ -1840,3 +1846,1054 @@ terminal states or only some tasks completed.
 - Submitted exact-resume array `17691417`. Slurm accepted all 18 tasks under
   the new project ID; they are waiting for the scheduler to assign GPUs.
 - No RGB, MNIST, seed-0 DiT, U-Net, or weighting job was changed or duplicated.
+
+
+### 2026-10-03 00:48 CEST - Submit sampling-only runtime benchmark
+
+- Selected the completed CelebA32 N=2048, seed-0, x/x U-Net-S run at step
+  1,000,000. It has 72 saved checkpoints and uses the saved 50-step full-Heun,
+  safe-via-x, unclamped `x_t_max` sampler.
+- The first launcher call stopped before `sbatch` while recording the Conda
+  environment. The site wrapper referenced unset `CONDA_DEFAULT_ENV` under
+  `set -u`. It created partial batch directory
+  `outputs/job_sets/checkpoint_sampling_runtime/20261002T224656Z_1219292` but
+  submitted no job.
+- Corrected the shell boundary, repeated syntax validation, and submitted job
+  `17692093` under project `berzelius-2026-269`. It requests one thin
+  A100-40GB GPU for 30 minutes and has a 1,440-second sampling budget.
+- Frozen batch:
+  `outputs/job_sets/checkpoint_sampling_runtime/20261002T224818Z_1228250`.
+  It hashes the saved config, run record, data bundle, data manifest, noise,
+  checkpoint, source snapshot, job files, and environment.
+- The job measures 10,000 samples without metrics or saved generated images.
+  It will report measured one-checkpoint sampling time and the corresponding
+  72-checkpoint sampling-only projection.
+- Slurm accepted the job. It is pending for scheduler priority. No production
+  training, resume, verifier, or evaluation job was changed.
+
+
+### 2026-10-03 00:57 CEST - Move runtime benchmark to development QoS
+
+- The project association permits `devel`, `normal`, and `1g.10gb` QoS. The
+  `devel` QoS accepts one GPU and 16 CPUs per user, so this one-GPU, 30-minute
+  benchmark fits its declared limits.
+- Slurm denied an in-place QoS update. Cancelled untouched pending job
+  `17692093`; accounting records zero elapsed time and no work ran.
+- Added `--qos=devel` to the launcher, repeated shell validation and the
+  write-free preview, and submitted replacement job `17692132`.
+- Frozen replacement batch:
+  `outputs/job_sets/checkpoint_sampling_runtime/20261002T225610Z_1277373`.
+  Slurm confirms project `berzelius-2026-269`, QoS `devel`, one thin
+  A100-40GB GPU, and a 30-minute limit.
+- The replacement is pending for scheduler priority. Slurm currently estimates
+  a start on 2026-10-04. The short request is eligible for backfill, but the
+  development QoS did not produce an immediate start.
+
+
+### 2026-10-03 01:04 CEST - Cancel queued benchmark for interactive execution
+
+- Confirmed job `17692132` was still pending for priority with zero elapsed
+  time, then cancelled it when the researcher chose an available interactive
+  GPU allocation.
+- No benchmark computation ran in either cancelled job. The reusable command
+  runner and notebook remain ready and use the same saved CelebA32 checkpoint.
+
+
+### 2026-10-03 03:29 CEST - Production status check
+
+- Across 234 production trajectories, 198 are trained at one million, 18
+  CelebA64 RGB trajectories are running, and 18 seed-1 Small-DiT trajectories
+  have an exact-resume job waiting for GPUs. No trajectory lacks a submitted
+  continuation.
+- All 18 CelebA64 RGB tasks in stage-5 array `17654918` are running under
+  `berzelius-2026-269`. Live output reached steps 984,500-988,250. Saved
+  histories and recovery indexes reached steps 980,000-985,000. Every latest
+  loss is finite, every run has `error=null`, and every indexed recovery file
+  is present. Final verifier `17654919` waits for stage 5 to finish.
+- Seed-1 Small-DiT exact-resume array `17691417` is accepted under
+  `berzelius-2026-269` and waits for scheduler priority. Slurm estimates a
+  start at 2026-10-04 09:15 CEST. All 18 source runs remain safely interrupted
+  at exact recovery steps 552,194-556,621 with finite losses, `error=null`,
+  and present recovery files.
+- The other 198 trajectories remain complete at one million: CelebA32 U-Net
+  3x3 108/108, seed-0 Small-DiT 36/36, MNIST32 18/18, MNIST64 18/18, weighted
+  native-v/v N=512 9/9, and weighted native-v/v N=2048 9/9. Every row has a
+  final checkpoint, a one-million-step recovery state, a finite final loss,
+  `error=null`, and a successful W&B finish.
+- The current RGB stage-5 logs and the latest seed-1 DiT logs contain no
+  traceback, CUDA OOM, disk/quota fault, non-finite value, assertion error,
+  runtime error, cancellation, or kill signature.
+- Separate interactive job `17692162` is running with a four-hour limit. It is
+  not a production training trajectory. No job was submitted, resumed,
+  cancelled, or modified during this check.
+
+
+### 2026-10-03 03:35 CEST - Resume-all audit
+
+- Checked every unfinished production trajectory before submission. The 18
+  seed-1 Small-DiT runs already have exact-resume array `17691417`, tasks 0-17,
+  waiting for scheduler priority under `berzelius-2026-269`.
+- All 18 CelebA64 RGB trajectories remain active in stage-5 array `17654918`.
+  Final verifier `17654919` remains correctly queued behind that stage.
+- No stopped production trajectory lacks a continuation job. Submitted no
+  duplicate resume job and changed no running job.
+
+
+### 2026-10-03 10:39 CEST - Status and project-code audit
+
+- CelebA64 RGB stage-5 array `17654918` completed all 18 tasks with exit
+  `0:0`. Every run is trained at one million with its final checkpoint,
+  one-million-step recovery state, finite final loss, `error=null`, and a
+  successful W&B finish. The final verifier `17654919` is waiting for priority.
+- Seed-1 Small-DiT exact-resume array `17691417`, tasks 0-17, remains waiting
+  for priority. Its recovery state remains valid at steps 552,194-556,621.
+- Slurm `squeue`, `sacct`, and `scontrol` all report account/project code
+  `berzelius-2026-269` for every live or waiting job: DiT resume `17691417`,
+  RGB verifier `17654919`, and interactive job `17693158`. All 18 completed
+  RGB stage-5 tasks also ran under `berzelius-2026-269`.
+- Maintained launch and resume scripts default to `berzelius-2026-269`.
+  Frozen batch snapshots still contain their original `berzelius-2026-78`
+  defaults. They remain unchanged as historical provenance; Slurm's submitted
+  records are authoritative and show the corrected project code.
+
+
+### 2026-10-03 10:46 CEST - Queue and runtime estimate
+
+- Slurm estimates 2026-10-04 13:32 CEST for both seed-1 Small-DiT resume
+  array `17691417` and CelebA64 verifier `17654919`. These estimates can move.
+- Measured throughput from the latest DiT attempts is 11,497-11,655 optimizer
+  steps per GPU-hour. The 18 trajectories need 38.1-38.9 more GPU-hours each.
+  Their queued 24-hour allocation should reach about steps 828,121-836,214,
+  after which one final exact resume of about 14-15 GPU-hours will be needed.
+- Write-free `sbatch --test-only` probes for a new 30-minute thin-GPU job, a
+  new 24-hour thin-GPU job, and another 18-task 24-hour thin-GPU array all
+  returned an earliest start estimate of 2026-10-04 13:49 CEST. This is about
+  17 minutes later than the already queued jobs. For an array, the estimate
+  describes the earliest schedulable task, not guaranteed simultaneous starts.
+- Confirmed probe IDs `17693169`-`17693171` do not exist in `squeue`; the probes
+  submitted no jobs. No live job was changed.
+
+
+### 2026-10-03 11:00 CEST - Submit real dummy metrics job
+
+- Submitted job `17693255` under project `berzelius-2026-269`, normal QoS.
+  It requests one thin A100-40GB GPU, four CPUs, 32 GB, and 30 minutes.
+- The job runs
+  `jobs/berzelius/checkpoint_sampling_runtime/run_interactive_metrics.sh`.
+  It reuses the verified 10,000-image generated bank and computes clean-test
+  raw-pixel f_mem, SSCD f_mem, and FID in a new timestamped output directory.
+- Slurm accepted the job in `PENDING (Priority)` state and estimates a start at
+  2026-10-04 13:32 CEST. Logs are
+  `outputs/job_sets/checkpoint_sampling_runtime/dummy_metrics_logs/dummy_17693255.{out,err}`.
+- The submission did not change any production job. Immediately afterward,
+  DiT resume tasks 0-8 were running and tasks 9-17 were waiting for resources.
+
+
+### 2026-10-03 11:11 CEST - End-of-session state
+
+- All 18 seed-1 Small-DiT tasks in resume array `17691417` are running under
+  project `berzelius-2026-269`. Every task resumed from its matching saved step.
+  Every run record is `training` with `error=null` and a finite latest loss. The
+  current logs contain no traceback, OOM, disk, non-finite, or runtime failure.
+- CelebA64 verifier `17654919` started at 11:05 CEST and completed with exit
+  `0:0` in 44 seconds. It validated all 18 trajectories at one million and
+  wrote the strict `TRAINING_COMPLETE` marker.
+- Dummy metric job `17693255` initially displayed a next-day start estimate,
+  but it started after 5 minutes 44 seconds and completed with exit `0:0` in 64
+  seconds. Its output is
+  `outputs/interactive_checkpoint_metrics/20261003T090549Z/`. It reproduced,
+  to displayed precision, FID-10k 34.8159, raw fixed-rho f_mem 0.5197, calibrated raw f_mem
+  0.9450, and calibrated SSCD f_mem 0.6235.
+- Every submitted or running job uses project `berzelius-2026-269`. Across the
+  234 production trajectories, 216 are complete at one million and the final
+  18 are running. No production trajectory is stopped or missing continuation.
+- Separate researcher-controlled interactive job `17693158` remains running
+
+
+### 2026-10-03 14:05 CEST - Full metric-suite smoke submission
+
+- Built and verified the persistent seed-2003 canonical evaluation-noise bank
+  with shape `[10000, 1, 32, 32]`.
+- Submitted unthrottled array `17693872`, tasks 0-2, under project
+  `berzelius-2026-269` with normal QoS.
+- Each task requests one thin A100-40GB GPU, eight CPUs, 64 GB, and four hours.
+- Tasks `0`, `1`, and `2` started together on `node024`.
+- Frozen batch and results root:
+  `outputs/smoke/full_metric_suite_512/20261003T120348Z_1385173/`.
+- Task mapping is CelebA32 U-Net-S, MNIST32 U-Net-S, and CelebA32 Small-DiT.
+
+
+### 2026-10-03 14:17 CEST - Smoke repair and final-replica submission
+
+- MNIST task `17693872_1` completed all 20 checkpoints and both evaluator
+  passes. It failed only in the final plot validator because the plotter used
+  the versioned name `memorization_mnist_jointae32_v1.png` and the validator
+  expected an unversioned name.
+- Applied a validation-only correction to the repository and frozen batch.
+  The batch records the original and amended validator hashes in
+  `_job/AMENDMENTS.md`. Restart `17693881_1` reused every completed checkpoint
+  artifact and finished with exit `0:0` in 69 seconds. The MNIST result now has
+  `ACCEPTED.json`.
+- At 14:17 CEST, the 512-sample U-Net and DiT tasks remained healthy on
+  `node024` with 57/72 and 29/72 checkpoints complete. MNIST was accepted at
+  20/20.
+- Submitted unthrottled array `17693885`, tasks 0-2, for the separate
+  `final-replica10000` profile. Each task requests one thin A100-40GB GPU,
+  eight CPUs, 64 GB, normal QoS, project `berzelius-2026-269`, and four hours.
+- This array evaluates only step 1,000,000 for the same U-Net, MNIST, and DiT
+  runs. It uses all 10,000 canonical noise rows, runs the full metric suite,
+  saves the 10,000 generated images, runs a cache-only second pass, and writes
+  development-only results beneath
+  `outputs/smoke/final_metric_suite_replica_10000/20261003T121532Z_1453615/`.
+- Tasks 0 and 1 started on `node024`. Task 2 was waiting for a GPU resource.
+  This dummy gate does not resume the final all-run paper evaluation or build
+  the final archive.
+
+
+### 2026-10-03 14:24 CEST - Final-replica validator repair
+
+- Replica tasks `17693885_0` and `17693885_1` completed their step-1,000,000
+  metrics and both reuse passes. Their final validator incorrectly required
+  sample grids at steps 0, 10,000, and 100,000, which this final-only profile
+  did not select. Both tasks failed after all expensive work was complete.
+- Changed the validator to require a canonical sample grid only when the
+  matching checkpoint is present. The frozen batch records the original and
+  amended validator hashes in `_job/AMENDMENTS.md`. Sampling, features,
+  metrics, plots, and cached artifacts are unchanged.
+- Submitted cache-only restarts `17693893_1` for MNIST and `17693894_0` for
+  U-Net. MNIST completed with exit `0:0` in 56 seconds and has an accepted
+  `[10000, 1, 32, 32]` sample bank. U-Net was still running its reuse checks.
+- Original replica task `17693885_2` continued on `node030`. Because its
+  validation process had not started when the frozen fix was applied, it can
+  consume the corrected validator without a restart.
+
+
+### 2026-10-03 14:28 CEST - Final-replica smoke accepted
+
+- All three final-replica outputs have strict `ACCEPTED.json` records. Each
+  contains one step-1,000,000 sample bank with shape `[10000, 1, 32, 32]`, all
+  finite required metrics, bounded f_mem values, cache-only second-pass flags,
+  and readable plots.
+- U-Net task `17693885_0` completed its expensive work in 4m54s. Cache-only
+  restart `17693894_0` completed in 1m06s. Its FID-10k is 34.7997 and its
+  DINOv2 Fréchet distance is 0.163546.
+- MNIST task `17693885_1` completed its expensive work in 3m42s. Cache-only
+  restart `17693893_1` completed in 56s. Its global JointAE FD is 0.851736 and
+  its class-aware JointAE FD is 3.02668.
+- DiT task `17693885_2` completed normally in 8m30s with exit `0:0`. Its
+  FID-10k is 22.6027 and its DINOv2 Fréchet distance is 0.0934862.
+- Results root:
+  `outputs/smoke/final_metric_suite_replica_10000/20261003T121532Z_1453615/`.
+  The only failures were the recorded post-compute grid-validator mismatch in
+  tasks 0 and 1. No task had a sampling, encoding, numerical, OOM, or source-
+  integrity failure.
+
+
+### 2026-10-03 14:36 CEST - Full trajectory smoke accepted
+
+- All three 512-sample trajectory outputs have strict `ACCEPTED.json` records:
+  U-Net 72/72, MNIST 20/20, and DiT 72/72 checkpoints.
+- U-Net task `17693872_0` completed in 16m48s. MNIST performed all expensive
+  work in 4m21s, and validation-only restart `17693881_1` completed in 1m09s.
+  DiT task `17693872_2` completed in 30m23s. All successful task records have
+  exit `0:0`.
+- U-Net and DiT each contain 1,728 finite metric rows, 1,368 f_mem rows, and 16
+  verified plots. MNIST contains 320 finite metric rows, 220 f_mem rows, and 12
+  verified plots. Every generated tensor has shape `[512, 1, 32, 32]`.
+- A final audit checked every checkpoint metric record. All samples, feature
+  matrices, statistics, distances, neighbors, and held-out losses report cache
+  reuse on the repeated invocation. A fresh SHA-256 check passed for every
+  frozen run, checkpoint, noise, reference, and encoder input in both smoke
+  batches. This also confirms that source training directories did not change.
+- Results root:
+  `outputs/smoke/full_metric_suite_512/20261003T120348Z_1385173/`. Its current
+  size is 8.3 GiB. The final-replica root is 1.7 GiB.
+- The only trajectory failure was the recorded MNIST post-compute plot-name
+  validator mismatch. There was no sampling, encoding, numerical, OOM, disk,
+  or source-integrity failure.
+- Fourteen focused canonical-noise and evaluator tests passed in
+  `mem_param_env`, including both mocked two-checkpoint integrations and their
+  strict acceptance checks. Ruff, Python compilation, shell syntax, launcher
+  dry runs, notebook JSON, notebook-to-Python compilation, and
+  `git diff --check` passed.
+- The review notebook executed every enabled cell against the three completed
+  Berzelius trajectory outputs through a real Jupyter kernel. The optional GPU
+  rerun cell remained disabled. The temporary executed notebook was valid JSON
+  and contained all metric tables, trajectories, grids, neighbor panels, and
+  artifact paths.
+
+
+### 2026-10-03 14:52 CEST - Plot final 10,000-sample metrics
+
+- Added one combined final-checkpoint summary beneath the isolated replica
+  output. It separates Inception FID, DINOv2 Fréchet distance, natural-image
+  calibrated f_mem, MNIST JointAE FD, and MNIST calibrated f_mem so unrelated
+  metric spaces are not compared on one axis.
+- The figure uses step 1,000,000, 10,000 generated samples, and alpha 0.01 for
+  calibrated f_mem. Exact plotted values are saved beside the PNG and PDF.
+- PNG SHA-256:
+  `c607f6986fd033113f6409d08ca61dfbf1003b924df87751854da1b317c4602f`.
+- CSV SHA-256:
+  `aa9d1ea082f2473c279c96d20a20698909c178222f2c49dfa1e31376e3b636ed`.
+
+
+### 2026-10-03 15:02 CEST - Plot all-checkpoint training dynamics
+
+- Added separate CelebA32 and MNIST32 training-dynamics figures beneath the
+  accepted 512-sample trajectory root. The figures use every saved checkpoint,
+  exact unsmoothed values, and a symmetric-log update axis that includes step
+  zero.
+- The CelebA figure compares U-Net-S and Small-DiT for Inception FID, DINOv2
+  Fréchet distance, four calibrated memorization spaces, and three held-out
+  loss branches. The MNIST figure contains both JointAE quality metrics, both
+  memorization spaces, and all held-out losses.
+- Exported 1,436 exact plotted values to
+  `summary/training_dynamics_selected_n512.csv`. Calibrated memorization curves
+  use alpha 0.01. No smoothing or aggregation was applied.
+- CelebA PNG SHA-256:
+  `9c14f8d517b5ab4617fe813d9bc0a2c588c90f72416c8420f47afad93bf3f60f`.
+- MNIST PNG SHA-256:
+  `022681dde35762f40a5e2098036d9d4c6c2fa7b2af4dc362839db4808fc86ff6`.
+
+
+### 2026-10-03 15:34 CEST - Submit v/v epsilon-equivalent paper evaluation
+
+- The researcher explicitly resumed paper-tier evaluation for the six
+  CelebA32 U-Net-S native-`v/v`, `eps_equivalent` runs at `N={512,2048}` and
+  seeds `{0,1,2}`. Other full evaluations and the final archive remain on ice.
+- Submitted unthrottled array `17693967`, tasks `0-5`, under project
+  `berzelius-2026-269` with normal QoS.
+- Each task requests one thin A100-40GB GPU, eight CPUs, 64 GB, and 12 hours.
+  Each task evaluates all 72 checkpoints with 10,000 fixed-noise samples and
+  the complete natural-image metric suite. Held-out losses use 512 images.
+- The launcher froze the source, environment, six run paths, 432 checkpoint
+  files, canonical evaluation noise, clean CelebA test reference, encoder
+  assets, and SHA-256 records before submission.
+- Each worker will run a cache-only second evaluator invocation and strict
+  paper-tier validation. It will verify all frozen inputs before and after
+  evaluation.
+- Frozen batch and result root:
+  `outputs/evals/celeba32_vv_eps_equivalent_full_10000/20261003T133411Z_2057207/`.
+- At the first status check, all six tasks were `PENDING`; no task had started
+  or failed.
+
+
+### 2026-10-03 15:39 CEST - Correct equivalent-weight evaluation scope
+
+- The researcher clarified that the paper evaluation must include both
+  equivalent-weight controls: `x_equivalent=(1-t)^2` and
+  `eps_equivalent=t^2`. The `unit` baseline is outside this corrected request.
+- Cancelled array `17693967` while every task was still pending. Slurm records
+  zero elapsed time, so the mistaken six-run subset used no GPU compute.
+- Replaced the launch matrix with 12 runs: two weightings, `N={512,2048}`, and
+  seeds `{0,1,2}`. Each run has 72 checkpoints and uses the same paper-tier
+  10,000-sample protocol.
+- Submitted corrected unthrottled array `17694005`, tasks `0-11`, under project
+  `berzelius-2026-269` with normal QoS. Each task requests one thin A100-40GB,
+  eight CPUs, 64 GB, and 12 hours.
+- Frozen batch and result root:
+  `outputs/evals/celeba32_vv_equivalent_weighting_full_10000/20261003T134406Z_2096528/`.
+  All 12 source-input manifests contain 88 hashed files, and the complete
+  frozen snapshot passed verification after submission.
+- At the first corrected status check, all 12 tasks were `PENDING (Priority)`.
+  Slurm gave a provisional start estimate of 2026-10-05 01:36 CEST.
+
+
+### 2026-10-03 15:47 CEST - Expand to the complete weighting experiment
+
+- The researcher clarified that the evaluation must include the entire
+  native-`v/v` loss-weighting experiment, including the `unit` baseline.
+- Cancelled array `17694005` while all 12 tasks were pending. Slurm records
+  zero elapsed time, so it used no GPU compute.
+- Expanded the final launch matrix to 18 runs: `x_equivalent`, `unit`, and
+  `eps_equivalent` at `N={512,2048}` and seeds `{0,1,2}`. The evaluation
+  protocol remains 10,000 samples at every one of 72 checkpoints per run.
+- Submitted final unthrottled array `17694010`, tasks `0-17`, under project
+  `berzelius-2026-269` with normal QoS. Each task requests one thin A100-40GB,
+  eight CPUs, 64 GB, and 12 hours.
+- Frozen batch and result root:
+  `outputs/evals/celeba32_vv_weighting_full_10000/20261003T134718Z_2109890/`.
+  All 18 source-input manifests contain 88 hashed files, and the complete
+  frozen snapshot passed verification after submission.
+- At the first final status check, all 18 tasks were pending. No task had
+  started or failed, and Slurm did not yet provide a start estimate.
+
+
+### 2026-10-03 17:55 CEST - Weighting evaluation remains queued
+
+- Final array `17694010`, tasks `0-17`, remains fully pending for priority.
+  No task has started, failed, or consumed GPU time.
+- All 18 result directories remain at 0/72 completed checkpoints. No task
+  status file or Slurm output exists because no worker has started.
+- Slurm currently estimates 2026-10-04 10:38 CEST as the earliest start for
+  the array. This estimate can change with cluster scheduling.
+
+
+### 2026-10-03 18:00 CEST - Audit remaining experiment work
+
+- Confirmed 216 of the 234 main one-million-step training trajectories are
+  complete with `state=trained`, `final_step=1000000`, and no saved error.
+- The completed groups are 108 CelebA32 U-Net 3x3 runs, 36 MNIST diagonal
+  runs, 18 CelebA64 diagonal runs, 36 CelebA32 seed-0 Small-DiT runs, and all
+  18 native-v/v loss-weighting runs.
+- The remaining 18 trajectories are the CelebA32 seed-1 Small-DiT robustness
+  runs in array `17691417`. All are running without saved errors at steps
+  552,194 through 556,621.
+- Full paper-scale checkpoint evaluation is not complete for the other study
+  groups. The accepted outputs so far are development smokes and the isolated
+  final-checkpoint gates. The 18-run weighting evaluation remains pending.
+
+
+### 2026-10-03 18:03 CEST - Assess the October 6 critical path
+
+- Live seed-1 Small-DiT logs are at steps 632,250 through 637,750 after about
+  seven hours in the current allocation. The observed rate projects roughly
+  32 more training hours to one million, before queue delay or evaluation.
+- The weighting evaluation has a provisional start at 2026-10-04 10:38 CEST.
+  The measured 10,000-sample U-Net full-suite gate took 4m54s for one
+  checkpoint. A linear 72-checkpoint bound is about 5.9 GPU-hours per run,
+  before cache verification, plots, and scheduler staggering.
+- A complete all-study paper evaluation is not a safe October 6 plan. A scoped
+  paper based on completed U-Net studies and the queued weighting evaluation
+  remains feasible if aggregation, plots, and prose are prepared before the
+  result arrives. Seed-1 DiT must not be on this deadline's critical path.
+
+
+### 2026-10-03 18:30 CEST - Live job and experiment-block status audit
+
+- Slurm shows all 18 seed-1 Small-DiT tasks in array `17691417` running. Their
+  allocation elapsed times are 7h24m-7h31m. Live logs reached steps 637,750
+  through 643,250 of one million. The latest displayed losses are finite, all
+  saved run records remain `state=training` with `error=null`, and a scan of
+  the current logs found no traceback, OOM, quota, non-finite, assertion,
+  cancellation, or kill signature.
+- The production-training total remains 216/234 complete. Only the 18
+  seed-1 Small-DiT robustness trajectories remain in training.
+- Paper evaluation array `17694010`, tasks `0-17`, remains fully pending for
+  priority. No task has started or consumed GPU time. The result root contains
+  0/1,296 checkpoint completion markers. Slurm now gives a provisional start
+  estimate of 2026-10-04 06:09 CEST, earlier than its previous estimate.
+- The 108-run CelebA32 U-Net block, 36-run seed-0 Small-DiT block, 36-run
+  MNIST block, 18-run CelebA64 RGB block, and both nine-run native-v/v
+  weighting blocks retain complete one-million-step artifacts. Strict
+  `TRAINING_COMPLETE` markers cover every group except the seed-0 Small-DiT
+  block, whose 36 saved run records and final artifacts are complete.
+- Supporting blocks remain at their intended endpoints: the initial 3x3 and
+  data-format gates are 9/9 and 7/7 paused at 200k; the capacity-attention gate
+  is 24/24 paused and verified at 400k; the Small-DiT pilot is 3/3 at 100k;
+  the successful N=16 diagnostic batches are 5/5 at 10k and 5/5 at 50k; and
+  the epsilon smoke is 6/6 at 2k. The six-run epsilon-recovery multiseed
+  launcher has no submitted batch and remains not run.
+- Accepted evaluation evidence remains limited to the full-suite development
+  smokes and final-checkpoint replicas for one U-Net, one MNIST, and one DiT
+  run, plus the older selected-checkpoint epsilon-recovery evaluation. No
+  complete paper-tier trajectory evaluation exists yet for the other main
+  blocks.
+- No job was submitted, cancelled, resumed, or modified during this check.
+
+
+### 2026-10-03 19:30 CEST - Weighting evaluation starts
+
+- All 18 tasks in paper-evaluation array `17694010` are running. They started
+  between 18:50 and 19:03 CEST and each has a 12-hour limit.
+- The evaluation has written 171/1,296 per-checkpoint completion markers.
+  Every source run has 7-11 of its 72 checkpoints complete. No run has reached
+  final acceptance because every task is still processing its trajectory.
+- A scan of all evaluation stdout and stderr files found no traceback, OOM,
+  quota, non-finite, assertion, runtime, cancellation, or kill signature.
+  Current throughput projects completion within the allocation if it remains
+  stable, but the projection is not a scheduler or runtime guarantee.
+- All 18 seed-1 Small-DiT tasks in array `17691417` remain running. Live logs
+  reached steps 648,500 through 654,500 of one million. The displayed losses
+  are finite, and the current logs have no failure signature.
+- Production training remains 216/234 complete. The active seed-1 Small-DiT
+  block is the only unfinished production-training block.
+- No job was submitted, cancelled, resumed, or modified during this check.
+
+
+### 2026-10-03 22:00 CEST - Weighting evaluation passes three quarters
+
+- All 18 tasks in paper-evaluation array `17694010` remain running after
+  2h55m-3h07m. The output contains 1,023/1,296 checkpoint completion markers,
+  or 78.9 percent. Every run has completed 54-59 of its 72 checkpoints.
+- No run is accepted yet because every task must finish its trajectory, repeat
+  the evaluator in cache-only mode, and pass strict validation. A scan of all
+  evaluation logs found no failure signature.
+- All 18 seed-1 Small-DiT tasks in array `17691417` remain running. Live logs
+  reached steps 676,750 through 683,250 of one million. Their displayed losses
+  are finite, and the current logs have no failure signature.
+- Production training remains 216/234 complete. No job was submitted,
+  cancelled, resumed, or modified during this check.
+
+
+### 2026-10-03 22:06 CEST - Weighting evaluation ETA
+
+- All 18 tasks remain running with 1,067/1,296 checkpoint markers complete,
+  or 82.3 percent. Individual runs have completed 57-61 of 72 checkpoints.
+- Measured task throughput leaves 11-15 checkpoints per run and projects
+  first-pass trajectory completion in about 45-60 minutes. Cache-only replay,
+  plot finalization, and strict validation should follow in minutes if no
+  issue appears.
+- The best current acceptance estimate is 23:00-23:30 CEST. Midnight is a
+  conservative bound. Every task has almost nine hours of its 12-hour
+  allocation remaining, and current logs contain no failure signature.
+- This is a throughput projection, not a guarantee. No job was submitted,
+  cancelled, resumed, or modified during this check.
+
+
+### 2026-10-03 19:46 CEST - Active evaluation progress check
+
+- All 18 tasks in weighting evaluation array `17694010` remain running after
+  43-56 minutes. The output now contains 269/1,296 checkpoint completion
+  markers, or 20.8 percent. Individual runs have completed 13-17 of their 72
+  checkpoints. No final `ACCEPTED.json` exists while trajectories are active.
+- All evaluation stdout and stderr files remain free of traceback, OOM, quota,
+  non-finite, assertion, runtime, cancellation, kill, and explicit error
+  signatures.
+- All 18 seed-1 Small-DiT tasks in array `17691417` remain running after about
+  8h40m. Live logs reached steps 651,750 through 657,750 of one million. The
+  displayed losses are finite and the active logs remain clean.
+- No job was submitted, cancelled, resumed, or modified during this check.
+
+
+### 2026-10-04 00:54 CEST - Weighting evaluation accepted
+
+- All 18 tasks in paper-evaluation array `17694010` completed with exit `0:0`.
+  They ran for 3h45m-3h52m and finished between 22:40 and 22:54 CEST.
+- The output contains 18/18 `ACCEPTED.json` records and 1,296/1,296 checkpoint
+  completion markers. Every run is marked `publication_ready=true` and contains
+  72 checkpoints evaluated with 10,000 samples, 1,728 metric rows, 1,368 f_mem
+  rows, and 16 plots. No acceptance field differs from the paper contract.
+- A fresh scan of the evaluation logs found no traceback, OOM, non-finite,
+  assertion, disk, or quota failure signature.
+- All 18 seed-1 Small-DiT tasks in array `17691417` remain running after
+  13h46m-13h53m. Live logs are at steps 710,000-717,500. Their latest losses
+  are finite, and the current logs contain no failure signature.
+- Current throughput projects 24.3-25.5 more training hours to one million.
+  The present 24-hour allocations project to stop near steps 825k-835k, so this
+  block will require at least one more resume allocation. Queue delay is not
+  included in the estimate.
+- Production training remains 216/234 complete. The accepted weighting
+  evaluation is now the first complete paper-tier full-trajectory evaluation
+  for a full 18-run experiment block.
+- No job was submitted, cancelled, resumed, or modified during this check.
+
+
+### 2026-10-04 01:32 CEST - Weighting trajectories and fast plot cache
+
+- Aggregated all 18 accepted weighting runs across seeds at every one of the
+  72 checkpoints. The exact table contains 10,368 rows and 144 complete metric
+  series. The line is the seed mean and the band is plus or minus one sample
+  standard deviation.
+- Wrote separate N=512 and N=2048 overview, quality, memorization, and loss
+  figures under the accepted evaluation's `aggregate/seed_trajectories/` tree.
+  All 16 PNG and 16 PDF files opened successfully and all stored hashes match.
+- Added a CSV-only quick plotting workspace. Its one-time table split took
+  0.37 seconds. Individual figures took 0.27-1.77 seconds in the plotting
+  process. No checkpoint, generated image, or feature cache was opened.
+- No scheduler job was submitted or modified.
+
+### 2026-10-04 02:25 CEST - Evaluation-readiness status check
+
+- All 18 seed-1 Small-DiT tasks in array `17691417` remain running. Their
+  allocation elapsed times are 15h20m-15h27m.
+- The runs retain `state=training` with no saved error. Persisted checkpoint
+  counts are 65-66 per run, with latest saved checkpoints from step 695,000
+  through 730,000.
+- The other 216 production trajectories remain complete. The weighting block
+  remains accepted at 18/18 runs and 1,296/1,296 evaluated checkpoints.
+- This check created missing local reference artifacts and ran CPU validation.
+  It did not submit, cancel, resume, or modify any scheduler job.
+
+### 2026-10-04 03:05 CEST - Submit all completed 1M paper evaluations
+
+- Submitted 198 completed one-million-step runs as eight unthrottled arrays
+  under project `berzelius-2026-269` and normal QoS. Every task evaluates all
+  saved checkpoints with the full metric suite, 10,000 generated samples, and
+  512 held-out-loss examples.
+- The dependency graph is: gate `17696049`; MNIST32 `17696050` and MNIST64
+  `17696051` after the gate; CelebA64 RGB `17696052` after both MNIST arrays;
+  DiT seed 0 `17696053`; then U-Net chunks `17696054`, `17696055`, and
+  `17696056` in sequence. The largest array contains 36 tasks.
+- The matrix contains 108 CelebA32 U-Net-S runs, 18 MNIST32 runs, 18 MNIST64
+  runs, 18 CelebA64 RGB runs, and 36 CelebA32 Small-DiT seed-0 runs. The 18
+  Small-DiT seed-1 runs are excluded because they have not reached one million
+  updates.
+- The frozen batch is
+  `outputs/evals/all_1m_full_10000/20261004T005702Z_3271331`. Its task matrix
+  SHA-256 is `b79cd695b106ef68cf6d4cdeb1fe968b2a5f4658655a34bdef9d76d521290874`.
+  The snapshot-manifest SHA-256 is
+  `ed657a6059c478a91cb34d80956c55dd0475f50cc9701258796bf2e0295ac626`.
+- Each successful task performs a second cache-only evaluator pass, strict
+  paper-tier validation, and identity-checked cache compaction. It preserves
+  all metrics, tables, plots, statistics, nearest-neighbor records, and sample
+  tensors at steps 0, 10k, 100k, and 1M.
+
+- Immediate scheduler verification found gate task `17696049_0` running on
+  `node052`. The seven downstream arrays are pending for their recorded
+  dependencies, as designed.
+- Slurm accepted every requested array and task range. No task is pending for
+  an invalid dependency or resource error.
+
+
+### 2026-10-04 11:47 CEST - DiT recovery stop and paper-evaluation progress
+
+- All 18 seed-1 Small-DiT tasks in resume array `17691417` handled the planned
+  five-minute `SIGUSR1` signal and exited with code `75:0` after 23h54m-23h55m.
+  Slurm labels these tasks `FAILED`, but this is the documented resumable-stop
+  path rather than an application error.
+- Every DiT `run.json` is `state=interrupted` with `error=null` and stop reason
+  `received SIGUSR1`. Exact recovery states cover steps 825,684 through
+  834,488. A further manual resume is required to reach one million updates;
+  no resume was submitted during this status check.
+- In the 198-run paper-evaluation chain, gate `17696049`, MNIST32 array
+  `17696050`, and MNIST64 array `17696051` completed with exit `0:0`. All 36
+  MNIST runs have `ACCEPTED.json`, for 720/720 checkpoint results.
+- CelebA64 array `17696052` has all 18 tasks running after 5h06m. Every task
+  has 32/75 checkpoint completion markers, for 576/1,350 in this stage. The
+  DiT and three CelebA32 U-Net arrays remain pending on successful dependencies.
+- The complete evaluation output currently contains 36 accepted runs and
+  1,296 checkpoint completion markers. A scan of all available evaluation
+  stdout and stderr found no traceback, OOM, quota, disk, non-finite,
+  assertion, runtime, cancellation, kill, or segmentation failure signature.
+- No job was submitted, cancelled, resumed, or modified during this check.
+
+
+### 2026-10-04 11:58 CEST - Storage and dependency-parallelism assessment
+
+- `nscquota` reports 13.5 TiB used under `/proj/rep-learning-robotics`, against
+  a 14.6 TiB normal quota and an 18.3 TiB hard limit. The shared filesystem has
+  4.9 TiB physically available. Inode use is 39 percent.
+- `mem_param_clean/outputs` uses 2.0 TiB. Evaluation outputs use 1.1 TiB. The
+  active all-1M batch uses 506 GiB, including 492 GiB from the 18 running
+  CelebA64 tasks. The completed weighting evaluation uses 521 GiB and has no
+  retention-completion markers; no cache was deleted during this check.
+- The CelebA64 tasks advanced to 33/75 checkpoints each. At the measured
+  per-checkpoint growth, this stage can approach 1.15 TiB before its validated
+  end-of-run retention step reduces the cache.
+- A completed 32x32 paper-tier run uses about 29 GiB before retention. Making
+  all 144 pending DiT and U-Net tasks eligible together could therefore create
+  about 4.1 TiB of additional temporary data. Together with remaining
+  CelebA64 growth, this would consume nearly all physical free space and the
+  project hard-limit headroom, while exceeding the normal quota by several
+  tebibytes.
+- Slurm has no explicit per-user job or GPU cap on this account. The four
+  pending arrays request thin A100-40GB GPUs and use `afterok` dependencies.
+  Slurm can technically clear those dependencies while the jobs are pending.
+  The 40GB nodes are currently saturated, so eligibility would not guarantee
+  immediate starts and cannot serve as a storage safety limit.
+- Verdict: do not clear all dependencies for unthrottled parallel execution.
+  Keep the present chain, or wait for CelebA64 acceptance and compaction before
+  replacing it with an explicit aggregate concurrency limit and a fresh quota
+  check. The latter requires a recorded throttle decision.
+
+
+### 2026-10-04 12:00 CEST - Resume seed-1 Small-DiT training
+
+- Submitted unthrottled resume array `17698276`, tasks `0-17`, under project
+  `berzelius-2026-269` with normal QoS. The target is step 1,000,000.
+- Each task requests one thin A100-40GB, four CPUs, 32 GB, and 24 hours. Slurm
+  will send `SIGUSR1` five minutes before wall time so the trainer can save an
+  exact recovery state if another allocation is required.
+- At the immediate scheduler check, tasks 0-1 were running on nodes 022 and
+  038. Tasks 2-17 were pending for resources. No dependency or throttle is set.
+- The resume records start from exact saved steps 825,684-834,488. No prior
+  run record contains an application error.
+
+
+### 2026-10-04 12:02 CEST - DiT resume startup check
+
+- Ten tasks, 0-9, in resume array `17698276` are running. All use the frozen
+  resume worker and the existing run directories.
+- Representative tasks 0 and 1 loaded exact states at steps 833,819 and
+  830,311. Task 0 had already advanced to step 834,000 with a finite loss.
+- A scan of every available new stdout and stderr file found no application
+  failure signature.
+- Tasks 10-17 remain pending for thin A100-40GB resources. Slurm has not
+  reported a dependency, account, or submission error.
+
+
+### 2026-10-04 12:15 CEST - Remaining evaluation map
+
+- All 18 tasks in DiT resume array `17698276` are running. Every run record is
+  `training`, and the new logs contain no failure signature.
+- The 198-run evaluation chain has accepted all 36 MNIST runs. The 18 CelebA64
+  tasks are running at 35/75 checkpoints each, or 630/1,350 checkpoint results.
+- Four arrays remain behind the CelebA64 dependency: 36 seed-0 Small-DiT runs
+  in `17696053`, followed by three 36-run CelebA32 U-Net arrays in `17696054`,
+  `17696055`, and `17696056`. Each block spans the complete 3x3
+  prediction/loss matrix at `N={512,1024,2048,4096}`.
+- The separate 18-run native-v/v weighting evaluation is already accepted and
+  is not part of the pending queue.
+- After seed-1 Small-DiT training completes, its 18 runs still require a new
+  paper-tier evaluation submission; those evaluations are not yet queued.
+
+
+### 2026-10-04 12:23 CEST - Release CelebA32 U-Net evaluation arrays
+
+- At the researcher's explicit request, cleared all Slurm dependencies from
+  CelebA32 U-Net arrays `17696054`, `17696055`, and `17696056`. These arrays
+  contain 108 tasks across seeds 0-2.
+- No array throttle was added. All 108 tasks can start as Slurm assigns thin
+  A100-40GB resources.
+- Immediate verification showed `Dependency=(null)` for all three arrays.
+  Array `17696054` was pending for resources; arrays `17696055` and `17696056`
+  were pending for priority.
+- DiT seed-0 array `17696053` was not changed and remains dependent on successful
+
+
+### 2026-10-04 12:25 CEST - Per-checkpoint retention assessment
+
+- After dependency release, tasks 0-2 of CelebA32 U-Net seed-0 array
+  `17696054` started. They had not completed their first checkpoint, and their
+  logs contained no failure signature.
+- The frozen worker cannot safely delete large caches after each checkpoint in
+  its current form. It runs the complete evaluator twice, requires the second
+  pass to reuse every cache, and then loads every `samples.pt` during strict
+  validation before retention.
+- External deletion during these jobs would force recomputation in the second
+  pass or make strict validation fail. Editing live source would not change the
+  frozen worker and would violate its end-of-job source hash check.
+- Safe streaming retention is feasible with a new protocol: validate each
+  checkpoint cache before deletion, preserve metrics, feature statistics,
+  nearest-neighbor evidence, and selected sample tensors, then allow the final
+  validator to recognize checkpoint-level retention records.
+
+
+### 2026-10-04 12:30 CEST - Cancel CelebA32 evaluations for streaming retention
+
+- At the researcher's explicit request, cancelled CelebA32 arrays `17696053`,
+  `17696054`, `17696055`, and `17696056`. This covers 36 seed-0 Small-DiT runs
+  and 108 U-Net runs across seeds 0-2.
+- Fourteen tasks in U-Net seed-0 array `17696054` had started and ran for
+  19 seconds to 6 minutes 13 seconds. Slurm records them as `CANCELLED`; no task
+  reached acceptance. The other 130 tasks used no GPU time.
+- The active CelebA64 array `17696052` was not changed.
+- Replacement requirement: implement and test checkpoint-level retention,
+  freeze a new batch, and submit all 144 CelebA32 evaluations without the old
+  dependency chain.
+
+
+### 2026-10-04 13:14 CEST - Submit checkpoint-compacted CelebA32 evaluations
+
+- Implemented checkpoint-level identity manifests and restart-safe retention.
+  After each checkpoint completes, the evaluator preserves metrics, feature
+  statistics, nearest-neighbor evidence, and plot-required samples, then
+  removes dense feature tensors and non-protected sample tensors.
+- Replaced the old two-pass cache replay with one evaluator pass followed by
+  strict validation of every checkpoint retention record. Final run-level
+  retention still removes reproducible reference feature matrices after
+  paper-tier acceptance.
+- Validation passed: 5 retention unit tests, 14 image-protocol integration
+  tests, Ruff lint/format checks, shell syntax checks, and an exact 144-run
+  matrix preflight.
+- Frozen batch:
+  `outputs/evals/celeba32_streaming_full_10000/20261004T110904Z_1979099`.
+  It contains 36 seed-0 Small-DiT runs and three 36-run U-Net arrays covering
+  seeds 0-2.
+- Submitted four independent, unthrottled arrays with no dependency arguments:
+  `17698532` (DiT seed 0), `17698533` (U-Net seed 0),
+  `17698534` (U-Net seed 1), and `17698535` (U-Net seed 2).
+
+
+### 2026-10-04 13:16 CEST - CelebA32 replacement startup check
+
+- Slurm reports `Dependency=(null)` for arrays `17698532-17698535`.
+  Each array has task range `0-35` with no percent throttle, so all 144 tasks
+  are independently eligible.
+- At the immediate check, all 36 tasks in each array are pending for priority.
+  There is no dependency, account, submission, or worker-start failure.
+- The cancelled arrays `17696053-17696056` remain replaced; CelebA64 array
+  `17696052` was not modified by this submission.
+
+
+### 2026-10-04 13:26 CEST - Complete experiment and evaluation status audit
+
+- Production training is 216/234 complete at exactly one million optimizer
+  updates. Complete blocks are the 108-run CelebA32 U-Net 3x3 matrix, 36-run
+  MNIST diagonal matrix, 18-run CelebA64 RGB diagonal matrix, 36-run seed-0
+  Small-DiT matrix, and both nine-run native-v/v weighting matrices. Their
+  `run.json` records are all `trained`, all report `latest_step=1000000`, and
+  none contains a saved error.
+- The remaining 18 production runs are the seed-1 Small-DiT matrix. All tasks
+  in resume array `17698276` are running after about 1h19m-1h22m. Live logs
+  reached steps 841,250-850,250 with finite displayed losses. Current stdout
+  and stderr contain no traceback, OOM, non-finite, exception, or explicit
+  failure signature.
+- Supporting experiment blocks remain at their intended endpoints: the 9-run
+  prediction/loss gate and 7-run data-format gate at 200k, the 24-run
+  capacity-attention gate at 400k, the 3-run Small-DiT pilot at 100k, the two
+  5-run N=16 diagnostic blocks at 10k and 50k, and the 6-run epsilon smoke at
+  2k. The separate six-run epsilon-recovery multiseed launcher remains not
+  submitted.
+- The native-v/v weighting paper evaluation remains fully accepted: 18/18
+  runs and 1,296/1,296 checkpoints, with publication-ready records and the
+  aggregate seed-trajectory tables and plots present. Its two narrower draft
+  arrays, `17693967` and `17694005`, were cancelled before any task started and
+  were superseded by accepted array `17694010`.
+- In the original all-1M evaluation batch, all 36 MNIST runs are accepted with
+  720/720 checkpoint results and completed retention. All 18 CelebA64 tasks in
+  array `17696052` are running after about 6h41m with 770/1,350 checkpoint
+  results complete, or 42-43 of 75 per run. Their logs contain no failure
+  signature.
+- The old CelebA32 arrays `17696053-17696056` remain cancelled and superseded.
+  The 14 U-Net tasks that briefly ran left three completed checkpoint records
+  across 13 partial result directories, but zero accepted runs; these are not
+  counted as valid evaluation results.
+- Replacement arrays `17698532-17698535` contain all 144 seed-0 Small-DiT and
+  CelebA32 U-Net evaluations. All are pending for priority. Slurm confirms
+  `Dependency=(null)`, no array throttle, and no account or submission error;
+  no task has started and the new root contains no result artifacts yet.
+- The 18 seed-1 Small-DiT paper evaluations are not submitted because their
+  source training runs have not reached one million updates.
+- No job was submitted, cancelled, resumed, or otherwise modified during this
+  audit.
+
+
+### 2026-10-04 13:50 CEST - End-of-session closeout
+
+- Production training remains 216/234 complete. All 18 seed-1 Small-DiT tasks
+  in resume array `17698276` are running at steps 846,500-855,250. Their latest
+  displayed losses are finite and the active logs contain no failure signature.
+- All 18 CelebA64 evaluation tasks in array `17696052` remain running after
+  7h09m. Every run has completed exactly 45/75 checkpoints, for 810/1,350
+  results. No run is accepted until its complete trajectory passes validation.
+- All 36 seed-0 Small-DiT evaluation tasks in replacement array `17698532` are
+  running. Tasks 0 and 1 of seed-0 U-Net array `17698533` are also running;
+  its other 34 tasks are pending for resources. The 72 seed-1 and seed-2 U-Net
+  tasks in arrays `17698534` and `17698535` are pending for priority.
+- The replacement evaluation root contains 40 completed checkpoint results and
+  40 checkpoint-retention records, with zero accepted runs so far. Startup logs
+  contain no traceback, OOM, non-finite, disk, quota, or explicit failure
+  signature. All four arrays remain dependency-free and unthrottled.
+- Accepted paper evaluation remains 36/36 MNIST runs and 18/18 native-v/v
+  weighting runs. The cancelled CelebA32 arrays `17696053-17696056` remain
+  superseded, and seed-1 Small-DiT evaluation remains unsubmitted until its
+  training reaches one million updates.
+- Today's storage work removed the two explicitly approved archived SGDM roots
+  from `old_mem_par`, reclaiming 19.847 GiB. The broader verified old-storage
+  cleanup remains documented separately and left the project below its normal
+  storage quota.
+- No additional scheduler action is needed at closeout. Next session: verify
+  seed-1 Small-DiT progress, monitor CelebA64 and replacement CelebA32
+  evaluations, and submit the seed-1 DiT paper evaluation only after all 18
+  training runs are complete and validated.
+
+
+### 2026-10-04 15:34 CEST - Active-job status and U-Net startup failure
+
+- All 18 seed-1 Small-DiT tasks in resume array `17698276` remain running
+  after 3h30m-3h34m. Live logs reached steps 866,250-875,500; all run records
+  remain `training` with `error=null`, and current logs contain no failure
+  signature.
+- All 18 CelebA64 evaluation tasks in array `17696052` remain running after
+  8h53m. Every run has completed exactly 56/75 checkpoints, for 1,008/1,350
+  results. No run is accepted yet, and no failure signature appears.
+- Replacement arrays `17698532` and `17698533` have all 36 tasks running.
+  Array `17698534` has tasks 0-15 running and tasks 16-35 failed. All 36 tasks
+  in array `17698535` failed. The active replacement total is therefore 88
+  running and 56 failed, with no pending tasks.
+- Every failed task exited `1:0` after 7-9 seconds before the evaluation worker
+  started. Their shared stderr is an Lmod conflict: the frozen worker tried to
+  load `Mambaforge/23.3.1-1-hpc1-bdist` while another module from the
+  `mamba_env` family was already loaded. This is an environment-startup
+  failure, not a model, evaluator, retention, storage, or CUDA failure.
+- Running replacement tasks have completed and retained 2,008 checkpoints:
+  597 across all 36 DiT runs, 1,037 across all 36 seed-0 U-Net runs, and 374
+  across the 16 running seed-1 U-Net runs. Completion and retention counts
+  match exactly; no run is accepted until its full trajectory finishes.
+- No job was cancelled, resubmitted, or modified during this status check.
+  Next action is to sanitize the module environment and retry only seed-1
+  tasks 16-35 and seed-2 tasks 0-35.
+
+
+### 2026-10-04 15:58 CEST - Retry failed U-Net evaluations with clean modules
+
+- Added an explicit `module --force purge` and stale Lmod-family variable
+  removal before loading Mambaforge in the maintained CelebA32 streaming
+  worker. A shell test loaded Mambaforge from a contaminated environment,
+  activated `mem_param_env`, and resolved the expected Python executable.
+- Preserved the original frozen worker unchanged. Stored the corrected worker
+  as `_job/run_array_clean_env.sbatch` with SHA-256
+  `6f1ab347bf99e81a3701da725ad6cbd7cff7107bc4c8705aa03708879942d634`.
+  The original frozen snapshot passed its complete checksum verification.
+- Submitted only the failed ranges: seed-1 U-Net tasks 16-35 as array
+  `17699034`, and seed-2 U-Net tasks 0-35 as array `17699035`. Both arrays
+  use the original 12-hour thin-A100 resources, have no dependency, and have
+  no array throttle. The 88 healthy evaluation tasks were not changed.
+- At 15:59 CEST, retry tasks 16 and 17 in array `17699034` were running and
+  had entered the evaluator at `step_000000`. Their logs show a clean
+  Mambaforge load and no Lmod conflict or other failure. The remaining 18
+  seed-1 retries and all 36 seed-2 retries were pending for priority.
+- Recorded both retries and the corrected worker identity in the frozen
+  batch's submission audit.
+
+
+### 2026-10-04 16:26 CEST - Active-job status
+
+- All 18 seed-1 Small-DiT training tasks in resume array `17698276` remain
+  running. Live logs reached steps 876,500-885,750; all run records remain
+  `training` with `error=null`, and no failure signature appeared.
+- All 18 CelebA64 evaluation tasks in array `17696052` remain running. They
+  have completed 1,112/1,350 checkpoint results, or 61-62 of 75 per run. No
+  run is accepted yet, and no failure signature appeared.
+- The 88 healthy original CelebA32 replacement tasks remain running. Retry
+  tasks 16 and 17 in array `17699034` are also running; the other 18 tasks in
+  that array and all 36 tasks in array `17699035` are pending for priority.
+- The replacement batch has completed and retained 3,135/10,368 checkpoints:
+  875 for seed-0 Small-DiT, 1,613 for seed-0 U-Net, and 647 for seed-1 U-Net.
+  Completion and retention counts match exactly; no run is accepted yet.
+- The two running retries passed the corrected module startup and show only
+  expected model-library warnings. No new traceback, OOM, CUDA, storage,
+  quota, module-conflict, or other failure signature appeared after retry
+  submission.
+- No job was submitted, cancelled, resumed, or otherwise modified during this
+  status check.
+
+
+### 2026-10-04 20:22 CEST - Active-job status and CelebA64 finalization failure
+
+- All 18 seed-1 Small-DiT training tasks in resume array `17698276` remain
+  running. Live logs reached steps 921,750-932,000 with finite displayed
+  losses and no failure signature.
+- All 18 CelebA64 tasks in array `17696052` saved their complete 75-checkpoint
+  trajectories, for 1,350/1,350 checkpoint results. They then failed with exit
+  `1:0` during the worker's intentional reuse pass. The repeated evaluator
+  request rejected the existing manifest as a protocol mismatch. Final
+  validation and retention did not run, so these runs are not accepted yet,
+  but the expensive first-pass metrics are saved.
+- In the replacement CelebA32 batch, all 36 seed-0 U-Net evaluations and 18
+  seed-1 U-Net evaluations are complete. The remaining 36 seed-0 Small-DiT,
+  18 seed-1 U-Net retries, and 36 seed-2 U-Net retries are running. No task is
+  pending and no new task failed.
+- The CelebA32 batch had at least 8,753/10,368 checkpoint results complete:
+  2,157 seed-0 Small-DiT, 2,592 seed-0 U-Net, 2,297 seed-1 U-Net, and 1,707
+  seed-2 U-Net. There were 8,754 retention markers; the one-count difference
+  was an in-flight write while the jobs were active.
+- No job was submitted, cancelled, resumed, or otherwise modified during this
+  status check. Next action is to correct and narrowly resume the CelebA64
+  validation/retention path without recomputing its saved checkpoint metrics.
+
+
+### 2026-10-04 20:52 CEST - Submit CelebA64 finalization repair
+
+- The failure came from source shadowing, not invalid metrics. The original
+  batch froze its evaluator source, but the worker changed into the live
+  repository before launching Python. A source update at 13:00 CEST therefore
+  changed the manifest identity used by the second process.
+- Added a dedicated repair worker that stays in the frozen batch and imports
+  the original frozen `mem_param_src` and torch-fidelity packages. It runs one
+  cache-reuse pass, paper-tier validation, dry-run retention, exact-path
+  retention apply, and post-retention validation.
+- Syntax and shell checks passed. The original batch snapshot and common-input
+  hashes passed. All 18 roots had complete 75-checkpoint first passes, zero
+  acceptance records, and zero retention-completion records. A read-only task-0
+  preflight reconstructed the request with the frozen source and matched the
+  saved manifest exactly.
+- Submitted all 18 repair tasks as array `17699894` under account
+  `berzelius-2026-269`: tasks `0-17`, one fat A100-80GB, eight CPUs, 64 GB,
+  and 12 hours per task. The array has no dependency and no concurrency
+  throttle. Existing training and CelebA32 jobs were not changed.
+- At 20:52 CEST, all 18 repair tasks were pending for priority. The staged
+  worker SHA-256 is
+  `1ea1e52ab93f3ede24802b1ee4e605900ff67ecdcec716cd39aa2601255791ca`.
+- At 20:56 CEST, all 18 repair tasks were running. Every task recorded imports
+  from the original frozen `mem_param_src` and torch-fidelity packages and
+  entered cache reuse. Logs contained only expected model-library warnings and
+  no manifest, module, CUDA, storage, or other failure signature.
+
+
+### 2026-10-05 08:48 CEST - Overnight completion audit
+
+- Slurm reports no running or pending jobs for `x_moalj`. All 18 tasks in
+  training resume array `17698276` completed with exit `0:0`; the last ended
+  at 03:14:49 CEST. All run records say `trained`, `final_step=1000000`,
+  `latest_step=1000000`, and `error=null`. Every run has a nonempty final
+  checkpoint, a 1M recovery state in its recovery index, a finite final logged
+  loss, and a successful W&B finish. Production training is now 234/234 complete,
+  combining these 18 runs with the previously verified 216.
+- CelebA64 repair array `17699894` completed 18/18 with exit `0:0` in
+  10m34s-13m04s. The last task finished at 21:05:40 CEST on October 4.
+  All 18 roots have paper acceptance, complete manifests, 75/75 checkpoint
+  results, and final retention records. Recorded cleanup removed
+  1,105,071,443,928 bytes (1,029.18 GiB) of reproducible caches across these
+  runs. Retained results remain available; this audit did not delete data.
+- The streaming CelebA32 batch completed all 144 evaluations: 36 seed-0 DiT,
+  and 36 U-Nets for each of seeds 0, 1, and 2. All 10,368 checkpoint completion
+  and checkpoint-retention markers are present. Every run has paper acceptance
+  and final retention records. The final task finished at 22:00:46 CEST on
+  October 4. Earlier module-startup failures are superseded by successful
+  retries `17699034` and `17699035`.
+- The 36 MNIST evaluations remain accepted with 720/720 checkpoints and final
+  retention complete. The separate 18 weighting evaluations remain accepted
+  with 1,296/1,296 checkpoints. In total, 216 run evaluations are accepted.
+- The remaining 18 seed-1 DiT paper evaluations are not submitted: no matching
+  source path appears in the saved evaluation task matrices. Their training
+  completion now permits preparing the final source validation and evaluation
+  submission. The final Mac archive remains on ice.
+- This was a status audit using Slurm accounting and saved JSON records, file
+  presence checks, and final log values in the Berzelius `mem_param_env`
+  interpreter. It did not reload or rehash all checkpoint tensors, rerun
+  metric validation, or change any scheduler jobs.
+
+
+### 2026-10-05 09:05 CEST - Submit the final 18 seed-1 DiT evaluations
+
+- The researcher authorized evaluation of the newly completed DiT runs.
+  Submitted array `17701413`, tasks `0-17`, under `berzelius-2026-269`,
+  normal QoS. Each task requests one thin-node A100-40GB, eight CPUs,
+  64 GB RAM, and 12 hours. There is no dependency or concurrency throttle.
+- Frozen batch: [`20261005T070254Z_4059124`](outputs/evals/celeba32_dit_seed1_streaming_full_10000/20261005T070254Z_4059124).
+  Source training batch: `celeba32_dit_robustness_s1_1m_viax/20260929T124425Z_2240178`.
+  The exact matrix is seed 1, N=512/2048, and all nine prediction/loss pairs.
+- Each run evaluates all 72 saved checkpoints with the full paper metric
+  suite, 10,000 canonical-noise samples, 512 held-out losses, and the saved
+  10,000-image clean-test reference. Total: 1,296 checkpoint evaluations.
+  Identity-checked cleanup runs after every checkpoint, followed by paper
+  acceptance and final reference-cache retention. Training artifacts are kept.
+- Preflight checked the full matrix, exact saved checkpoint schedules and
+  nonempty files. All 18 data-bundle hashes match their saved manifests.
+  All 18 final recovery states match their recorded hashes and reach 1M.
+  The freezer recorded hashes for every checkpoint and required input.
+- Shell syntax, Ruff lint/format, the 18-run and legacy 144-run matrix checks,
+  and 19 retention/protocol unittest tests passed in Berzelius
+  `mem_param_env`. Pytest is not installed; the existing unittest entrypoint
+  ran all 19 tests successfully.
+- New workers keep their working directory in the frozen batch, replace
+  PYTHONPATH with its source snapshot, disable bytecode writes, and verify
+  imported package paths. A read-only check confirmed frozen imports for
+  the evaluator, validator, retention module, and torch-fidelity.
+- At first inspection, five tasks were RUNNING and thirteen CONFIGURING.
+  All 18 had node allocations. No previous batch or training artifact was
+  changed. The final Mac archive remains on ice.
+- At 09:07 CEST, all 18 tasks were RUNNING. Every task passed its input
+  checksum checks and clean module startup, verified frozen package imports,
+  and launched the expected full-suite command. All 18 evaluation manifests
+  are present. Logs show expected library warnings and no failure signature.
+  No checkpoint evaluation had finished yet at this startup check.
+
+
+### 2026-10-05 11:44 CEST - Final DiT evaluation progress
+
+- All 18 tasks in seed-1 Small-DiT evaluation array `17701413` remain running
+  after 2h38m. Slurm reports no other running or pending jobs for `x_moalj`.
+- The batch has completed and retained 428/1,296 checkpoint evaluations. Fourteen
+  runs have 24/72 complete checkpoints and four runs have 23/72. Completion and
+  retention counts match; no run is accepted until its full trajectory finishes.
+- Current stdout and stderr contain no traceback, OOM, non-finite, exception,
+  storage, quota, or explicit failure signature. All 18 evaluation manifests
+  remain present.
+- No job was submitted, cancelled, resumed, or otherwise modified during this
+  status check.
+
+
+### 2026-10-05 13:02 CEST - Final DiT evaluation progress
+
+- All 18 tasks in seed-1 Small-DiT evaluation array `17701413` remain running
+  after 3h57m, with every task holding its expected node allocation.
+- The batch has completed and retained 627/1,296 checkpoint evaluations.
+  Completion and retention counts match. No run has reached paper acceptance yet.
+- The scalar plotting-data export therefore still contains the 216 previously
+  accepted evaluations. Rerunning the deterministic exporter after this array
+  finishes will add only the 18 seed-1 DiT runs to its experiment directory.
+- No scheduler or evaluation state was changed during this status check.

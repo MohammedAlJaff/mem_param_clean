@@ -16,8 +16,11 @@ from mem_param_src.runners.artifacts import (
     read_json,
     save_data_manifest,
     save_torch,
+    tensor_sha256,
     write_json,
 )
+from mem_param_src.runners.evaluation_noise import build_canonical_noise
+from mem_param_src.runners.full_suite_validate import validate_full_suite
 from mem_param_src.runners.image_protocol import (
     evaluate_image_protocol,
     resolve_checkpoint_selection,
@@ -39,13 +42,19 @@ def _mnist_config():
     return config
 
 
-def _mnist_bundle():
+def _mnist_bundle(config=None):
+    config = _mnist_config() if config is None else config
     generator = torch.Generator().manual_seed(73)
     train_source_id = "fixture:mnist_train"
     reference_source_id = "fixture:mnist_test"
+    image_shape = (
+        int(config.data.image_channels),
+        int(config.data.image_size),
+        int(config.data.image_size),
+    )
     return {
-        "train": torch.rand(6, 1, 32, 32, generator=generator).mul(2).sub(1),
-        "reference": torch.rand(4, 1, 32, 32, generator=generator).mul(2).sub(1),
+        "train": torch.rand(6, *image_shape, generator=generator).mul(2).sub(1),
+        "reference": torch.rand(4, *image_shape, generator=generator).mul(2).sub(1),
         "train_labels": torch.arange(6).remainder(10),
         "reference_labels": torch.arange(4).remainder(10),
         "train_indices": torch.arange(6),
@@ -56,9 +65,7 @@ def _mnist_bundle():
         "reference_sample_id_kind": "index",
         "train_source_size": 6,
         "reference_source_size": 4,
-        "train_source_catalog_sha256": source_catalog_sha256(
-            train_source_id, range(6)
-        ),
+        "train_source_catalog_sha256": source_catalog_sha256(train_source_id, range(6)),
         "reference_source_catalog_sha256": source_catalog_sha256(
             reference_source_id, range(4)
         ),
@@ -68,7 +75,7 @@ def _mnist_bundle():
         "reference_split": "test",
         "train_role": "train",
         "reference_role": "heldout_reference",
-        "display_shape": (1, 32, 32),
+        "display_shape": image_shape,
     }
 
 
@@ -81,6 +88,9 @@ class _FakeModel:
 
     def eval(self):
         return self
+
+    def compute_loss(self, x, eps=None, t=None):
+        return (x + 0.01 * eps + 0.01 * t[:, None, None, None]).square().mean()
 
 
 class _FakeFeatureEncoder(torch.nn.Module):
@@ -110,6 +120,7 @@ class TestImageMetricRegistry(unittest.TestCase):
                 "dataset_default",
             )
             self.assertEqual(protocol["dataset_family"], "mnist")
+            self.assertEqual(protocol["image_channels"], 1)
             self.assertEqual(protocol["quality_metric"], "mnist_fd_jointae32_v1")
             self.assertEqual(protocol["feature_spaces"], ["mnist_jointae32"])
 
@@ -146,9 +157,28 @@ class TestImageMetricRegistry(unittest.TestCase):
             protocol["feature_spaces"],
             ["inception_v3", "sscd", "dinov2", "lpips"],
         )
-        self.assertEqual(
-            protocol["memorization_spaces"], ["sscd", "dinov2", "lpips"]
+        self.assertEqual(protocol["memorization_spaces"], ["sscd", "dinov2", "lpips"])
+
+    def test_full_suite_resolves_all_dataset_specific_branches(self):
+        mnist = resolve_image_metric_protocol(
+            _mnist_config(), "full", "dataset_default"
         )
+        self.assertTrue(mnist["full_suite"])
+        self.assertIn("f_mem_raw_pixels", mnist["metrics"])
+        self.assertIn("heldout_loss", mnist["metrics"])
+        self.assertIn("mnist_cafd_jointae32_v1", mnist["metrics"])
+
+        config = _mnist_config()
+        config.data.dataset = "celeba32_grey"
+        natural = resolve_image_metric_protocol(config, "full", "dataset_default")
+        self.assertTrue(natural["full_suite"])
+        self.assertEqual(
+            natural["feature_spaces"],
+            ["inception_v3", "sscd", "dinov2", "lpips"],
+        )
+        self.assertIn("dinov2_fd", natural["metrics"])
+        self.assertIn("f_mem_raw_pixels", natural["metrics"])
+        self.assertIn("heldout_loss", natural["metrics"])
 
 
 class TestMNISTProtocolIntegration(unittest.TestCase):
@@ -157,7 +187,7 @@ class TestMNISTProtocolIntegration(unittest.TestCase):
         (run_dir / "checkpoints").mkdir(parents=True)
         (run_dir / "evaluations").mkdir()
         config = _mnist_config() if config is None else config
-        bundle = _mnist_bundle()
+        bundle = _mnist_bundle(config)
         write_json(run_dir / "config.json", config.to_dict())
         write_json(
             run_dir / "run.json",
@@ -165,11 +195,24 @@ class TestMNISTProtocolIntegration(unittest.TestCase):
                 "artifact_format_version": ARTIFACT_FORMAT_VERSION,
                 "run_kind": "image",
                 "state": "trained",
+                "z_init_seed": 2003,
             },
         )
         save_torch(run_dir / "data_bundle.pt", bundle)
         save_data_manifest(run_dir, config, bundle, run_kind="image")
-        save_torch(run_dir / "z_init.pt", torch.randn(4, 1, 32, 32))
+        noise_generator = torch.Generator(device="cpu").manual_seed(2003)
+        save_torch(
+            run_dir / "z_init.pt",
+            torch.randn(
+                (
+                    4,
+                    int(config.data.image_channels),
+                    int(config.data.image_size),
+                    int(config.data.image_size),
+                ),
+                generator=noise_generator,
+            ),
+        )
         save_torch(
             run_dir / "checkpoints" / "step_000005.pt",
             {"step": 5, "model": {}},
@@ -218,9 +261,7 @@ class TestMNISTProtocolIntegration(unittest.TestCase):
                 [5],
             )
             manifest = read_json(result / "eval_manifest.json")
-            metrics = read_json(
-                result / "checkpoints" / "step_000005" / "metrics.json"
-            )
+            metrics = read_json(result / "checkpoints" / "step_000005" / "metrics.json")
             neighbors = load_torch(
                 result
                 / "checkpoints"
@@ -233,9 +274,7 @@ class TestMNISTProtocolIntegration(unittest.TestCase):
             self.assertTrue(metrics["sample_reused"])
             self.assertTrue(metrics["features_reused"])
             self.assertTrue(metrics["mnist_fd_jointae32_v1"]["distance_reused"])
-            self.assertTrue(
-                metrics["f_mem_mnist_jointae32_v1"]["neighbors_reused"]
-            )
+            self.assertTrue(metrics["f_mem_mnist_jointae32_v1"]["neighbors_reused"])
             self.assertEqual(
                 [row["alpha"] for row in metrics["f_mem_mnist_jointae32_v1"]["curve"]],
                 [0.005, 0.01, 0.02, 0.05],
@@ -294,6 +333,209 @@ class TestMNISTProtocolIntegration(unittest.TestCase):
                     metrics="fid",
                     sample_count=2,
                     protocol_id="../outside",
+                    device="cpu",
+                )
+
+    def test_full_two_checkpoint_smoke_reuses_sampling_and_encoding(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = self._write_run(root)
+            save_torch(
+                run_dir / "checkpoints" / "step_000010.pt",
+                {"step": 10, "model": {}},
+            )
+            noise_artifact = root / "canonical_noise.pt"
+            build_canonical_noise(
+                [run_dir / "z_init.pt"],
+                noise_artifact,
+                count=4,
+                seed=2003,
+            )
+            output_dir = root / "smoke" / "mnist32"
+
+            with (
+                patch(
+                    "mem_param_src.runners.image_protocol.GDFM",
+                    return_value=_FakeModel(),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._sample_checkpoint",
+                    side_effect=lambda model, noise, config, device: noise.clone(),
+                ) as sample,
+            ):
+                arguments = {
+                    "checkpoints": "5,10",
+                    "metrics": "full",
+                    "sample_count": 4,
+                    "loss_count": 4,
+                    "output_dir": output_dir,
+                    "noise_artifact": noise_artifact,
+                    "write_plots": True,
+                    "device": "cpu",
+                    "feature_batch_size": 2,
+                    "nn_batch_size": 2,
+                }
+                result = evaluate_image_protocol(run_dir, **arguments)
+                repeated = evaluate_image_protocol(run_dir, **arguments)
+                accepted = validate_full_suite(
+                    result,
+                    expected_checkpoints=2,
+                    sample_count=4,
+                )
+
+            self.assertEqual(result, repeated)
+            self.assertTrue(accepted["accepted"])
+            self.assertEqual(sample.call_count, 2)
+            manifest = read_json(result / "eval_manifest.json")
+            self.assertTrue(manifest["development_only"])
+            self.assertFalse(manifest["publication_ready"])
+            final_metrics = read_json(
+                result / "checkpoints" / "step_000010" / "metrics.json"
+            )
+            self.assertTrue(final_metrics["sample_reused"])
+            self.assertTrue(final_metrics["features_reused"])
+            self.assertTrue(final_metrics["heldout_loss"]["reused"])
+            self.assertTrue(final_metrics["f_mem_raw_pixels"]["neighbors_reused"])
+            samples = load_torch(result / "checkpoints" / "step_000010" / "samples.pt")
+            self.assertEqual(tuple(samples.shape), (4, 1, 32, 32))
+            self.assertTrue((result / "plots" / "quality_trajectories.png").is_file())
+            self.assertTrue(
+                (result / "plots" / "nearest_neighbors_mnist_jointae32.png").is_file()
+            )
+
+    def test_full_suite_streaming_retention_compacts_and_resumes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = self._write_run(root)
+            save_torch(
+                run_dir / "checkpoints" / "step_000010.pt",
+                {"step": 10, "model": {}},
+            )
+            noise_artifact = root / "canonical_noise.pt"
+            build_canonical_noise(
+                [run_dir / "z_init.pt"],
+                noise_artifact,
+                count=4,
+                seed=2003,
+            )
+            output_dir = root / "streaming" / "mnist32"
+
+            with (
+                patch(
+                    "mem_param_src.runners.image_protocol.GDFM",
+                    return_value=_FakeModel(),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._sample_checkpoint",
+                    side_effect=lambda model, noise, config, device: noise.clone(),
+                ) as sample,
+            ):
+                arguments = {
+                    "checkpoints": "5,10",
+                    "metrics": "full",
+                    "sample_count": 4,
+                    "loss_count": 4,
+                    "output_dir": output_dir,
+                    "noise_artifact": noise_artifact,
+                    "write_plots": True,
+                    "streaming_retention": True,
+                    "device": "cpu",
+                    "feature_batch_size": 2,
+                    "nn_batch_size": 2,
+                }
+                result = evaluate_image_protocol(run_dir, **arguments)
+                repeated = evaluate_image_protocol(run_dir, **arguments)
+                accepted = validate_full_suite(
+                    result,
+                    expected_checkpoints=2,
+                    sample_count=4,
+                )
+
+            self.assertEqual(result, repeated)
+            self.assertEqual(sample.call_count, 2)
+            self.assertTrue(accepted["streaming_retention"])
+            self.assertEqual(accepted["retained_checkpoint_count"], 2)
+            early = result / "checkpoints" / "step_000005"
+            final = result / "checkpoints" / "step_000010"
+            self.assertFalse((early / "samples.pt").exists())
+            self.assertFalse((early / "features" / "mnist_jointae.pt").exists())
+            self.assertTrue((early / "features" / "mnist_jointae_stats.pt").is_file())
+            self.assertTrue((early / "RETENTION_COMPLETE.json").is_file())
+            self.assertTrue((final / "samples.pt").is_file())
+            self.assertFalse((final / "features" / "mnist_jointae.pt").exists())
+            self.assertTrue((final / "RETENTION_COMPLETE.json").is_file())
+
+    def test_full_mnist64_path_preserves_native_shape_and_reuses_all_caches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mnist_config()
+            config.data.image_size = 64
+            config.data.resize_size = 64
+            run_dir = self._write_run(root, config=config)
+            noise_artifact = root / "canonical_noise_64.pt"
+            build_canonical_noise(
+                [run_dir / "z_init.pt"],
+                noise_artifact,
+                count=4,
+                seed=2003,
+            )
+            output_dir = root / "smoke" / "mnist64"
+
+            with (
+                patch(
+                    "mem_param_src.runners.image_protocol.GDFM",
+                    return_value=_FakeModel(),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._sample_checkpoint",
+                    side_effect=lambda model, noise, config, device: noise.clone(),
+                ) as sample,
+            ):
+                arguments = {
+                    "checkpoints": "5",
+                    "metrics": "full",
+                    "sample_count": 4,
+                    "loss_count": 4,
+                    "output_dir": output_dir,
+                    "noise_artifact": noise_artifact,
+                    "write_plots": True,
+                    "device": "cpu",
+                    "feature_batch_size": 2,
+                    "nn_batch_size": 2,
+                }
+                result = evaluate_image_protocol(run_dir, **arguments)
+                repeated = evaluate_image_protocol(run_dir, **arguments)
+                accepted = validate_full_suite(
+                    result,
+                    expected_checkpoints=1,
+                    sample_count=4,
+                )
+
+            self.assertEqual(result, repeated)
+            self.assertTrue(accepted["accepted"])
+            self.assertEqual(sample.call_count, 1)
+            samples = load_torch(result / "checkpoints" / "step_000005" / "samples.pt")
+            self.assertEqual(tuple(samples.shape), (4, 1, 64, 64))
+            metrics = read_json(result / "checkpoints" / "step_000005" / "metrics.json")
+            self.assertTrue(metrics["sample_reused"])
+            self.assertTrue(metrics["features_reused"])
+            self.assertTrue(metrics["heldout_loss"]["reused"])
+
+    def test_publication_evaluation_requires_ten_thousand_samples(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = self._write_run(root)
+
+            with self.assertRaisesRegex(ValueError, "sample_count=10000"):
+                evaluate_image_protocol(
+                    run_dir,
+                    checkpoints="5",
+                    metrics="full",
+                    sample_count=4,
+                    output_dir=root / "paper",
+                    noise_artifact=root / "unused_noise.pt",
+                    write_plots=True,
+                    publication_evaluation=True,
                     device="cpu",
                 )
 
@@ -387,9 +629,7 @@ class TestNaturalProtocolIntegration(unittest.TestCase):
             self.assertEqual(result, repeated)
             self.assertEqual(sample.call_count, 1)
             self.assertEqual(len(calls), 5)
-            metrics = read_json(
-                result / "checkpoints" / "step_000005" / "metrics.json"
-            )
+            metrics = read_json(result / "checkpoints" / "step_000005" / "metrics.json")
             self.assertTrue(metrics["inception_fid"]["features_reused"])
             self.assertTrue(metrics["inception_fid"]["distance_reused"])
             self.assertTrue(metrics["f_mem_sscd"]["features_reused"])
@@ -403,6 +643,155 @@ class TestNaturalProtocolIntegration(unittest.TestCase):
                     / "sscd.COMPLETE.json"
                 ).is_file()
             )
+
+    def test_full_two_checkpoint_natural_smoke_reuses_all_features(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = _mnist_config()
+            config.data.dataset = "celeba64_rgb"
+            config.data.image_size = 64
+            config.data.resize_size = 64
+            config.data.image_channels = 3
+            run_dir = self._write_run(root, config=config)
+            save_torch(
+                run_dir / "checkpoints" / "step_000010.pt",
+                {"step": 10, "model": {}},
+            )
+            noise_artifact = root / "canonical_noise.pt"
+            build_canonical_noise(
+                [run_dir / "z_init.pt"],
+                noise_artifact,
+                count=4,
+                seed=2003,
+            )
+            reference = load_torch(run_dir / "data_bundle.pt")["reference"]
+            reference_manifest = {
+                "artifact_sha256": "reference-artifact",
+                "reference_tensor_sha256": tensor_sha256(reference),
+            }
+            specifications = {
+                name: {
+                    "dimension": dimension,
+                    "layer": "fixture",
+                    "preprocessing": f"fixture_{name}",
+                }
+                for name, dimension in {
+                    "inception_v3": 4,
+                    "sscd": 5,
+                    "dinov2": 4,
+                    "lpips": 6,
+                }.items()
+            }
+            assets = {
+                "package_versions": {"torch": torch.__version__},
+                "encoders": {
+                    "fid_inception_v3": {"sha256": "fid"},
+                    "sscd": {"sha256": "sscd"},
+                    "dinov2_weights": {"sha256": "dino"},
+                    "lpips_calibration": {"sha256": "lpips"},
+                    "lpips_alexnet": {"sha256": "alex"},
+                },
+            }
+            calls = []
+
+            def encoder(space, assets_root, manifest, device):
+                del assets_root, manifest, device
+                return _FakeFeatureEncoder(specifications[space]["dimension"], calls)
+
+            with (
+                patch.dict(
+                    "mem_param_src.runners.image_protocol.NATURAL_SPACE_SPECS",
+                    specifications,
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._load_encoder_assets",
+                    return_value=(root, assets, {"sha256": "assets"}),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._natural_encoder",
+                    side_effect=encoder,
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._load_reference",
+                    return_value=(
+                        reference,
+                        {},
+                        reference_manifest,
+                        root / "reference.pt",
+                    ),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol."
+                    "_validate_reference_compatibility"
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol.GDFM",
+                    return_value=_FakeModel(),
+                ),
+                patch(
+                    "mem_param_src.runners.image_protocol._sample_checkpoint",
+                    side_effect=lambda model, noise, config, device: noise.clone(),
+                ) as sample,
+            ):
+                arguments = {
+                    "checkpoints": "5,10",
+                    "metrics": "full",
+                    "sample_count": 4,
+                    "loss_count": 4,
+                    "output_dir": root / "smoke" / "unet32",
+                    "noise_artifact": noise_artifact,
+                    "reference_artifact": root / "reference.pt",
+                    "assets_manifest": root / "assets.json",
+                    "write_plots": True,
+                    "device": "cpu",
+                    "feature_batch_size": 16,
+                    "nn_batch_size": 4,
+                }
+                result = evaluate_image_protocol(run_dir, **arguments)
+                call_count = len(calls)
+                repeated = evaluate_image_protocol(run_dir, **arguments)
+                accepted = validate_full_suite(
+                    result,
+                    expected_checkpoints=2,
+                    sample_count=4,
+                )
+
+            self.assertEqual(result, repeated)
+            self.assertTrue(accepted["accepted"])
+            self.assertEqual(sample.call_count, 2)
+            self.assertEqual(call_count, 15)
+            self.assertEqual(len(calls), call_count)
+            final_metrics = read_json(
+                result / "checkpoints" / "step_000010" / "metrics.json"
+            )
+            self.assertTrue(final_metrics["dinov2_fd"]["features_reused"])
+            self.assertTrue(final_metrics["dinov2_fd"]["distance_reused"])
+            self.assertTrue(final_metrics["f_mem_lpips"]["features_reused"])
+            self.assertTrue(final_metrics["heldout_loss"]["reused"])
+            self.assertTrue(
+                (result / "plots" / "memorization_raw_pixels.png").is_file()
+            )
+            self.assertTrue(
+                (result / "plots" / "nearest_neighbors_dinov2.png").is_file()
+            )
+
+            manifest_path = result / "eval_manifest.json"
+            manifest = read_json(manifest_path)
+            manifest.update(
+                {
+                    "evaluation_tier": "paper",
+                    "development_only": False,
+                    "publication_ready": True,
+                }
+            )
+            write_json(manifest_path, manifest)
+            paper_acceptance = validate_full_suite(
+                result,
+                expected_checkpoints=2,
+                sample_count=4,
+                evaluation_tier="paper",
+            )
+            self.assertTrue(paper_acceptance["publication_ready"])
 
 
 if __name__ == "__main__":

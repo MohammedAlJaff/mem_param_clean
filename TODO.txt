@@ -11,7 +11,7 @@ in meaningful choices without routine approval requests. Apply this rule to
 future notes and documentation. Full guidance: root AGENTS.md, Collaboration
 and Code Understanding.
 
-Updated: 2026-09-21
+Updated: 2026-10-04
 
 PURPOSE
 This is the single list of unfinished work in the clean repository.
@@ -29,6 +29,39 @@ MIGRATION_JOURNAL.md and remove it from this file.
 
 
 NEXT SESSION: LOCK FULL RUNS AND AISTATS FIGURES
+
+ON ICE BY RESEARCHER REQUEST
+
+[~] T021 - Run the full checkpoint evaluation and build the final Mac archive.
+    Status (2026-10-05): 216 evaluations are accepted: 36 MNIST, 18 CelebA64,
+    144 replacement CelebA32, and 18 weighting runs. All training is complete.
+    Submitted the final 18 seed-1 Small-DiT evaluations as array `17701413`,
+    tasks 0-17, with no dependencies or throttle. Each evaluates 72 checkpoints,
+    10,000 samples, and 512 held-out losses with checkpoint-level cleanup.
+    The saved data and final recovery hashes passed, and all source inputs are
+    frozen. Next action: check startup and completion, then verify acceptance
+    and retention for these 18 runs.
+    The combined export, final figure selection, and final Mac archive remain
+    on ice until the evaluations finish and the researcher resumes that work.
+    Done when: One verified Mac archive supports every frozen figure without
+    model loading, sampling, encoding, neighbor search, or FID computation.
+
+[~] T022 - Add verified cache retention for rolling paper evaluation.
+    Status: Run-level identity-checked retention is complete on all 36 accepted
+    MNIST runs. Checkpoint-streaming retention is implemented, tested, frozen,
+    and active in replacement jobs `17698532-17698535`. It validates and records
+    each checkpoint before removing dense reproducible caches while preserving
+    metrics, feature statistics, neighbor evidence, and selected qualitative
+    tensors. All 144 streaming evaluations are now accepted with all 10,368
+    checkpoint-retention and 144 final retention records. CelebA64 repair array
+    `17699894` completed validation and retention on all 18 runs. The status
+    audit checked these records; a full independent rehash and storage comparison
+    remain before closing this retention work item.
+    Done when: One complete real streaming run passes acceptance and retained-
+    output checks, and storage behavior matches the recorded retention manifest.
+
+The final Mac archive remains on ice. Completed training and evaluation do not
+authorize that export.
 
 [ ] T019 - Freeze the final paper training matrix and continuation plan.
     Current evidence: The seed-zero diagonal anchors reached one million

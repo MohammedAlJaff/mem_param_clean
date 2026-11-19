@@ -3436,3 +3436,552 @@ Validation and publication scope:
   code cells compiled, and no notebook outputs or blank cells remain. Full
   ten-epoch notebook execution and a real production-checkpoint protocol run
   were not performed.
+
+
+## 2026-10-02 - Add minimal one-checkpoint image evaluation notebooks
+
+- Added `notebooks/sanity/mnist_checkpoint_metrics.ipynb`.
+  It selects one saved checkpoint, reuses saved noise, generates eight samples,
+  and reports JointAE FD, class-aware FD, calibrated JointAE f_mem, raw sample
+  diagnostics, a four-by-two grid, and saved artifact paths.
+- Added `notebooks/sanity/celeba_checkpoint_metrics.ipynb`.
+  It follows the same flow and reports Inception FID plus calibrated SSCD
+  f_mem through the verified schema-v3 encoder asset manifest.
+- Both executed notebooks use step 1,000,000 from the seed-zero, 512-example,
+  x/x U-Net-S run. Their settings cells expose the run, step, and noise bank.
+  The notebooks label all eight-sample values as smoke metrics.
+- Updated `docs/image_evaluation.md` and `docs/repo_map.md` with the two
+  entrypoints and their metric scope.
+- Validation used `mem_param_env`. Both notebooks executed all seven code cells
+  on CPU and store their tables and four-by-two sample grids without errors.
+  Each protocol completed with a finite `(8, 1, 32, 32)` sample tensor.
+- The MNIST smoke values are JointAE FD `134.9258`, macro present-class FD
+  `76.6609`, and calibrated JointAE f_mem `1.0` at all four alpha levels.
+- The CelebA smoke values are Inception FID `212.7642` and calibrated SSCD
+  f_mem `1.0` at all four alpha levels. These eight-sample values are not
+  paper-scale estimates.
+
+
+## 2026-10-03 - Add and launch the sampling runtime gate
+
+- Added `docs/unified_checkpoint_evaluation_plan.md`. It fixes one scheduler
+  task per run stage, checkpoint-level completion, one deterministic 10,000-
+  image bank per checkpoint, dataset-aware quality metrics, four memorization
+  spaces, held-out threshold calibration, compact top-two neighbor evidence,
+  storage retention, and metric-specific restart boundaries.
+- Recorded a required input gap: the selected CelebA production run stores
+  1,024 held-out images. Paper-scale evaluation needs one separately frozen,
+  hashed, disjoint 10,000-image reference bank before the proposed 1,024/8,976
+  calibration and validation split can run.
+- Added `mem_param_src/runners/sampling_benchmark.py`. It loads exact saved
+  artifacts, extends the recorded noise stream while proving its saved prefix,
+  times complete sampling batches, keeps diagnostics and previews outside the
+  timed section, and projects the 10,000-sample result across the actual saved
+  checkpoint count. It does not compute metrics or save generated images.
+- Added the output-free, dataset-selectable
+  `notebooks/sanity/checkpoint_sampling_runtime.ipynb` and the frozen short-job
+  package under `jobs/berzelius/checkpoint_sampling_runtime/`.
+- Validation used `mem_param_env`. Four focused unit tests passed. Python and
+  shell syntax passed. Ruff passed. All six notebook code cells compiled; the
+  eight-cell notebook has no outputs. The write-free submission preview passed.
+- A real one-sample CPU integration loaded the selected step-1,000,000 CelebA32
+  checkpoint, found all 72 checkpoints, used the saved full-Heun settings,
+  generated finite output, and wrote the timing artifacts successfully. This
+  was an execution check, not a useful GPU throughput estimate.
+- The first submission attempt stopped before `sbatch` because of one Conda
+  wrapper shell setting. After the launcher fix, submitted job `17692093` under
+  project `berzelius-2026-269`. Frozen batch:
+  `outputs/job_sets/checkpoint_sampling_runtime/20261002T224818Z_1228250`.
+- The normal submission remained pending. Slurm denied an in-place QoS change,
+  so job `17692093` was cancelled with zero elapsed time. Added the permitted
+  `devel` QoS to the launcher and submitted replacement job `17692132`. Its
+  frozen batch is
+  `outputs/job_sets/checkpoint_sampling_runtime/20261002T225610Z_1277373`.
+
+## 2026-10-03 - Record historical full-evaluation runtimes
+
+- Added the retained old-repository timing evidence to
+  `docs/unified_checkpoint_evaluation_plan.md` and linked its scope from the
+  repository map.
+- Cross-checked the old per-checkpoint CSV timers against retained Slurm
+  accounting for jobs `16473994`, `16479328`, and `16484437`.
+- Slurm assigned both A100 classes. The three arrays used 111 A100-40GB tasks
+  and 81 A100-80GB tasks in total. Runtime summaries therefore describe the
+  historical mixed allocation rather than one GPU-memory class.
+- The original 84-run evaluation processed 72 checkpoints and 10,000 generated
+  images per checkpoint. Its median checkpoint took `78.897` seconds. Its
+  median one-run task took `01:34:58`. The suite consumed `135.10` GPU-hours.
+- The 97-run capacity evaluation used the same 72-checkpoint and 10,000-image
+  protocol. Its median checkpoint took `143.707` seconds. Its median task took
+  `02:53:37`. The suite consumed `243.05` GPU-hours.
+- Sampling dominated both measurements. Median sampling time was `65.224`
+  seconds per original checkpoint and `129.319` seconds per capacity
+  checkpoint. Median FID time stayed near ten seconds.
+- The summed checkpoint timers matched median Slurm wall time within about 31
+  seconds for the original suite and 72 seconds for the capacity suite.
+- These values support one run per staged scheduler task. They do not include
+  the new SSCD, LPIPS, DINOv2, or JointAE branches, so they are lower-bound
+  evidence for the complete unified protocol.
+- This audit was read-only. It launched no compute and changed no old outputs.
+
+## 2026-10-03 - Add the full interactive CelebA32 checkpoint metric gate
+
+- Added `runners/checkpoint_metrics_benchmark.py`. It samples one saved
+  checkpoint into one deterministic 10,000-image bank, reports raw-pixel
+  `f_mem` at fixed `rho={0.3,0.5,0.7}`, reports calibrated raw and SSCD `f_mem`
+  curves, and computes Inception FID-10k.
+- The evaluator uses the frozen 10,000-image CelebA validation bank. It verifies
+  its artifact and tensor hashes, source catalog, preprocessing, and exact
+  1,024-image prefix against the selected production run before evaluation.
+- It saves the generated bank, SSCD and Inception features, FID statistics, and
+  nearest and second-nearest evidence. Threshold changes can therefore reuse
+  the saved evidence without sampling or encoding again.
+- Added `run_interactive_metrics.sh` as the direct command for an existing GPU
+  allocation. The runner prints sampling, encoding, neighbor, metric, and time
+  progress and saves a final `summary.json`.
+- Updated the command README, unified evaluation plan, and repository map.
+- Validation used `mem_param_env`. Thirty-two focused sampling, metric, and
+  image-protocol tests passed with `unittest`. Ruff, Python compilation, CLI,
+  and shell syntax checks passed.
+- A read-only real-artifact check verified the 10,000-image validation bank,
+  the exact 1,024-image saved prefix, and both pinned weight hashes. One-image
+  CPU smoke checks produced finite SSCD `[1,512]` and Inception `[1,2048]`
+  features. The interactive wrapper adds the established pinned
+  `old_mem_par/third_party/torch-fidelity` source path.
+- No GPU evaluation or scheduler job was launched. The paper-scale runtime is
+  still unmeasured until the researcher runs the interactive command.
+
+## 2026-10-03 - Freeze the clean CelebA test-10k reference
+
+- Completed at `2026-10-03T01:40:03Z`. Added
+  `runners/celeba_test_reference.py` and built the fixed seed-1 official-test
+  bank at
+  `outputs/reference_banks/celeba_test_seed1_clean_n10000.{pt,json}`.
+- The builder verified 201 saved source runs across the current CelebA32 U-Net,
+  DiT, weighting, and CelebA64 suites. It mapped every saved split-local train
+  index through the official train catalog. The union contains 11,988 unique
+  global filenames, JPEG hashes, and CelebA32 transformed-tensor hashes.
+- The builder pinned the partition file hash
+  `fc955bcb3ef8fbdf7d5640d9a8693a8431b5f2ee291a5c1449a1549e7e073fe7`
+  and preprocessing implementation hash
+  `47e9f6a66b2312dc8bdd335c4e661cea856cfc0a23e77a7931b0b38df5d2b46b`.
+- The final `[10000,1,32,32]` bank examined 10,001 candidates. It rejected
+  one internal JPEG duplicate. It found zero training JPEG overlap, training
+  tensor overlap, internal transformed-tensor collisions, or duplicate
+  filenames. The tensor SHA-256 is
+  `d3575a8576c0feb834a78dade48c99f81433c709ba6b99e0c5e75454992056b0`.
+  The artifact SHA-256 is
+  `c3c7532abde2e16c3e86368f08b2bbbbf096354a76d5daccad2e2960c9a504b7`.
+- Updated `runners/checkpoint_metrics_benchmark.py` to require the official
+  test split, 10,000 unique filenames, JPEG hashes, and transformed tensors.
+  It now rejects training-tensor contamination before loading metric assets or
+  sampling.
+- Added explicit `--generated-bank` reuse. The preflight verified the existing
+  10,000-image bank, step-1,000,000 checkpoint hash, full-Heun sampling
+  settings, noise seed 2003, sample count, and generated tensor hash
+  `7b49245859edf1d04e1a3b477329acb6a360a4118d59e5d273d8885e4c1399ea`.
+- Updated the interactive wrapper, command README, image-evaluation contract,
+  unified evaluation plan, and repository map. The default wrapper writes to a
+  new timestamped directory and leaves `20261003T000727Z/` unchanged.
+- Verification used the available `mem_param_env`; the documented local
+  `memcompgen` environment was not installed. Fifteen focused sampling,
+  reference, and metric tests passed. Python compilation, Ruff, shell syntax,
+  `git diff --check`, the real
+  reference preflight, and the real generated-bank reuse preflight passed.
+- No training artifact, training job, GPU evaluation, or scheduler job was
+  changed or launched. The clean-test metric command is ready but was not run.
+
+## 2026-10-03 - Complete the paper-scale CelebA32 checkpoint gate
+
+- Ran the N=2048, seed-0, x/x U-Net-S checkpoint at step 1,000,000 with 10,000
+  deterministic generated images. Fresh 50-step full-Heun sampling took
+  154.401 seconds on one A100-80GB, or 64.77 images per second.
+- Retained the first validation-reference result at
+  `outputs/interactive_checkpoint_metrics/20261003T000727Z/` as exploratory
+  evidence. Its FID-10k was 33.7535, fixed-rho raw-pixel f_mem was 0.5197,
+  calibrated raw-pixel f_mem was 0.9493, and calibrated SSCD f_mem was 0.6561.
+- Replaced that reference for the paper gate because the official validation
+  subset contains one exact JPEG duplicate of a selected seed-0 N=2048 train
+  image. The duplicate lies outside the 1,024-image calibration prefix and
+  cannot explain the large memorization rates, but the run-specific overlap is
+  avoidable.
+- Reused the exact generated bank against the frozen clean official-test bank.
+  The final output is
+  `outputs/interactive_checkpoint_metrics/20261003T084819Z/`. It reports
+  FID-10k 34.8159, fixed-rho raw-pixel f_mem 0.5197, calibrated raw-pixel f_mem
+  0.9450, and calibrated SSCD f_mem 0.6235.
+- The clean-test reuse pass took 31.992 seconds. Combining its metric stages
+  with the measured sampling kernel projects 173.191 seconds per checkpoint
+  and 3.469 GPU-hours for all 72 checkpoints. The output retains feature
+  matrices, float64 FID statistics, and top-two neighbor evidence, so threshold
+  changes do not require resampling or re-encoding.
+- This result qualifies one complete checkpoint path. It does not yet compare
+  parameterizations or checkpoint trajectories.
+- Real Slurm replay job `17693255` reused the same generated bank and reference.
+  It reproduced all four reported metrics to displayed precision and completed with exit
+  `0:0` in 64 seconds. Its output is
+  `outputs/interactive_checkpoint_metrics/20261003T090549Z/`.
+
+## 2026-10-03 - Freeze and verify the portable figure-bundle contract
+
+- Added `runners/figure_bundle.py` with schema version 1. It verifies completed
+  gate summaries, checkpoint and tensor hashes, test-reference use, full
+  neighbor arrays, source counts, and unique run-step identities.
+- The exporter writes portable CSV, JSON, NPZ, and PNG files. It writes full
+  generated, calibration, and validation neighbor evidence. It also writes
+  exact generated and nearest-training image tensors for selected examples.
+  It does not load models or run sampling, encoders, neighbor search, or FID.
+- Froze the SSCD alpha-0.01 qualitative rule: 16 smallest-r examples, 8 unused
+  boundary-nearest examples, and 8 deterministic unused examples above the
+  boundary. Final checkpoints are automatic. Explicit `RUN_ID:STEP` keys add
+  disputed or planned figure checkpoints.
+- Added `tests/test_figure_bundle.py`. The tests reject non-test references,
+  check every table and array class, validate checksums and the tar archive,
+  open the PNG, compare deterministic example indices, prove sampling is not
+  called, and check overwrite protection. All four focused tests passed.
+- Exported the completed replay gate to
+  `outputs/figure_bundles/celeba32_checkpoint_gate_test_v1/` and its sibling
+  tar archive. The manifest reports 12 scalar rows, 8 calibration rows, 306
+  distribution rows, 32 exact example triplets, and 14 hashed portable files.
+- The 10,000-row raw-pixel and SSCD arrays and the 1,024/8,976 reference arrays
+  have the expected lengths. Every bundle hash passed. The archive is 909 KiB
+  with SHA-256
+  `ce50051f9396e7773a904b26ed5a1fd1a600cb957d2a7af16ff11cbc9fbccf36`.
+- Updated the image-evaluation guide, unified plan, command README, and
+  repository map. The docs include the required `cd` and CPU-only command.
+
+## 2026-10-03 - Put full evaluation and the final Mac archive on ice
+
+- Added T021 to `TODO.txt` at the researcher's request.
+- The existing archive is one clean-gate checkpoint. It validates the schema
+  only and is not the final all-runs paper archive.
+- Do not submit full-evaluation jobs or create the final combined archive until
+  the researcher explicitly resumes T021. T019 and T020 must define the run
+  matrix and final figure contract first.
+
+## 2026-10-03 - Implement and launch full metric-suite development smokes
+
+- Added a persistent CPU-generated Gaussian evaluation-noise artifact with
+  seed 2003 and shape `[10000, 1, 32, 32]`. Its manifest records generator,
+  environment, tensor, artifact, and source-prefix hashes. All three selected
+  runs match its first 128 rows exactly. Source monitoring noise is unchanged.
+- Extended the restartable evaluator with the `full` metric preset, verified
+  external noise and reference artifacts, held-out losses, raw-pixel
+  memorization, DINOv2 Fréchet distance, complete MNIST diagnostics, stage
+  runtimes, plot generation, strict identities, and development-only flags.
+- Added strict full-suite plotting and acceptance validation. Added focused
+  noise, resolution, metric, restart, cache, and two-checkpoint integration
+  tests for MNIST and natural images. The second integration passes reused all
+  expensive artifacts.
+- Added `notebooks/sanity/full_metric_suite_smoke.ipynb` and the frozen
+  three-task Berzelius launcher. The default profile evaluates all checkpoints
+  with 512 generated images. The `final-replica10000` profile evaluates only
+  step 1,000,000 with 10,000 generated images.
+- Submitted array `17693872` for the 512-sample trajectory smoke. MNIST task 1
+  completed all 20 checkpoints and both reuse passes, then found a versioned
+  plot-name mismatch in the final validator. The validation-only fix and both
+  hashes are recorded in the frozen batch. Restart `17693881_1` completed in
+  69 seconds without resampling.
+- Submitted array `17693885` for the isolated 10,000-sample final-checkpoint
+  replica smoke. This is a production-scale per-checkpoint gate, not a resume
+  of the final all-run evaluation or Mac archive.
+- Both smoke profiles completed and passed strict acceptance. The trajectory
+  outputs cover 72 U-Net, 20 MNIST, and 72 DiT checkpoints at 512 samples. The
+  replica outputs cover the three step-1,000,000 checkpoints at 10,000 samples.
+- Live validation found two presentation-contract defects: a version suffix in
+  the MNIST memorization plot name and grid requirements for checkpoints not
+  selected by the final-only profile. Both fixes affect validation only. The
+  frozen batches record pre-change and post-change hashes, and task-specific
+  restarts reused all expensive artifacts.
+- Final audits found finite metrics, bounded f_mem values, correct sample
+  shapes, readable plots, complete reuse flags, and unchanged frozen source
+  inputs across all outputs.
+
+## 2026-10-03 - Prepare the complete v/v loss-weighting paper evaluation
+
+- Scoped the explicitly resumed evaluation to all 18 CelebA32 U-Net-S runs:
+  `N={512,2048}`, seeds `{0,1,2}`, native `v/v`, and `x_equivalent`, `unit`,
+  and `eps_equivalent` loss weighting.
+- Added an explicit publication mode to the restartable evaluator. It requires
+  the complete metric suite, 10,000 generated samples, and plot output. Its
+  manifest records the paper tier and publication status.
+- Strengthened full-suite acceptance. The validator now checks reuse of every
+  sample, feature, statistic, distance, neighbor, and held-out-loss cache.
+- Added the frozen 18-task launcher under
+  `jobs/berzelius/celeba32_vv_weighting_paper_eval/`. Each task
+  selects all 72 checkpoints, uses the common seed-2003 evaluation-noise bank,
+  and compares against the complete clean CelebA test bank.
+- Kept the final combined paper archive on ice. This request authorizes only
+  the selected loss-weighting experiment.
+
+## 2026-10-03 - Write the self-contained AISTATS experiment appendix source
+
+- Added `docs/aistats_experimental_design_appendix.md` as a long-form source
+  that later paper writing can shorten.
+- Defined the linear path, target notation, common optimizer, model, sampler,
+  checkpoint, data-pairing, and post-hoc evaluation contracts in plain
+  technical English.
+- Described all five production blocks and their 234 one-million-update
+  trajectories. The source separates the main CelebA32 U-Net factorial from
+  Small-DiT, MNIST, CelebA64 RGB, and native-velocity loss-weighting controls.
+- Described the prediction/loss pilot, epsilon recovery, data-format,
+  capacity-attention, DiT pilot, and small-set numerical studies as supporting
+  blocks. It states why those runs must not be counted as independent main
+  replicates.
+- Marked metric smokes, the MNIST encoder job, runtime probes, resume tests,
+  and notebooks as evaluation infrastructure rather than scientific blocks.
+- Added analysis cautions for paired comparisons, raw loss scales, 128-image
+  monitors, 512-image smoke metrics, and confounded resolution/capacity
+  contrasts. Added one short reusable appendix paragraph at the end.
+- Updated `docs/repo_map.md` to make the new source discoverable.
+
+## 2026-10-03 - Audit old storage before cleanup
+
+- Added `mem_param_src/runners/old_storage_cleanup.py`. The command is dry-run
+  by default and writes separate keep, delete, and summary manifests. Its apply
+  mode validates the manifest hash and each file identity before unlinking only
+  explicit paths.
+- Added checkpoint retention across resumed attempts. The audit keeps the first
+  checkpoint, every tenth saved checkpoint, the final checkpoint, and the
+  historical step-25,000 checkpoint used by the epsilon-recovery audit.
+- Preserved all configurations, metrics, figures, logs, histories, data
+  identities, and reproducibility artifacts. Kept W&B event files whose remote
+  sync is not verified. Left current clean outputs, old evaluation tables, old
+  datasets, and unrelated old source code outside the scan. The audit now saves
+  the exact obsolete intrinsic/ambient prototype source in a hashed archive
+  before it lists those live source files for deletion.
+- Verified all active Slurm commands and working directories use
+  `mem_param_clean`, not `old_mem_par`.
+- Created the final dry-run audit under
+  `outputs/storage_audits/old_mem_par/20261003T215201Z`. It scanned 175,520
+  files, kept 106,192 files, and marked 69,328 files for possible deletion.
+  Hard-link accounting predicts 2.272 TiB of recoverable storage. No deletion
+  was applied.
+- Loaded one retained final checkpoint from each of ten old job-set families in
+  `mem_param_env`. All ten payloads were valid dictionaries.
+- Verified the untouched historical evaluation tables contain 6,048, 6,984,
+  and 792 checkpoint rows. Recorded their SHA-256 hashes during the check.
+- The separate obsolete-source group contains 29 files and 400,772 logical
+  bytes. Its 29 archive members exactly match its 29 deletion-manifest paths.
+- Verification: focused unittest ran 4 tests successfully. Ruff, compilation,
+  manifest/archive path equality, archive hashing, and diff checks passed in
+  `mem_param_env`.
+
+## 2026-10-04 - Apply the reviewed old-storage cleanup
+
+- Applied all seven groups from the immutable audit at
+  `outputs/storage_audits/old_mem_par/20261003T215201Z` after explicit approval.
+  The tool removed 69,328 exact manifest paths from `old_mem_par`. It did not
+  delete any path under `mem_param_clean`.
+- Removed the cancelled `j8825` checkpoints and W&B events, verified temporary
+  checkpoint copies, thinned capacity checkpoints and their hard-linked backup,
+  failed or incomplete checkpoints, old image checkpoints, and prototype
+  checkpoints. Retained metadata, metrics, figures, logs, configurations, and
+  the scheduled checkpoints.
+- Removed 29 live intrinsic/ambient prototype source files from `old_mem_par`.
+  Preserved their exact tracked and untracked contents in the verified
+  `INTR_AMB_SOURCE_SNAPSHOT.tar.gz` audit artifact.
+- Ran `nscquota` before and after every cleanup group. Project usage decreased
+  from 15.2 TiB to 13.0 TiB. This is below the 13.5 TiB stop target and the
+  14.6 TiB normal quota, so deletion stopped.
+- `POST_CLEANUP_VERIFICATION.json` confirms that all 106,192 keep-manifest
+  regular files remain unchanged, all 69,328 delete-manifest files are absent,
+  and no unexpected regular file exists in the scanned roots.
+
+## 2026-10-04 - Add fast weighting-analysis plots
+
+- Added `runners/weighting_trajectory_plots.py` for strict complete-matrix
+  aggregation and the reproducible full PNG/PDF figure bundle.
+- Added `plotting/weighting/` for fast iteration. It splits the accepted
+  aggregate into one CSV per metric and provides one small command for a metric,
+  quality, memorization, held-out loss, overview, or final-checkpoint figure.
+- The quick path reads only the required CSV files and writes one figure. It
+  does not scan checkpoints, resample, encode images, or regenerate unrelated
+  plots.
+- Ruff, compilation, focused aggregation tests, source and output hash checks,
+  CSV completeness checks, and all six quick plot types passed.
+
+## 2026-10-04 - Document fast plotting and qualify remaining full evaluation
+
+- Added `docs/fast_plotting.md`. It defines the immutable aggregate, per-metric
+  CSV cache, one-figure command pattern, scratch-output rule, PNG/PDF policy,
+  and a three-second target for normal figure edits.
+- Added `docs/full_evaluation_readiness.md`. It records every production
+  block, real checkpoint counts, artifact readiness, storage limits, and the
+  gates for rolling paper-evaluation batches.
+- Removed the evaluator's one-channel acceptance assumption. Protocol
+  manifests and strict validation now carry the saved channel count.
+- Generalized the clean CelebA reference builder to the saved image size,
+  channel count, and resize size while retaining its grayscale-32 defaults.
+- Built verified seed-2003, 10,000-row canonical noise banks for grayscale
+  64×64 and RGB 64×64. Every seed-0 source prefix of each shape matched.
+- Built the clean 10,000-image RGB64 official-test reference against all 18
+  saved RGB64 training banks. It examined 10,001 candidates and rejected one
+  collision.
+- A real CPU preflight verified encoder assets, data manifests, shape-specific
+  noise, clean references, checkpoint counts, final step 1,000,000, and strict
+  checkpoint loading for CelebA32 U-Net, MNIST32, MNIST64, CelebA64 RGB, and
+  CelebA32 Small-DiT.
+- The focused suite passed 32 tests in `mem_param_env`, including two-pass
+  full-suite cache reuse for MNIST32, MNIST64, and RGB64. Ruff, compilation,
+  shell syntax, notebook code-cell compilation, launcher dry-runs, and
+  `git diff --check` passed.
+- Project usage is 13.0 TiB of the 14.6 TiB normal quota. The accepted
+  weighting evaluation uses 521 GiB. Remaining evaluation must use rolling
+  batches and a verified explicit-path cache-retention command.
+- No evaluation or training job was submitted, cancelled, or modified.
+- Hardened both full-suite launchers to copy the exact modified torch-fidelity
+  package and license into each frozen batch. The worker now imports only the
+  copied package, and the batch snapshot hashes every copied file.
+- Recorded the accepted weighting result's earlier torch-fidelity provenance
+  limitation. Source modification times predate the run and the current tree
+  hash is preserved, but a publication archive or FID recomputation must close
+  the missing submission-time hash.
+
+## 2026-10-04 - Submit all completed 1M paper evaluations
+
+- Added `runners/full_suite_retention.py`. It creates a dry-run manifest by
+  default and can remove only explicit generated sample and feature caches
+  after paper-tier acceptance. It records size, time, inode, link count, and
+  SHA-256 before deletion. It preserves every metric, table, plot, feature
+  statistic, neighbor record, and selected qualitative sample tensor.
+- Added two focused tests for complete retention and failure before any unlink
+  when one candidate identity changes.
+- Added the frozen launcher under `jobs/berzelius/all_1m_paper_eval/`. Its exact
+  matrix contains 198 trained runs: 108 CelebA32 U-Nets, 18 MNIST32 U-Nets, 18
+  MNIST64 U-Nets, 18 CelebA64 RGB U-Nets, and 36 CelebA32 Small-DiT seed-0
+  runs. The 18 unfinished Small-DiT seed-1 runs remain excluded.
+- The launcher hashes all 677 GiB of source run artifacts before submission.
+  It also freezes the repository source, exact torch-fidelity package, encoder
+  assets, noise banks, clean references, Conda environment, and task matrix.
+- The execution graph uses one real MNIST32 retention gate. Later arrays use
+  `afterok` dependencies and contain at most 36 tasks. This prevents concurrent
+  uncompressed outputs from exceeding the project quota.
+- Each accepted task runs a second cache-only pass, strict paper validation,
+  dry-run retention, exact-path apply, and post-retention validation. Interrupted
+  evaluator and retention states restart from the same frozen batch.
+- Verification passed 35 focused tests in `mem_param_env`, including full
+  two-pass MNIST32, MNIST64, and RGB64 integrations. Ruff, Python compilation,
+  Bash syntax, launcher dry-run, exact 198-run matrix validation, and
+  `git diff --check` passed.
+- Submitted jobs `17696049` through `17696056` under project
+  `berzelius-2026-269`. The frozen output root is
+  `outputs/evals/all_1m_full_10000/20261004T005702Z_3271331`. At the immediate
+  status check, the gate ran on `node052` and all dependent arrays waited on
+  their expected dependencies.
+
+
+## 2026-10-04 - Stream retention per checkpoint and replace CelebA32 evaluation
+
+- The original full-suite worker could retain caches only after a complete
+  trajectory, a second cache-only replay, and final validation. That exposed
+  the project to unnecessary peak storage while large arrays ran in parallel.
+- Added checkpoint-level identity manifests and restart-safe retention in
+  `mem_param_src/runners/full_suite_retention.py`, integrated it into
+  `image_protocol.py`, and taught strict validation and plotting to consume
+  retained checkpoints. Each completed checkpoint preserves metrics, feature
+  statistics, nearest-neighbor evidence, and selected qualitative samples
+  before deleting dense reproducible sample and feature tensors.
+- Replaced the two-pass worker with one evaluator pass followed by strict
+  validation of all checkpoint-retention records. Run-level retention still
+  removes reproducible reference feature matrices after paper-tier acceptance.
+- Validation passed five retention tests, fourteen image-protocol integration
+  tests, Ruff lint and format checks, shell syntax checks, and an exact 144-run
+  launcher preflight.
+- Cancelled old CelebA32 arrays `17696053-17696056`. Fourteen U-Net tasks had
+  briefly started, but none reached acceptance. Submitted independent,
+  unthrottled replacements `17698532-17698535` from frozen root
+  `outputs/evals/celeba32_streaming_full_10000/20261004T110904Z_1979099`.
+- At session closeout, 36 DiT and two U-Net evaluations were running. The first
+  40 checkpoint results and retention records were complete, and startup logs
+  contained no failure signature.
+
+## 2026-10-04 - End-of-day tooling note
+
+- Local sandbox creation repeatedly failed with `bwrap: Creating new namespace
+  failed: nesting depth or /proc/sys/user/max_*_namespaces exceeded (ENOSPC)`.
+  The reported kernel limits were 2,061,050 for user, mount, and PID namespaces,
+  while `lsns` reported only one visible user and mount namespace. This does not
+  look like exhaustion of those host limits; it is most consistent with sandbox
+  nesting or namespace-lifecycle state in the Codex execution environment.
+- The issue did not affect Slurm jobs or experiment artifacts. It did make the
+  interactive session slower because normal sandboxed commands and the patch
+  helper failed, requiring approved direct-command retries and a narrow POSIX
+  patch fallback.
+
+
+## 2026-10-04 - Harden Mambaforge startup for evaluation retries
+
+- Fifty-six independently scheduled U-Net evaluation tasks failed before
+  Python started because Lmod found another loaded module in the `mamba_env`
+  family. The already-running 88 replacement tasks were unaffected.
+- Updated `jobs/berzelius/celeba32_streaming_paper_eval/run_array.sbatch` to
+  purge loaded modules and clear stale Lmod family variables before loading
+  the required Mambaforge module. The source and frozen workers otherwise
+  remain identical.
+- Preserved the original frozen worker and added a separately checksummed
+  clean-environment worker to the existing batch. The original full snapshot
+  checksum still passes.
+- Submitted retry arrays `17699034` for seed-1 tasks 16-35 and `17699035` for
+  all seed-2 tasks. The first two retries passed module loading, activated the
+  expected environment, and entered checkpoint evaluation.
+
+
+## 2026-10-04 - Recover CelebA64 finalization with frozen source
+
+- All 18 CelebA64 first passes completed 75/75 checkpoints before their reuse
+  passes failed. The worker had frozen `mem_param_src`, but it changed into the
+  live repository before launching Python. The repository source therefore
+  shadowed the frozen package on `sys.path`.
+- The live source gained the `streaming_retention` identity field while the
+  first passes ran. The old manifests correctly omit that field. The second
+  processes imported the new source and rejected the old manifests.
+- Added `repair_celeba64_finalization.sbatch`. It keeps the working directory
+  inside the frozen batch, sets `PYTHONPATH` to the original source snapshot,
+  verifies the imported module paths, and performs one reuse pass followed by
+  strict validation and identity-checked retention.
+- Added a read-only identity preflight. A representative CelebA64 command
+  reconstructed with the frozen source matched its saved manifest exactly.
+  The original batch snapshot and input hashes also passed.
+- Submitted repair array `17699894` for tasks 0-17 with no dependency and no
+  throttle. This repair does not modify live evaluator source, CelebA32
+  outputs, training outputs, or any running job.
+
+
+## 2026-10-05 - Submit seed-1 DiT streaming paper evaluation
+
+- Added `--dit-seed1` to the existing CelebA32 streaming launcher. It selects
+  exactly 18 completed seed-1 DiT runs at N=512/2048 and all prediction/loss
+  pairs. Default selection remains the previous 144-run matrix.
+- The task builder checks the exact 18-cell matrix and saved checkpoint
+  schedule. The freezer accepts the explicitly selected 18-task count.
+  The protocol remains 72 checkpoints, 10,000 samples, and 512 held-out losses.
+- Fixed source isolation for new streaming batches: workers stay in their
+  frozen batch, use only its source on PYTHONPATH, disable bytecode writes,
+  and verify imports. Existing frozen batches and their outputs were not edited.
+- Validation: shell syntax, Ruff lint/format, actual 18-run and legacy 144-run
+  matrix checks, and 19 unittest retention/protocol tests passed using
+  Berzelius `mem_param_env`. All 18 saved data bundles and final recovery
+  states passed their recorded hashes. All evaluation inputs were checksummed.
+  A frozen-source import check passed for the evaluator and metric packages.
+- Submitted independent, unthrottled array `17701413`, tasks 0-17, from
+  `outputs/evals/celeba32_dit_seed1_streaming_full_10000/20261005T070254Z_4059124`.
+  Reusable preview, submit, and restart examples are in the launcher README.
+  The final Mac archive remains on ice.
+
+## 2026-10-05 - Add diffable plotting-data bundle
+
+- Added `plotting/export_plot_data.py`. It exports accepted scalar training and
+  evaluation records into deterministic plain CSV tables grouped by experiment
+  under `plot_data/`. It excludes checkpoints, generated samples, feature
+  matrices, datasets, and other large tensors.
+- The current bundle contains 216 accepted evaluations across six experiment
+  directories. Each directory has a run index, training metrics, evaluation
+  metrics, diagnostics, and a hash manifest joined by `run_id`.
+- Updated the CelebA32 U-Net 3x3 plotting script to read only the tracked
+  `plot_data/celeba32_unet_3x3` tables. The default command regenerated the
+  four-N_train, three-seed f_mem grid from 2,592 aggregate rows in 1.84 seconds.
+- Ruff, Python compilation, exporter execution, plotting execution, and Git
+  whitespace checks passed. Two consecutive exports of all 38 generated files
+  were byte-identical. The still-running DiT seed-1 evaluation is intentionally
+  absent until those runs reach accepted state and the exporter is rerun.

@@ -17,6 +17,8 @@ Current skeleton:
 mem_param_src/     reusable first-party package
 external/          baseline and third-party code, if retained
 notebooks/         reviewed notebooks, probes, and paper analysis
+plotting/          fast CSV-only research figure scripts
+plot_data/         tracked, deterministic scalar tables grouped by experiment
 jobs/berzelius/    Slurm launchers for Berzelius, if retained
 docs/              migration notes and project intent
 TODO.txt           single operational backlog of unfinished work
@@ -68,7 +70,9 @@ Probable destinations:
 - `RUN_JOURNAL.md` records every submitted job and each later status check.
 - Reviewed notebooks go under `notebooks/`.
 - Baselines and third-party code go under `external/` only if retained.
-- Generated outputs do not enter the clean repo by default.
+- Generated outputs do not enter the clean repo by default. The narrow exception is
+  reviewed scalar-only exports under `plot_data/`; checkpoints, tensors, and rendered
+  figures remain untracked.
 
 Boundary rules:
 
@@ -204,6 +208,14 @@ Boundary rules:
   they must not carry a second copy of `d1`, `d2`, `r`, or `f_mem` math.
 - Checkpoint evaluation must read saved artifacts, not rebuild datasets.
 
+- AISTATS experimental-design source:
+  `docs/aistats_experimental_design_appendix.md` is the self-contained,
+  long-form description of the target parameterizations, common training and
+  evaluation protocol, all five production blocks, supporting pilots, and
+  rules that separate scientific evidence from engineering validation. Future
+  paper text can shorten this source without recovering settings from launch
+  scripts.
+
 - Dataset-aware image evaluation: `metrics/image/mnist_jointae.py` owns the
   frozen MNIST32 encoder, canonicalization, raw-feature Fréchet math, and
   training-bank feature geometry. Its hashed weights, provenance manifest, and
@@ -215,7 +227,83 @@ Boundary rules:
   encoder hashes. Natural-image encoders come from one verified schema-v3 asset
   manifest. `runners/image_eval.py` exposes this path through protocol flags and
   retains the earlier all-checkpoint replay mode. `docs/image_evaluation.md`
-  defines the public API, metric names, command, and artifacts.
+  defines the public API, metric names, command, and artifacts. The minimal
+  `mnist_checkpoint_metrics.ipynb` and `celeba_checkpoint_metrics.ipynb`
+  notebooks each select one checkpoint, generate eight samples, display a grid,
+  and report dataset-aware quality and memorization metrics. The reusable
+  `runners/sampling_benchmark.py` measures sampling without metrics.
+  `runners/celeba_test_reference.py` builds shape-matched clean CelebA test-10k
+  banks from official filenames and declared saved training bundles. It records
+  raw-JPEG and transformed-tensor collision checks and full provenance.
+  `runners/checkpoint_metrics_benchmark.py` adds one interactive CelebA32 gate
+  with raw-pixel and SSCD `f_mem`, Inception FID-10k, reusable features,
+  top-two neighbors, and verified generated-bank reuse.
+  `runners/figure_bundle.py` verifies completed checkpoint gates and exports
+  portable CSV, JSON, NPZ, and PNG figure inputs plus one Mac-ready archive.
+  It does no sampling, encoding, neighbor search, or FID computation.
+  `runners/evaluation_noise.py` builds and verifies persistent, shape-specific
+  seed-2003 evaluation-noise banks. `runners/full_suite_plots.py` writes the
+  development trajectory, grid, diagnostic, and nearest-neighbor plots.
+  `runners/weighting_trajectory_plots.py` validates the complete 18-run
+  loss-weighting result matrix and writes seed-mean trajectories with sample
+  standard-deviation bands. It keeps N=512 and N=2048 separate and places all
+  three weighting schemes in every metric panel.
+  `plotting/weighting/` splits the accepted aggregate once into one CSV per
+  metric. Its small commands then render only one requested figure from those
+  tables, without scanning checkpoints or regenerating unrelated plots.
+  `docs/fast_plotting.md` defines the reusable CSV-first plotting workflow,
+  its aggregate schema, one-figure command pattern, and three-second runtime
+  target. `docs/full_evaluation_readiness.md` records the final evaluator
+  coverage audit, shape-specific reference artifacts, experiment-block state,
+  storage constraint, and rolling-batch launch gates.
+  `runners/full_suite_retention.py` creates an identity-checked deletion
+  manifest after paper-tier acceptance. It preserves metrics, plots,
+  statistics, neighbor evidence, and selected sample tensors while removing
+  only reproducible sample and feature caches.
+  `jobs/berzelius/all_1m_paper_eval/` validates the exact completed-run matrix,
+  freezes source and input hashes, and submits the 198 paper evaluations as a
+  dependency chain. One MNIST32 task gates the later arrays. Each task repeats
+  the evaluator for cache-reuse validation, applies strict acceptance, and then
+  performs exact-path retention. The launcher supports task-specific restart
+  from the same frozen batch.
+  `jobs/berzelius/celeba32_streaming_paper_eval/` replaces the CelebA32
+  portion with independent arrays and one evaluator pass. It validates and
+  removes reproducible caches after each checkpoint. Its `--dit-seed1`
+  selection submits only the 18 newly completed seed-1 DiT runs, with all
+  72 checkpoints and 10,000 samples each. Workers import only the frozen
+  evaluator source. See that directory's README for submit and restart commands.
+
+
+- Historical storage audit:
+  `runners/old_storage_cleanup.py` creates immutable keep and delete manifests
+  for selected `old_mem_par` output roots. It is dry-run by default. It merges
+  resumed attempts, accounts for hard links, keeps every tenth checkpoint plus
+  the first and final checkpoints, protects documented checkpoints, and hashes
+  documented temporary copies before classifying them. Applying a reviewed
+  manifest requires the exact old root and removes only explicit regular-file
+  paths. The audit also snapshots the obsolete intrinsic/ambient prototype
+  source before it lists those live source files in a separate deletion group.
+  See `docs/old_storage_cleanup.md` for the command and safety checks.
+  `runners/full_suite_validate.py` enforces checkpoint counts, finite values,
+  f_mem ranges, sample shapes, cache reuse, and readable plots.
+  `notebooks/sanity/full_metric_suite_smoke.ipynb` reviews all three smoke
+  outputs and has a disabled one-checkpoint rerun cell.
+  `jobs/berzelius/full_metric_suite_smoke/` freezes and launches either the
+  all-checkpoint 512-sample trajectory smoke or the final-checkpoint
+  10,000-sample replica smoke. Both profiles use isolated development output
+  roots.
+  `jobs/berzelius/celeba32_vv_weighting_paper_eval/` freezes and launches all
+  18 paper-tier CelebA32 `v/v` loss-weighting runs. The matrix contains
+  `x_equivalent`, `unit`, and `eps_equivalent` at `N={512,2048}` and seeds
+  `{0,1,2}`. It evaluates 10,000 fixed-noise samples at all 72 checkpoints,
+  verifies all frozen inputs before and after each task, and requires a
+  cache-only second evaluator invocation.
+  `checkpoint_sampling_runtime.ipynb` exposes sampling interactively.
+  `jobs/berzelius/checkpoint_sampling_runtime/` contains the short sampling
+  job and both direct interactive commands.
+  `docs/unified_checkpoint_evaluation_plan.md` defines the later run-level
+  production workflow, storage policy, restart boundaries, and historical
+  10,000-sample A100 runtime evidence.
 
 - Fresh MNIST diagonal production matrix:
   `jobs/berzelius/mnist_diagonal_1m/` launches 36 new one-million-update
