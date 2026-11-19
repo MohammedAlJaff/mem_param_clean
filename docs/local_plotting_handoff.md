@@ -30,6 +30,19 @@ The local machine uses `conda run -n memcompgen` with `PYTHONPATH=.`.
 Check `mem_param_src.__file__` before a new experiment. The imported path
 must match the intended checkout.
 
+For the full test suite on macOS, use a real temporary-folder path:
+
+```bash
+mkdir -p /private/tmp/mem_param_tests
+TMPDIR=/private/tmp/mem_param_tests PYTHONPATH=. conda run -n memcompgen python -m pytest -q tests
+```
+
+One existing test compares saved path strings. The default macOS `/var`
+path and its resolved `/private/var` path differ. The explicit temporary
+folder avoids that mismatch without changing the research code.
+The combined suite passed 191 tests and 59 subtests on each machine.
+Local checks used PyTorch 2.9.1; cluster checks used PyTorch 2.5.1.post303.
+
 Full source and Git backups are in
 `../rebuttal_backups/consolidation_2026-11-19/` on Berzelius and
 `outputs/handoffs/consolidation_2026-11-19/` on the laptop. They include

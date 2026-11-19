@@ -5665,3 +5665,32 @@ Validation and publication scope:
   to keep mem_param_clean as the main cluster directory and preserve all
   existing artifact paths. No model, data, result, or paper export was changed.
 - No scheduler job was submitted, resumed, cancelled, or changed.
+
+
+## 2026-11-19 - Verify the combined source on the laptop
+
+- Fetched the combined source commit f49b778 directly from the isolated
+  Berzelius test checkout. Tested it in a separate local Git worktree.
+- All 284 active Berzelius source/config/job files match the source backup
+  byte for byte. Ignored patch backups remain in the verified archives and
+  original directories. No training, sampler, metric, config, or job source
+  was changed during integration.
+- Local memcompgen: Python 3.10.19, PyTorch 2.9.1, NumPy 2.2.6,
+  Matplotlib 3.10.8, pytest 9.1.1, Pillow 11.3.0, and Ruff 0.14.8.
+  The full suite passed 191 tests and 59 subtests in 15.22 seconds.
+- The first local test run had one failure in a figure-bundle fixture.
+  macOS gives tempfile a /var path, while saved summaries resolve it to
+  /private/var. Confirmed that path alias mismatch. The failed test and then
+  the full suite passed with TMPDIR set to a real /private/tmp directory.
+  Research code and test code remained unchanged. Updated the handoff with
+  the reproducible command. Existing Pillow/torchvision warnings remain.
+- All 99 shell job files passed bash syntax checks; none was executed.
+  Fifty-four changed Python files pass Ruff. The unchanged Berzelius
+  plotting/weighting/quick_plot.py has one existing E402 import-order warning.
+  It was preserved rather than edited during the source merge.
+- Local test reports are saved under outputs/handoffs/
+  consolidation_2026-11-19/validation/. Cluster reports remain under
+  mem_param_consolidation/outputs/consolidation_tests/.
+- The publication step updates codex/rebuttal only. Main and historical
+  branches remain available. Model, data, noise, reference, generated-result,
+  and historical frozen-job directories are outside this source update.
