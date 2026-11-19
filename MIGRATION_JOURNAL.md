@@ -5036,3 +5036,47 @@ Validation and publication scope:
 - The snapshot describes the local workspace, not the submitted manuscript.
   Existing review states, numerical inputs, and source output files remain
   unchanged. No notebook, figure, training, or evaluation was rerun.
+
+
+## 2026-11-19 - Prepare the separate Berzelius rebuttal checkout
+
+- Pushed preservation commits 8c43c86 and 35c2d8a to
+  codex/portable-plot-data. Created and pushed codex/rebuttal at 35c2d8a.
+  GitHub confirmed both branches. Main remains at 0cb30dd.
+- After the researcher established SSH login, inspected the cluster checkout,
+  its instructions and latest journals, and the scheduler queue. No jobs were
+  running or pending for x_moalj at the check.
+- The old mem_param_clean checkout remains on codex/reproducible-runners at
+  e5bf94b with additional evaluation work. Backed up all 71 pending files,
+  their hashes, Git status, and the worktree patch without changing them.
+  Backup: mem_param_rebuttal/outputs/rebuttal_setup/legacy_checkout_backup/.
+  Every saved source hash and the old commit were checked again after setup.
+- Cloned GitHub codex/rebuttal into the new sibling directory
+  /proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_rebuttal.
+  It initially matched 35c2d8a exactly. All 24 plot-data CSV hashes and sizes,
+  and all 342 archived paper-file hashes, matched on Berzelius.
+- Loaded Mambaforge and activated mem_param_env. Its research libraries are
+  Python 3.10.20, PyTorch 2.5.1.post303, NumPy 2.2.6, Matplotlib 3.10.8,
+  nbformat 5.10.4, ipykernel 7.2.0, and JupyterLab 4.5.6.
+- Pytest was missing. Created a checkout-local .venv with system site packages
+  and installed pytest 9.1.1, iniconfig 2.3.1, and pluggy 1.7.0 there.
+  The shared Conda environment was not changed. All 28 focused plotting tests
+  passed in 4.97 seconds with PYTHONPATH pointing to the new checkout.
+- Registered the mem_param_rebuttal kernel under .venv/share/jupyter/.
+  Its interpreter and PYTHONPATH point to the new checkout. Environment
+  records are under outputs/rebuttal_setup/. Updated the plotting handoff
+  with activation, imports, tests, paths, and the separate old-code boundary.
+- No training, checkpoint evaluation, paper plot, or experiment was run.
+  No scheduler job was submitted, resumed, cancelled, or changed.
+
+- Copied the old-checkout source backup and environment report to the laptop
+  under outputs/handoffs/berzelius_rebuttal_setup_2026-11-19/. Verified all
+  71 copied source-file hashes. These additional cluster changes remain
+  separate from the GitHub source and the new rebuttal checkout.
+
+- A fresh mem_param_rebuttal notebook kernel started in notebooks/theory/,
+  imported mem_param_src from the new checkout, and used .venv/bin/python.
+  The check passed in 44.78 seconds and the kernel was shut down. An initial
+  30-second import timeout was too short; the repeated check allowed 150
+  seconds. No source change was needed. Kernel evidence is saved in
+  outputs/rebuttal_setup/kernel_check.json on Berzelius.

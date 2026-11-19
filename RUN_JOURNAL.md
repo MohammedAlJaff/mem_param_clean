@@ -1850,3 +1850,15 @@ terminal states or only some tasks completed.
 - No scheduler job was submitted, resumed, cancelled, or changed.
 - The researcher must establish SSH login before cluster preparation can
   continue. Local preservation and GitHub work can proceed independently.
+
+
+### 2026-11-19 - Authenticated rebuttal preparation check
+
+- SSH access works after the researcher established the shared connection.
+- squeue reports no running or pending jobs for x_moalj at the check.
+- Created the separate mem_param_rebuttal checkout on codex/rebuttal.
+  Preserved and backed up the old checkout's 71 pending source files.
+- Validated the transferred data and paper hashes. The isolated local test
+  environment passed 28 plotting tests in 4.97 seconds. Notebook tooling
+  and source imports use the new checkout. No experiment was run.
+- No scheduler job was submitted, resumed, cancelled, or changed.

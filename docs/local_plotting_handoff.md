@@ -8,27 +8,41 @@ New rebuttal work uses `codex/rebuttal`. The fixed paper-file archive is
 This archive preserves the local workspace. It does not identify the
 submitted manuscript or approve additional figure builds.
 
-Use a separate Berzelius checkout at
+The separate Berzelius checkout is ready at
 `/proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_rebuttal`.
-Inspect the existing checkout and jobs first. Keep its files and results.
-If the new destination already exists, inspect it before making changes.
+The existing `mem_param_clean` checkout remains unchanged on
+`codex/reproducible-runners` at `e5bf94b`. It has additional pending
+evaluation code. That code was not merged into the new checkout.
+Its 71 pending files are backed up under the new checkout at
+`outputs/rebuttal_setup/legacy_checkout_backup/`, with hashes and a Git patch.
 
-From the new checkout, load Mambaforge and activate `mem_param_env`.
-Confirm `git rev-parse HEAD` matches `origin/codex/rebuttal`.
-Check imports for `torch`, `numpy`, `matplotlib`, `pytest`, `nbformat`,
-`ipykernel`, `jupyterlab`, and `mem_param_src`. Record package versions.
-Check that `mem_param_src.__file__` points into the new checkout.
-Use `PYTHONPATH=.` from this checkout to avoid an older editable install.
+The new checkout uses `mem_param_env` for the research libraries.
+Its `.venv` inherits those libraries and adds pytest 9.1.1 locally.
+The shared Conda environment was not changed. The notebook kernel is
+`mem_param_rebuttal`. Its source path points to the new checkout.
+Select `mem_param_rebuttal` in the notebook kernel menu.
+
+Set up a shell in the new checkout:
 
 ```bash
-PYTHONPATH=. python -m pytest -q \
+cd /proj/rep-learning-robotics/users/x_moalj/project_mem_par/mem_param_rebuttal
+module load Mambaforge
+mamba activate mem_param_env
+source .venv/bin/activate
+export PYTHONPATH="$PWD"
+export JUPYTER_PATH="$PWD/.venv/share/jupyter"
+python -m pytest -q \
   tests/test_best_fid_summary.py tests/test_figure_catalog.py \
   tests/test_joint_trajectory_grid.py tests/test_memorization_sensitivity.py \
   tests/test_robustness_table.py
 ```
 
-Expected result: 28 tests pass. This check passed locally in `memcompgen`.
-It has not yet run on Berzelius. SSH authentication currently fails.
+Expected result: 28 tests pass. The suite passed locally in `memcompgen`
+and on Berzelius. The cluster test took 4.97 seconds.
+Cluster versions: Python 3.10.20, PyTorch 2.5.1.post303, NumPy 2.2.6,
+Matplotlib 3.10.8, nbformat 5.10.4, ipykernel 7.2.0, JupyterLab 4.5.6.
+Environment records are under `outputs/rebuttal_setup/` on Berzelius.
+All 24 input CSV hashes and all 342 paper snapshot files matched after transfer.
 Read existing data from its original paths. Save new results under the
 new checkout's `outputs/` directory. Select a reviewer question before
 creating or running a new experiment.
