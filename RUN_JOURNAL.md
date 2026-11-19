@@ -2919,3 +2919,23 @@ terminal states or only some tasks completed.
   environment passed 28 plotting tests in 4.97 seconds. Notebook tooling
   and source imports use the new checkout. No experiment was run.
 - No scheduler job was submitted, resumed, cancelled, or changed.
+
+
+### 2026-11-19 16:23 CET - Rebuttal closeout and saved-result status
+
+- Read-only check at 16:23 CET: squeue reports no running or pending jobs
+  for x_moalj. No scheduler job was submitted, resumed, cancelled, or changed.
+- Saved acceptance records report 234 accepted evaluations in the selected
+  production batches: 144 CelebA32 streaming, 54 MNIST/CelebA64, 18 weighting,
+  and 18 seed-1 DiT. All 18 final DiT acceptance markers are now present.
+  The October 5 progress entries remain unchanged as historical observations.
+- This is a check of saved acceptance metadata, not a fresh metric computation
+  or a full tensor-hash audit. It does not inventory every older experiment.
+- The existing shared plot_data bundle remains at 216 evaluations. No result
+  export, training, sampling, encoding, cleanup, or paper plotting was rerun.
+- Combined source 65f49ee was published and synchronized across the laptop
+  and Berzelius. Full CPU suites passed 191 tests and 59 subtests on each
+  machine. The final notebook kernel imports from the main mem_param_clean
+  checkout; its import check passed in 44.66 seconds.
+- Existing models, data, references, noise banks, and generated results stayed
+  in place. Source and Git backups cover the code; they are not model backups.

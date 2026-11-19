@@ -5694,3 +5694,33 @@ Validation and publication scope:
 - The publication step updates codex/rebuttal only. Main and historical
   branches remain available. Model, data, noise, reference, generated-result,
   and historical frozen-job directories are outside this source update.
+
+
+## 2026-11-19 - Final source synchronization and notebook closeout
+
+- Published the tested combined source at 65f49ee on codex/rebuttal.
+  The laptop, main Berzelius mem_param_clean checkout, secondary
+  mem_param_rebuttal checkout, and source-only test checkout all reached
+  that commit with clean working trees. Main remains the historical baseline.
+- The main working directory is project_mem_par/mem_param_clean on Berzelius.
+  The mem_param_rebuttal notebook kernel now imports the package and evaluator
+  from this main directory. A fresh kernel check passed in 44.66 seconds and
+  the test kernel was shut down.
+- Final file checks preserved all original source paths, all ten ignored
+  patch backups, and the original Berzelius source/config/job contents.
+  The local plotting and analysis additions are present in the combined code.
+- Full CPU suites passed 191 tests and 59 subtests on each machine. See the
+  previous entries for environments, the macOS temporary-path workaround,
+  and existing lint or library warnings. No GPU experiment was run.
+- Source backups and Git-history bundles remain verified on both machines.
+  The validation folder on the laptop contains pytest.xml for Berzelius,
+  local_pytest_canonical.xml for the final Mac run, source_check.json,
+  final_consolidation.json, and final_kernel_check.json. Earlier failed-check
+  reports remain separate rather than being overwritten.
+- Test reports are under outputs/handoffs/consolidation_2026-11-19/validation/
+  on the laptop. Cluster source checks remain under mem_param_consolidation/
+  outputs/consolidation_tests/; final runtime records are under
+  mem_param_rebuttal/outputs/rebuttal_setup/.
+- Earlier entries on this date describe intermediate setup states. This entry
+  records the completed synchronization. This journal closeout changes only
+  documentation; it does not change the tested source at 65f49ee.
