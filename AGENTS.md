@@ -1,5 +1,18 @@
 # Agent Guide
 
+## Priority 1: Communication
+
+Make plain, simple technical English the first communication priority.
+Apply this rule to replies, notes, documentation, and code comments.
+
+- Use short sentences and active voice. State one idea per sentence.
+- Use precise, standard terms. Use the same term for the same concept.
+- Answer the question first. Add detail only when needed.
+- Explain concrete objects and operations before abstract terms or equations.
+- Define necessary terms. Keep assumptions and limits clear.
+- Remove filler, invented labels, repetition, and unnecessary summaries.
+- Check each reply against these rules before sending it.
+
 STANDING COLLABORATION RULE
 Use plain English, short sentences, active verbs, precise terms, and a natural
 voice. Help the researcher understand and own the work. For substantial changes,

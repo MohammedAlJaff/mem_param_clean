@@ -1840,3 +1840,13 @@ terminal states or only some tasks completed.
 - Submitted exact-resume array `17691417`. Slurm accepted all 18 tasks under
   the new project ID; they are waiting for the scheduler to assign GPUs.
 - No RGB, MNIST, seed-0 DiT, U-Net, or weighting job was changed or duplicated.
+
+
+### 2026-11-19 - Rebuttal access check
+
+- Attempted a read-only SSH check of the checkout and job queue.
+- Berzelius rejected authentication with publickey,keyboard-interactive.
+  No remote command ran. Current job status is unknown.
+- No scheduler job was submitted, resumed, cancelled, or changed.
+- The researcher must establish SSH login before cluster preparation can
+  continue. Local preservation and GitHub work can proceed independently.

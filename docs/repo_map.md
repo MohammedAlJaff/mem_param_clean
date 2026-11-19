@@ -18,6 +18,9 @@ mem_param_src/     reusable first-party package
 external/          baseline and third-party code, if retained
 notebooks/         reviewed notebooks, probes, and paper analysis
 jobs/berzelius/    Slurm launchers for Berzelius, if retained
+plot_data/        committed scalar records for local analysis
+plotting/         local figures and summaries from the portable records
+paper_snapshots/   fixed paper-file archives with file lists and hashes
 docs/              migration notes and project intent
 TODO.txt           single operational backlog of unfinished work
 RUN_JOURNAL.md    submitted compute runs and chronological status checks
@@ -67,10 +70,152 @@ Probable destinations:
 - Berzelius launch files go under `jobs/berzelius/`.
 - `RUN_JOURNAL.md` records every submitted job and each later status check.
 - Reviewed notebooks go under `notebooks/`.
+- `notebooks/theory/` holds the supplied linear/RFN notebook, its existing
+  figures, and proposed main/appendix LaTeX snippets. Start with
+  `theory_audit_2026-10-07.txt` for verified claims and outstanding figure work.
+  The notebook's M6 plotting cell combines the selected random-initialization
+  panels from retained simulation arrays, without additional training.
 - Baselines and third-party code go under `external/` only if retained.
 - Generated outputs do not enter the clean repo by default.
+- `paper_snapshots/2026-11-19/` is the approved exception. It preserves the
+  local paper workspace for the rebuttal. Its archive and manifest retain
+  figures, captions, Overleaf files, and prior build records. New results
+  still go under `outputs/`; do not replace this snapshot.
 
 Boundary rules:
+
+- `docs/paper_figure_plan.txt` records the retained manuscript Figure 1-4 and
+  Table 1-2 layouts, raw-pixel rho=0.3/sample-SD requirements, planned theory
+  addition, and appendix scope. Its reference PDF hash fixes the visual baseline.
+  It specifies paper contents separately from catalog IDs and build approval.
+
+- Portable agent handoffs go under `outputs/handoffs/`. The
+  `mem_param_plotting_handoff_2026-10-05` folder and matching ZIP contain
+  copied scalar inputs, derived tables, current figures, six local plotting
+  scripts, setup instructions, and checksums. Its README is the standalone
+  entrypoint; it requires no clone, checkpoints, or cluster paths.
+
+- `outputs/paper_figures/` is the fresh paper revision workspace. Its
+  `README.txt` maps the six retained paper items to generators; `INDEX.md`
+  lists only generated drafts. Build one selected item or a small selected
+  group at a time. The earlier `outputs/figures/` collection stays intact.
+  `results_figures.tex` and `appendix_figures.tex` supply Overleaf float
+  blocks, captions, and labels using `figures/` paths. The accompanying
+  `overleaf_figures.zip` includes those fragments and their PDF assets.
+  `results_figures_reconciled.tex` is a separate alternative that preserves
+  the supplied manuscript's float order and labels, with M6 appended.
+
+- `plotting/figure_catalog.json` registers the paper's M1-M6 and A1-A5 names
+  where generators exist, with descriptive suffixes for variants. It records
+  scientific settings and exact-build review status. `plotting/figures.py`
+  generates named outputs such as M2.pdf and M5.pdf. Older IDs work only as
+  command aliases; current files and the index use M/A names. Build receipts
+  and `outputs/paper_figures/versions/` preserve inputs, code, and artifacts.
+  `plotting/AGENTS.md` gives the shared workflow. The catalog does not rewrite
+  numerical CSV tables. See `docs/paper_figure_plan.txt` for planned items.
+
+- `plotting/paper_style.py` owns DejaVu Sans text, STIX mathematics, and
+  shared bold mathematical x/epsilon/v labels, including diagonal pairs.
+  The common plotting module applies its Matplotlib settings; the standalone
+  LaTeX renderer uses its matching preamble. Templates retain their own sizes.
+
+- `plotting/celeba32_3x3/plot_best_fid_matrices.py` owns M3's two-matrix
+  reference layout. It uses the established per-seed best-FID summary to show
+  memorization percentages and paired FID at N=512 and 2048. M3 uses raw pixels;
+  M3-SSCD uses calibrated SSCD alpha=0.01; both use U-Net and sample SD.
+  M3-DIT uses raw pixels for Small-DiT with seed 0 and no uncertainty estimate.
+  See `docs/local_plotting_handoff.md` for the ID/type map and commands.
+
+- `plotting/plot_robustness_table.py` owns M4 / manuscript Table 2. It reuses
+  the accepted quality loader, selects each seed's best quality at N=2048,
+  and joins raw-pixel and calibrated feature memorization at the same step.
+  The catalog builds a manuscript LaTeX fragment, its PDF preview, and captions
+  under `outputs/paper_figures/`; the caption explains the dataset-specific
+  encoders. The compact table displays means only and adds a metric-description
+  column; the earlier SD version remains archived. See the plotting handoff
+  for the one-command build and manuscript inclusion example.
+
+- `plotting/plot_diagonal_trajectories.py` owns the M2_TRAJECTORIES variant.
+  It reuses the quality-data loader and seed-summary function, joins raw-pixel
+  f_mem at rho=0.3 to the same diagonal runs, and plots FID above f_mem.
+  The supplied reference sets eps/v/x column order, target-color shade ramps,
+  cool/warm backgrounds, and normalized log training time. PDF/SVG, a caption,
+  per-seed values, and mean/SD tables go into the CelebA32 U-Net figure folder.
+
+- `plotting/plot_diagonal_summary.py` owns M2 and its 3+3+2 template. It
+  reuses F10's trajectory rows and adds two wide panels: best FID and raw-pixel
+  f_mem at each seed's best FID. Its shared per-seed summary still computes
+  sustained onset for F12 and preserves the existing numerical table schema.
+  Its local FIGURE_WIDTH_INCHES is 8.8; FIGURE_ASPECT_RATIO preserves the
+  previous wide canvas shape. The bottom panels span half the row each.
+  The caption area groups the N line-style and parameter color/marker keys.
+  PDF/SVG, a caption, and per-seed/summary tables use a separate output stem.
+
+- `plotting/plot_diagonal_timescales.py` owns A3_UNET and A3_DIT (current-data appendix timescales),
+  and their shared TS 1x3 template.
+  Apply visual edits to both figures. It writes shared-style PDFs/SVGs,
+  detailed text captions, and manuscript-ready `.caption.tex` files.
+  It reuses the portable loader and per-seed onset calculation, then computes
+  tau_gen at 10% of best FID and the paired gap tau_mem - tau_gen. Negative
+  gaps remain visible. Censored groups show lower bounds on seed means with
+  open arrows and no SD; observed groups show mean and sample SD. Separate
+  per-seed/summary CSVs retain raw steps and explicit bound fields. The panels
+  run horizontally on a 6.75-by-1.95-inch canvas, with linear time axes and
+  2.8-point markers. Definitions and color keys appear in the caption.
+  A3_DIT loads the 12 DiT diagonal runs through the shared paired-metric loader.
+  Its single-seed values have no SD bars; its gap limits fit the observed range.
+  Newly computed numerical inputs come only from `plot_data/`.
+
+- `plotting/plot_workshop_timescales.py` owns M5: an explicitly requested
+  reproduction of workshop Figure 4. It copies the vector artwork preserved
+  under `plotting/references/` and writes captions explaining rho=0.5, first
+  1% onset, SE, and capped unobserved onsets. The catalog archives and hashes
+  the artwork and its provenance note; it does not reconstruct old values.
+
+- `plotting/plot_memorization_sensitivity.py` owns A2, A5, and A5_TRAJECTORIES. It reuses the
+  accepted quality loader and pairs seven readouts with each diagonal run's
+  best-FID checkpoint. A2 compares calibrated pixels/SSCD/LPIPS/DINOv2 at
+  alpha=0.01; A5 compares fixed pixel rho=0.3/0.5/0.7. Both show four N panels
+  with mean/sample SD. Run `python plotting/figures.py A2 A5` for PDF/SVG,
+  captions, and build receipts. The exports support aggregate-rate comparisons;
+  per-image overlap and the onset-threshold sensitivity remain separate work.
+  `load_trajectories` reuses the fixed-rho loader for all 72 checkpoints of
+  the 36 U-Net diagonal runs. `render_trajectories` makes A5_TRAJECTORIES:
+  a target-by-rho 3x3 grid on log axes, with mean/SD, shared N styles and
+  canonical target colors. Its numerical inputs and output folder are shared
+  with A5; it writes no numerical exports. Zero means break plotted lines
+  without removing zero-valued seeds from the summaries.
+
+- Portable CelebA32 U-Net analysis: `plotting/celeba32_3x3/plot_f_mem_grid.py`
+  reads only `plot_data/` and plots FID and raw-pixel f_mem trajectories.
+  Its `render` entrypoint also owns the current A1 and A1_DIT joint-axis
+  appendix grids. The same loader validates all nine cells and 72 checkpoints;
+  the renderer overlays four sizes and pairs dotted FID with solid F_mem.
+  `python plotting/figures.py A1 A1_DIT` writes PDF/SVG and text/LaTeX captions
+  under `outputs/paper_figures/`, with SD only for the three-seed U-Net data.
+  It also owns the shared target palette (eps blue, x red, v green),
+  lighter/darker shades for two sizes, training-size line styles, and
+  training-size markers for portable figures. Its PANEL_WIDTH_INCHES and
+  set_panel_width helper default to two-inch axes; F12/F13 pass wider settings.
+  F11 sets its full canvas size directly, retaining its original aspect ratio.
+  `summarize_f_mem_at_best_fid.py` reuses its record selection, chooses each
+  seed's lowest-FID checkpoint, and summarizes the paired f_mem values.
+  `plot_f_mem_at_best_fid.py` renders that summary as a 3x3 table with the
+  training sizes stacked inside each cell, plus a standalone LaTeX version.
+  `compare_weighted_velocity.py` supplies A4: the F07 comparison of diagonal
+  targets with two explicit velocity weights, using one v/v baseline per seed.
+  A4_DIAGONAL retains its legacy aliases. The optional matched mode compares
+  the weights with v/x and v/eps; its previous A4 drafts remain archived.
+  Both modes use N=512 and N=2048. Catalog exports and captions go to
+  `outputs/paper_figures/`.
+  Vector PDFs and scratch tables go under `outputs/figures/`. The local plotting
+  handoff documents the commands and checkpoint selection rule.
+
+- `plotting/plot_fid_by_training_size.py` plots the DiT 3x3 matrix and the
+  MNIST32, MNIST64, and CelebA64 diagonal quality trajectories by training size.
+  It reads only `plot_data/`, uses JointAE FD for MNIST and Inception FID for
+  CelebA, and labels DiT's single-seed coverage explicitly. Vector PDFs and seed
+  tables go under `outputs/figures/<experiment>/`.
 
 - Network backbones: `mem_param_src/networks/` owns the shared `forward(z, t)`
   implementations. `model_setup.py` resolves config layouts and constructs the

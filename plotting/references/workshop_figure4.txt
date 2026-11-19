@@ -1,0 +1,14 @@
+WORKSHOP FIGURE 4 REPRODUCTION SOURCE
+
+Source: /Users/mohammadaljaff/Desktop/209_What_You_Predict_Shapes_Ho (3).pdf
+Source SHA256: 23563e4e1a561dd2ed10df9b6f3e02a093858fc432f8819720a82fa8b0b42b92
+PDF page: 8 (one-based); Figure 4 plots only, without the manuscript caption.
+Crop box: 88 607 510 726 PDF points, measured from the page's lower-left corner.
+The crop preserves the original vector artwork; the PNG is a 220-dpi rendering.
+
+Extraction: pdfseparate page 8, then pdfcrop --bbox '88 607 510 726'.
+Selected by the researcher on 2026-10-07 for M5, with a revised caption.
+This is preserved artwork, not a new plot from the current data exports.
+Historical conventions: rho=0.5; first F_mem >= 0.01; mean +/- SE over
+three seeds; unresolved onsets assigned to the final checkpoint at 1m.
+The underlying workshop numerical records have not been recovered here.

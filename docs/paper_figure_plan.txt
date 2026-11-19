@@ -1,0 +1,310 @@
+PAPER FIGURE AND TABLE SPECIFICATION
+Decision date: 2026-10-06
+
+COMPLETION AND REVIEW
+
+[x] M1: done; handmade by the authors. No regeneration needed.
+[x] M2: approved by the researcher; exact build 43d9a790863d.
+[ ] M3: draft generated from the paper PDF's design; awaiting review.
+[x] M4: approved by the researcher; exact build 515a0307ff37.
+[~] M5: workshop artwork selected; revised caption prepared for review.
+[ ] M6: theory and computation.
+
+PURPOSE AND AGREED BASELINE
+
+Keep the layouts of manuscript Figures 1, 2, 3, and 4 and Tables 1 and 2.
+The researcher confirmed satisfaction with these six items in the supplied PDF.
+They then clarified: "Keep layouts; use raw pixels + SD."
+
+Reference: /Users/mohammadaljaff/Desktop/AISTATS_2027_Memparam_FM (1).pdf
+SHA256: 2df6522c048b359fe16c5ee0f412939ad6f089a74a8af5e46aeac70d09366020
+Locations: Figure 1 p.2; Table 1 p.3; Figure 2 and Table 2 p.6;
+Figure 3 p.7; Figure 4 p.8. Page numbers refer to PDF pages.
+
+NAMING: USE THE AGREED M1-M6 AND A1-A5 SCHEME
+
+M1 setup; M2 diagonal results; M3 prediction/loss grid; M4 robustness table;
+M5 generation/memorization timescales; M6 theory. A1 complete trajectories;
+A2 representation agreement; A3 extended timescales;
+A4 weighting controls; A5 threshold sensitivity. These are the names for files,
+commands, and discussion. The researcher's latest naming instruction supersedes
+the former type-based IDs. Reference-PDF numbers below identify accepted layouts.
+In particular, reference Figure 4 supplies the main-text M5 layout; M4 is the
+robustness table. Table 1 is M1's companion M1_CONVERSIONS.
+Use descriptive suffixes within a group when needed, such as A3_DIT.
+
+The agreement concerns the layouts. It does not retain SSCD or standard error
+from older versions as the headline convention. Apply the current metric and
+statistics below, except for explicitly named metric variants such as M3-SSCD.
+M5 is now an explicit exception: retain the original workshop artwork and its
+historical conventions, as requested on 2026-10-07. A3 holds current-data timescales.
+
+The layout baseline alone does not approve a catalog build or authorize a
+new experiment. Separate explicit approvals are recorded above and in the
+catalog. Current plots are reusable
+sources, but their files must be matched to the agreed PDF layouts.
+
+SHARED SCIENTIFIC AND VISUAL CONVENTIONS
+
+- Headline memorization: raw-pixel nearest-neighbour ratio, fixed rho=0.3.
+  SSCD, LPIPS, DINOv2, JointAE representations, and calibrated thresholds
+  belong to the supporting comparisons.
+- Quality: Inception FID for CelebA; global JointAE FD for MNIST.
+- Select the lowest saved quality value separately for each run/seed. Break
+  exact ties by the earliest checkpoint. Read memorization at that same step.
+  These are each run's best-quality results, not comparisons at equal quality.
+- Report the seed mean and sample SD (ddof=1), not SE. Use the three accepted
+  seeds where available. Small-DiT currently has seed 0 only: label it and
+  do not draw across-seed uncertainty bars.
+- Retain explicit units: Figure 2 uses memorization fractions; Figure 3 and
+  Table 2 use percentages. Multiply both the mean and SD by 100 for percent.
+- Text: DejaVu Sans. Mathematics: STIX. Parameter labels use
+  \boldsymbol{x}, \boldsymbol{\epsilon}, and \boldsymbol{v} throughout.
+  Their canonical colors are red #D62728, blue #1F77B4, and green #2CA02C.
+- Preserve the approved panel arrangement and ordering in the reference PDF.
+  Figure 2 has epsilon, v, x columns; Figure 3 and the tables use x, epsilon, v.
+  A later ordering change would be a separate layout decision.
+- Four training sizes use solid/dashed/dash-dot/dotted for
+  N=512/1024/2048/4096. Preserve the existing shade progression where used.
+- Empirical numerical input comes only from plot_data/. Join on run_id and
+  select conditions by metadata. Preserve source CSVs and evaluation records.
+- Captions must describe the actual panels, metric, uncertainty, seed count,
+  and checkpoint rule. Existing captions are not automatically retained.
+
+RETAINED LAYOUTS
+
+M1 -- Experimental setup and conceptual measurements (reference Figure 1, p.2)
+Status: done. The authors made this figure by hand and confirmed it complete.
+Purpose: explain prediction target, conversion to loss target, and what the
+study holds fixed and measures. Keep the existing schematic and its three
+conceptual curves. Identify those curves as illustrative rather than measured
+results. Retain the distinction between prediction and regression targets.
+
+M1_CONVERSIONS -- Target conversions and induced weights (reference Table 1, p.3)
+Purpose: state the mathematical relationship among the nine objectives.
+Keep the conversion matrix for z_t=t*x+(1-t)*epsilon, with 0<t<1, and the
+velocity-space weights (1-t)^2, t^2, and 1. Preserve the equations and layout.
+
+M2 -- Diagonal dynamics and best-quality summaries (reference Figure 2, p.6)
+Status: approved, build 43d9a790863d; outputs/paper_figures/M2.pdf.
+Data: CelebA32 U-Net; diagonal x/x, epsilon/epsilon, v/v; all four N values.
+Keep all eight panels: (a-c) FID trajectories, (d-f) memorization trajectories,
+(g) best FID versus N, and (h) memorization at each seed's best FID versus N.
+Keep the two wide summary panels under the two three-panel trajectory rows.
+Use raw pixels at rho=0.3 and sample SD in every applicable panel, including
+the summaries. Correct the caption to describe all three rows and panels g/h.
+Implementation: plotting/plot_diagonal_summary.py, catalog M2.
+
+M4 -- Dataset and architecture table at N=2048 (reference Table 2, p.6)
+Approved: outputs/paper_figures/M4.pdf, exact build 515a0307ff37 (2026-10-07).
+Keep the four dataset/model columns: CelebA32 U-Net, CelebA64 RGB U-Net,
+MNIST32 U-Net, and CelebA32 Small-DiT. Within each, retain x/epsilon/v order,
+red/blue/green triplets, and gray paired quality beneath the memorization rows.
+The researcher requested a common raw-pixel row and a separate feature row:
+  - Raw-pixel f_mem (%): fixed rho=0.3 in every dataset.
+  - Feature f_mem (%): SSCD image-copy-detection descriptors for CelebA;
+    a frozen 128-dimensional encoder trained jointly to reconstruct digit images
+    and classify their labels for MNIST. Describe this instead of only naming
+    the internal JointAE asset. Thresholds use held-out calibration at alpha=0.01.
+  - Quality: Inception FID for CelebA; Frechet distance in raw digit-encoder
+    features for MNIST. Lower quality distance is better.
+Both memorization rows use the same best-quality checkpoint for each seed;
+exact ties select the earlier checkpoint. Aggregate only after pairing.
+The current compact version displays means only, following the supplied original.
+SDs remain computed and the previous SD table is archived as fa972b2246c8.
+Explicitly identify DiT as seed 0. Underlining the lowest observed
+mean in each memorization row and dataset does not imply significance.
+The pixel and feature rows differ in both representation and threshold rule;
+their difference alone does not isolate the effect of representation.
+N=512 belongs to supporting results. The table assesses transfer across these
+settings; it does not isolate architecture or resolution as a causal factor.
+Implementation: plotting/plot_robustness_table.py via catalog M4. M4.tex is a
+manuscript table fragment. M4.pdf previews Table 2 at the supplied manuscript's
+6.75-inch text width (486 points). Add a metric-description column beside four
+dataset columns, with the
+raw-pixel, feature, and quality triplets stacked in each makecell. Preserve
+the original's pale header/body backgrounds. Identify line order in the caption.
+Use native small text and tabular* at the enclosing line width, without a
+whole-table resizebox. The preview canvas includes 0.12-inch margins.
+M4 is an explicit exception to the shared plot typography: inherit manuscript
+fonts and tablehead/tablerow/qgray colors. Keep the supplied red/blue/green!60!black
+triplets, arraystretch=1.55, default column padding, and plain line breaks.
+Keep the original ordinary spaces around slashes; do not reduce font sizes.
+Caption text and LaTeX are also saved separately. Existing paper items stay intact.
+
+M3 -- Prediction target by regression target (reference Figure 3, p.7)
+Current draft: outputs/paper_figures/M3.pdf, build 9ad16db1854a.
+Keep the two 3x3 matrices for N=512 and 2048, rows=prediction and columns=loss.
+Keep large memorization values and smaller paired FID values in each cell,
+diagonal target-colored tints, and neutral off-diagonal cells.
+Match M2's full PDF width of 8.8 inches; the compact M3 height is 2.5 inches.
+Use the PDF's wide cells, single-line mean +/- SD, gray FID below, colored
+target labels above/left, and an 8% target-color tint on each diagonal cell.
+Use raw-pixel memorization percentages at rho=0.3 and mean +/- sample SD for
+both quantities. Replace the PDF's SSCD values and SE convention together.
+Purpose: examine prediction effects, loss effects, and their interaction.
+Do not preselect a universal row/column ranking as a required conclusion.
+Implementation: plotting/celeba32_3x3/plot_best_fid_matrices.py, catalog M3.
+The supplied PDF is the visual reference; the user-supplied Python code is
+a related design reference, not the source of numerical values.
+
+Requested M3 variants (draft; manuscript placement not yet assigned):
+- M3-SSCD: CelebA32 U-Net, held-out-calibrated SSCD at alpha=0.01,
+  mean +/- sample SD over seeds 0/1/2. Each run uses its exported calibrated
+  rho; this is not fixed rho=0.3. Keep exactly the same best-FID checkpoints.
+- M3-DIT: CelebA32 Small-DiT, raw pixels at fixed rho=0.3, seed 0 only.
+  Show paired values without +/- or an across-seed uncertainty estimate.
+Both use N=512/2048, M3's layout/colors/fonts, and M2's 8.8-inch width.
+Each has its own PDF, SVG, caption, and build receipt in outputs/paper_figures/.
+These variants supplement M3; the headline M3 remains raw-pixel U-Net.
+
+M5 -- Original workshop generation and memorization timescales
+The researcher selected the actual workshop Figure 4 on 2026-10-07, replacing
+our current-data draft. outputs/paper_figures/M5.pdf reproduces its vector
+artwork; M5.caption.txt/.tex explain the historical conventions.
+Source: 209_What_You_Predict_Shapes_Ho (3).pdf, p.8. Provenance and a portable
+copy of the crop are in plotting/references/workshop_figure4.txt/.pdf.
+This CelebA32 grayscale U-Net study covers N=256 through 16384 (seven sizes).
+It uses raw pixels at rho=0.5, first F_mem >= 0.01 for tau_mem, first FID <=
+1.10 times run-best FID for tau_gen, and mean +/- SE across three seeds.
+Runs without an observed onset are assigned the final checkpoint at 1m.
+The plateaus and associated gaps therefore include censored observations;
+they do not establish actual onset times or continuous generation windows.
+This is a historical reproduction, not a newly computed extension of M2.
+The source records have not been recovered or harmonized with current runs.
+Implementation: plotting/plot_workshop_timescales.py; catalog M5. Its build
+records hash and archive the exact source artwork and provenance note.
+The former M5 current-data draft remains in versions/M5/1632be7bf6a4/.
+Its generator is registered as A3_UNET, alongside A3_DIT: rho=0.3, sustained
+5% onset, sample SD, explicit lower bounds, and the horizontal 1x3 layout.
+The revised M5 caption and appendix drafts still require review.
+
+M6 -- PLANNED THEORY ADDITION
+
+The source notebook was audited on 2026-10-07. The researcher selected a
+two-panel combination from its existing initialization figures:
+  (a) the rightmost A_init_sweep panel, with sigma=d^(-1/2);
+  (b) the random-initialization A_random_features panel, with sigma=p^(-1/2).
+Both use initial readout entry variance 1/p, with p=d for linear features.
+This is the same initialization rule, not matched initial velocity functions.
+The notebook now has a separate M6 plotting cell that reuses stored run arrays.
+It saves M6.pdf/M6.png in outputs/paper_figures/, with linear above RFN.
+The panels share vertical limits and show medians and 10--90% intervals.
+Each time axis spans its own plotted points. RFN starts after its first
+update, at tau=0.0776; the empty earlier time range has no recorded values.
+Only the linear panel retains dashed exact zero-initialization mean curves.
+Use a 4.2 by 4.8-inch stacked figure, with 12-point labels/titles and
+10.5-point ticks. Retain DejaVu Sans/STIX fonts, compact panel titles,
+light major grid, and thin axes. Both panels have no legends; the y-axis
+labels show only Delta G_q(tau). Define red=x, blue=eps, green=v in the
+caption, together with solid random-init medians, dashed linear zero-init
+means, and 10--90% shading. Include initialization details and seed counts.
+The combined plot remains a draft, without a registered or approved build.
+Purpose: demonstrate a possible mechanism under stated model assumptions.
+Do not present these models alone as proof of the mechanism in the image runs.
+Refer to this item as M6. LaTeX figure numbering follows manuscript placement.
+The researcher fixed the scope to f_q=B_q*phi(z), with identity features or a
+frozen nonlinear random-feature network. No RMT. The shared readout learning
+problem stays quadratic. See notebooks/theory/theory_audit_2026-10-07.txt and
+the proposed main/appendix TeX snippets in the same directory. The researcher's
+selected gap-only layout supersedes the audit's proposed four-panel layout.
+The researcher excluded the log-log figure. The nonlinear panel has SGD
+curves only; its exact moment-based trajectory comparison has not run.
+
+CORE APPENDIX GROUPS
+
+A1 -- Complete trajectories. Full prediction/loss grids for CelebA32 U-Net
+and DiT across available N, with diagonal supporting curves for other datasets.
+Keep the distinction between full-grid coverage and diagonal-only experiments.
+Current drafts A1.pdf (U-Net) and A1_DIT.pdf (Small-DiT) overlay all four N
+values in each prediction/loss cell, as requested. The workshop's dotted FID
+on the left and solid F_mem on the right share logarithmic training steps.
+Both figures use linear FID 0-600 and F_mem 0-1.03 display ranges, raw pixels
+at rho=0.3, and canonical prediction colors with size shades, without markers. U-Net
+uses mean/sample SD over three seeds; DiT uses seed 0 without uncertainty.
+Each has PDF/SVG and concise plain-text/LaTeX captions. All 71 positive
+checkpoints are displayed; step zero remains in the source data. Other
+datasets' diagonal supporting curves still need packaging here.
+
+A2 -- Representation agreement. Compare raw pixels, SSCD, LPIPS, and DINOv2
+for CelebA; pixels and JointAE for MNIST. Hold each run's selected quality
+checkpoint fixed. Distinguish fixed-rho results from calibrated-alpha results.
+For a controlled representation comparison, include calibrated pixel results
+alongside calibrated features; retain rho=0.3 as the headline reference.
+First draft A2.pdf: CelebA32 U-Net diagonal, four panels for N=512/1024/2048/
+4096, common alpha=0.01 across pixels/SSCD/LPIPS/DINOv2, mean +/- sample SD.
+The paired A5 draft supplies the fixed-rho pixel reference. Both use the same
+36 per-seed best-FID checkpoints. These are aggregate-rate comparisons, not
+per-image agreement: the portable bundle has no per-sample flags or ratios.
+Mean ordering depends on representation; for example DINOv2 at N=1024 puts
+x/x below epsilon/epsilon. Do not claim universal agreement or significance.
+Renderer: plotting/plot_memorization_sensitivity.py; command: figures.py A2 A5.
+MNIST and other dataset/architecture variants remain planned.
+
+A3 -- Extended timescales and sensitivity. Add DiT and quality tolerances
+5/10/20%, with the same onset/censoring rules. These extend the accepted
+workshop study without treating its capped onsets as current measurements.
+A3_UNET and A3_DIT use plotting/plot_diagonal_timescales.py, current rho=0.3,
+sustained 5% onset, and explicit lower bounds. A3_UNET is registered; its prior
+render remains archived under M5. Additional sensitivity variants are planned.
+
+A4 -- Diagonal targets and equivalent velocity-loss weights.
+The researcher selected the old F07 comparison on 2026-10-07, superseding
+the matched-row choice above. Draft: A4.pdf, build 601dad7c7933.
+Compare x/x, eps/eps, v/v, and native v/v weighted by (1-t)^2 or t^2.
+The 2x2 layout shows log FID above raw-pixel f_mem at rho=0.3, with
+N=512/2048 columns, three-seed means and sample SD. Display all 71 positive
+checkpoints on log training-step axes. Use the current 8.8-inch paper width,
+shared fonts, light bands, thin axes, and no markers. A two-column legend
+above the panels names x-equivalent and epsilon-equivalent with the formulas.
+Matching a weight does not make direct x/eps prediction identical to v prediction.
+Repeated unit v/v controls count once. Caption files are saved.
+The matched-row drafts remain archived under A4 builds fb007ce22e62 and
+c5e7ad733499. A4_DIAGONAL and the old F07 exports retain the original comparison.
+
+A5 -- Threshold sensitivity. Compare fixed pixel rho=0.3/0.5/0.7 and
+calibrated alpha=0.005/0.01/0.02/0.05 at fixed best-quality checkpoints.
+Assess how the findings change rather than requiring an invariant ranking.
+First draft A5.pdf covers fixed rho=0.3/0.5/0.7 for the same current CelebA32
+U-Net runs and checkpoints as A2. The mean ordering epsilon/epsilon < v/v <
+x/x holds for all four N in this fixed-rho comparison, although absolute rates
+change substantially. This does not establish equivalence of the historical
+and current training protocols. The calibrated-alpha sweep remains planned.
+A5_TRAJECTORIES is a separate current-data companion using the workshop
+Figure 7 layout: rows epsilon/epsilon, v/v, x/x; columns rho=0.3/0.5/0.7.
+It shows all 71 positive saved steps from the 72-checkpoint CelebA32 U-Net
+runs, with four training sizes and mean +/- sample SD across three seeds.
+Logarithmic axes show raw fractions. Zero means break curves; SD bands are
+clipped only for display. Small markers retain isolated positive observations.
+Canonical target colors and M2's N shade/line-style progression are reused.
+The original A5 best-FID summary remains a separate figure. Generate the
+trajectory variant with: python plotting/figures.py A5_TRAJECTORIES.
+Changing the ratio threshold rho differs from changing the onset cutoff on
+F_mem; neither initial appendix draft tests the workshop 1% versus sustained
+5% onset definitions. That timescale sensitivity belongs to A3.
+
+Optional candidates: capacity, initialization, MNIST64 detail, class-aware
+MNIST quality, extra DiT detail, calibration/FPR checks, nearest-neighbour
+examples, sampling sensitivity, and detailed theory controls. Include them
+when they support a specific manuscript claim and their evidence is available.
+
+NEXT STAGE
+
+New paper drafts go to outputs/paper_figures/. The earlier outputs/figures/
+collection remains available as reference. Build one chosen paper item or
+an explicitly selected small group through plotting/figures.py. Do not rebuild
+the whole catalog during this focused revision. Review each generated item
+against the accepted PDF layout and this specification before moving on.
+The new folder's README.txt maps paper items to generators; INDEX.md lists
+only figures actually generated there. A fresh folder is not a request to
+rewrite existing generators or recompute evaluations.
+
+Use this specification to map each accepted paper item to its exact source
+code and numerical inputs. Then update metrics and captions within the retained
+layouts. Use M/A names consistently in the catalog and output files. Record
+approval of rebuilt artifacts only after the researcher reviews those artifacts.
+
+Planning verification: inspected the reference PDF text and rendered pages
+2, 3, 6, 7, and 8. Checked the portable bundle's experiment/seed inventory and
+presence of metric/threshold settings. This was not a full numerical audit of
+the PDF. No figures or scientific records were changed while writing this plan.
