@@ -5022,3 +5022,17 @@ Validation and publication scope:
   and repository map for the fixed snapshot and separate Berzelius checkout.
 - SSH authentication failed before any remote command ran. The cluster
   checkout, jobs, and environment remain unverified. No compute was launched.
+
+
+## 2026-11-19 - Save the fixed paper-file snapshot
+
+- Created paper_snapshots/2026-11-19/ from the verified local backup.
+  The archive preserves all 342 paper files, including captions,
+  Overleaf fragments and package, previews, references, and build versions.
+- Recorded source code commit 8c43c8662d7ade6468e8df5730f5bae5ad7096a1, the unchanged theory
+  notebook hash, each file size and SHA-256, and the archive hash.
+- Verified every ZIP member against the manifest in local memcompgen.
+  SHA256SUMS covers the ZIP and manifest. The ZIP is 14433932 bytes.
+- The snapshot describes the local workspace, not the submitted manuscript.
+  Existing review states, numerical inputs, and source output files remain
+  unchanged. No notebook, figure, training, or evaluation was rerun.
